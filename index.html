@@ -1,141 +1,343 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GodWorld V1.0</title>
-  <link rel="stylesheet" href="styles.css">
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>رئیس‌جمهور — شبیه‌ساز مدیریت کشور</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="app">
-    <!-- Top Bar: World Info -->
-    <header id="top-bar">
-      <div class="world-title">
-        <span class="god-icon">✦</span>
-        <h1>GodWorld <small>V1.0</small></h1>
+
+  <!-- Start Screen -->
+  <div id="start-screen">
+    <h1>رئیس‌جمهور</h1>
+    <p class="subtitle">شبیه‌ساز استراتژیک مدیریت کشور — Version 1</p>
+    <p style="color:var(--text-muted); margin-bottom:1.5rem;">درجه سختی را انتخاب کنید:</p>
+    <div class="difficulty-cards">
+      <div class="diff-card easy" onclick="startNewGame('easy')">
+        <h3>Easy Mode</h3>
+        <div class="comfort">راحتی ۱۰ از ۱۰</div>
+        <p>منابع فراوان، اقتصاد پایدار، بحران کمتر، رشد سریع‌تر. مناسب شروع و لذت بردن از توسعه کشور.</p>
       </div>
-      <div id="world-stats" class="stats-panel">
-        <div class="stat"><span class="label">جمعیت</span><span id="stat-population">0</span></div>
-        <div class="stat"><span class="label">اقوام</span><span id="stat-tribes">0</span></div>
-        <div class="stat"><span class="label">ادیان</span><span id="stat-religions">0</span></div>
-        <div class="stat"><span class="label">خوشحال</span><span id="stat-happy">0</span></div>
-        <div class="stat"><span class="label">برکت</span><span id="stat-blessed">0</span></div>
-        <div class="stat"><span class="label">وسوسه</span><span id="stat-tempted">0</span></div>
+      <div class="diff-card medium" onclick="startNewGame('medium')">
+        <h3>Medium Mode</h3>
+        <div class="comfort">راحتی ۵ از ۱۰</div>
+        <p>تعادل بین سرگرمی و چالش. تصمیمات اشتباه اثر دارند و بودجه نیاز به مدیریت دقیق دارد.</p>
       </div>
-      <div id="time-display" class="time-panel">
-        <span id="time-label">روز ۱ • ساعت ۰۰:۰۰</span>
-        <span id="speed-indicator">⏸</span>
+      <div class="diff-card realistic" onclick="startNewGame('realistic')">
+        <h3>Realistic Mode</h3>
+        <div class="comfort">راحتی ۱ از ۱۰</div>
+        <p>شبیه‌سازی واقع‌گرایانه. تورم، بدهی، تحریم و بحران‌ها بسیار مهم‌اند. اشتباهات گران تمام می‌شوند.</p>
+      </div>
+    </div>
+    <button id="btn-continue" onclick="actionLoad()">ادامه بازی قبلی</button>
+  </div>
+
+  <!-- Game -->
+  <div id="game-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand" id="hdr-country">جمهوری آزاد</div>
+      <div class="stat-pill"><span class="label">تاریخ</span> <span id="hdr-date">2026/01/01</span></div>
+      <div class="stat-pill"><span class="label">سختی</span> <span id="hdr-diff">Medium</span></div>
+      <div class="stat-pill"><span class="label">GDP</span> <span id="hdr-gdp">480</span></div>
+      <div class="stat-pill"><span class="label">رشد</span> <span id="hdr-growth">+2.1%</span></div>
+      <div class="stat-pill"><span class="label">تورم</span> <span id="hdr-inflation">3.2%</span></div>
+      <div class="stat-pill"><span class="label">بیکاری</span> <span id="hdr-unemp">7.5%</span></div>
+      <div class="stat-pill"><span class="label">رضایت</span> <span id="hdr-sat">52</span></div>
+      <div class="stat-pill"><span class="label">بودجه</span> <span id="hdr-budget">95</span></div>
+      <div class="time-controls">
+        <button id="btn-pause" class="speed-btn" data-speed="0" onclick="setSpeed(0)">⏸</button>
+        <button class="speed-btn active" data-speed="1" onclick="setSpeed(1)">▶</button>
+        <button class="speed-btn" data-speed="3" onclick="setSpeed(3)">⏩</button>
       </div>
     </header>
 
-    <!-- Main Game Area -->
-    <main id="game-area">
-      <div id="map-container">
-        <canvas id="world-canvas"></canvas>
-        <div id="selection-overlay"></div>
-        <div id="weather-effects"></div>
-        <button id="mobile-history-btn" title="تاریخچه">📜</button>
-      </div>
-
-      <!-- Side Panels -->
-      <aside id="info-panel" class="side-panel hidden">
-        <div class="panel-header">
-          <h3 id="info-title">اطلاعات</h3>
-          <button id="close-info" class="btn-icon">×</button>
+    <div class="main-layout">
+      <!-- Sidebar -->
+      <nav class="sidebar">
+        <button class="nav-btn active" data-panel="dashboard">داشبورد</button>
+        <button class="nav-btn" data-panel="economy">اقتصاد</button>
+        <button class="nav-btn" data-panel="resources">منابع</button>
+        <button class="nav-btn" data-panel="population">جمعیت</button>
+        <button class="nav-btn" data-panel="military">ارتش</button>
+        <button class="nav-btn" data-panel="intelligence">اطلاعات</button>
+        <button class="nav-btn" data-panel="diplomacy">دیپلماسی</button>
+        <button class="nav-btn" data-panel="advisor">مشاور</button>
+        <button class="nav-btn" data-panel="alerts">هشدارها</button>
+        <div class="save-bar">
+          <button class="btn" onclick="actionSave()">ذخیره</button>
+          <button class="btn btn-warning" onclick="showStartScreen()">منوی اصلی</button>
         </div>
-        <div id="info-content" class="panel-body"></div>
-      </aside>
+      </nav>
 
-      <aside id="history-panel" class="side-panel">
-        <div class="panel-header">
-          <h3>تاریخچه جهان</h3>
-          <button id="toggle-history" class="btn-icon">−</button>
+      <!-- Content -->
+      <main class="content">
+        <!-- Dashboard -->
+        <div id="dashboard" class="panel active">
+          <h2>داشبورد وضعیت کشور</h2>
+          <div class="cards-grid">
+            <div class="card"><div class="card-label">GDP (میلیارد)</div><div class="card-value" id="dash-gdp">480</div></div>
+            <div class="card"><div class="card-label">رشد اقتصادی</div><div class="card-value" id="dash-growth">+2.1%</div></div>
+            <div class="card"><div class="card-label">تورم</div><div class="card-value" id="dash-inflation">3.2%</div></div>
+            <div class="card"><div class="card-label">بیکاری</div><div class="card-value" id="dash-unemp">7.5%</div></div>
+            <div class="card"><div class="card-label">بدهی ملی</div><div class="card-value" id="dash-debt">180</div></div>
+            <div class="card"><div class="card-label">کسری/مازاد</div><div class="card-value" id="dash-deficit">0</div></div>
+            <div class="card"><div class="card-label">رضایت مردم</div><div class="card-value" id="dash-sat">52</div><div class="bar-track"><div class="bar-fill" id="bar-sat" style="width:52%"></div></div></div>
+            <div class="card"><div class="card-label">ثبات</div><div class="card-value" id="dash-stability">58</div><div class="bar-track"><div class="bar-fill" id="bar-stability" style="width:58%"></div></div></div>
+            <div class="card"><div class="card-label">قدرت ارز</div><div class="card-value" id="dash-currency">100</div></div>
+            <div class="card"><div class="card-label">تراز تجاری</div><div class="card-value" id="dash-trade">4.5</div></div>
+            <div class="card"><div class="card-label">قدرت حمله</div><div class="card-value" id="dash-attack">48</div></div>
+            <div class="card"><div class="card-label">قدرت دفاع</div><div class="card-value" id="dash-defense">52</div></div>
+            <div class="card"><div class="card-label">آمادگی نظامی</div><div class="card-value" id="dash-readiness">55</div><div class="bar-track"><div class="bar-fill" id="bar-readiness" style="width:55%"></div></div></div>
+            <div class="card"><div class="card-label">سطح اطلاعات</div><div class="card-value" id="dash-intel">40</div></div>
+            <div class="card"><div class="card-label">فناوری</div><div class="card-value" id="dash-tech">44</div></div>
+            <div class="card"><div class="card-label">زیرساخت</div><div class="card-value" id="dash-infra">48</div></div>
+            <div class="card"><div class="card-label">جمعیت</div><div class="card-value" id="dash-pop">42 M</div></div>
+          </div>
+          <div class="section">
+            <h3>پیشنهادهای مشاور (۳ مورد برتر)</h3>
+            <div id="advisor-preview" class="advisor-grid"></div>
+            <p class="muted" style="margin-top:0.5rem">برای جزئیات کامل به بخش مشاور بروید.</p>
+          </div>
         </div>
-        <div id="history-list" class="panel-body"></div>
-      </aside>
-    </main>
 
-    <!-- Bottom Power Panel -->
-    <footer id="power-panel">
-      <div class="power-group">
-        <button class="power-btn" data-power="rain" title="باران">
-          <span class="icon">🌧</span>
-          <span class="label">باران</span>
-        </button>
-        <button class="power-btn" data-power="lightning" title="رعد و برق">
-          <span class="icon">⚡</span>
-          <span class="label">رعد</span>
-        </button>
-        <button class="power-btn" data-power="snow" title="برف">
-          <span class="icon">❄</span>
-          <span class="label">برف</span>
-        </button>
-      </div>
-
-      <div class="power-group time-controls">
-        <button class="power-btn time-btn" data-speed="0" title="توقف">
-          <span class="icon">⏸</span>
-        </button>
-        <button class="power-btn time-btn active" data-speed="1" title="سرعت عادی">
-          <span class="icon">▶</span>
-        </button>
-        <button class="power-btn time-btn" data-speed="2" title="×۲">
-          <span class="icon">⏩</span>
-          <span class="label">×۲</span>
-        </button>
-        <button class="power-btn time-btn" data-speed="4" title="×۴">
-          <span class="icon">⏭</span>
-          <span class="label">×۴</span>
-        </button>
-      </div>
-
-      <div class="power-group">
-        <button class="power-btn" data-power="religion" title="ایجاد دین">
-          <span class="icon">🕊</span>
-          <span class="label">دین</span>
-        </button>
-        <button class="power-btn" data-power="temptation" title="وسوسه">
-          <span class="icon">☠</span>
-          <span class="label">وسوسه</span>
-        </button>
-        <button class="power-btn" data-power="blessing" title="برکت">
-          <span class="icon">✨</span>
-          <span class="label">برکت</span>
-        </button>
-      </div>
-
-      <div class="power-group">
-        <button class="power-btn" data-power="save" title="ذخیره">
-          <span class="icon">💾</span>
-          <span class="label">ذخیره</span>
-        </button>
-        <button class="power-btn" data-power="load" title="بارگذاری">
-          <span class="icon">📂</span>
-          <span class="label">بارگذاری</span>
-        </button>
-      </div>
-    </footer>
-
-    <!-- Modals -->
-    <div id="modal-overlay" class="modal-overlay hidden">
-      <div id="modal" class="modal">
-        <div class="modal-header">
-          <h2 id="modal-title"></h2>
-          <button id="close-modal" class="btn-icon">×</button>
+        <!-- Economy -->
+        <div id="economy" class="panel">
+          <h2>اقتصاد</h2>
+          <div class="cards-grid">
+            <div class="card"><div class="card-label">GDP</div><div class="card-value" id="eco-gdp">480</div></div>
+            <div class="card"><div class="card-label">رشد</div><div class="card-value" id="eco-growth">2.1%</div></div>
+            <div class="card"><div class="card-label">تورم</div><div class="card-value" id="eco-inflation">3.2%</div></div>
+            <div class="card"><div class="card-label">بیکاری</div><div class="card-value" id="eco-unemp">7.5%</div></div>
+            <div class="card"><div class="card-label">بودجه</div><div class="card-value" id="eco-budget">95</div></div>
+            <div class="card"><div class="card-label">درآمد</div><div class="card-value" id="eco-revenue">0</div></div>
+            <div class="card"><div class="card-label">هزینه</div><div class="card-value" id="eco-spending">0</div></div>
+            <div class="card"><div class="card-label">کسری</div><div class="card-value" id="eco-deficit">0</div></div>
+            <div class="card"><div class="card-label">بدهی ملی</div><div class="card-value" id="eco-debt">180</div></div>
+            <div class="card"><div class="card-label">نرخ مالیات</div><div class="card-value" id="eco-tax">22%</div></div>
+            <div class="card"><div class="card-label">صادرات</div><div class="card-value" id="eco-exports">66.5</div></div>
+            <div class="card"><div class="card-label">واردات</div><div class="card-value" id="eco-imports">62</div></div>
+            <div class="card"><div class="card-label">تراز تجاری</div><div class="card-value" id="eco-trade">4.5</div></div>
+            <div class="card"><div class="card-label">قدرت ارز</div><div class="card-value" id="eco-currency">100</div></div>
+            <div class="card"><div class="card-label">سرمایه‌گذاری خارجی</div><div class="card-value" id="eco-fi">18</div></div>
+            <div class="card"><div class="card-label">تولید صنعتی</div><div class="card-value" id="eco-prod">55</div></div>
+            <div class="card"><div class="card-label">منابع طبیعی</div><div class="card-value" id="eco-resources">65</div></div>
+            <div class="card"><div class="card-label">زیرساخت</div><div class="card-value" id="eco-infra">48</div></div>
+          </div>
+          <div class="section">
+            <h3>اقدامات اقتصادی</h3>
+            <div class="form-row">
+              <label>نرخ مالیات:</label>
+              <input type="range" id="tax-slider" min="8" max="45" value="22" oninput="document.getElementById('tax-value').textContent=this.value+'%'" />
+              <span id="tax-value">22%</span>
+              <button class="btn" onclick="actionChangeTax()">اعمال</button>
+            </div>
+            <div class="form-row">
+              <label>سرمایه‌گذاری زیرساخت (مبلغ):</label>
+              <input type="number" id="infra-amount" value="10" min="5" max="50" />
+              <button class="btn" onclick="actionInvestInfra()">شروع پروژه</button>
+            </div>
+          </div>
         </div>
-        <div id="modal-body" class="modal-body"></div>
-        <div class="modal-footer">
-          <button id="modal-cancel" class="btn btn-secondary">انصراف</button>
-          <button id="modal-confirm" class="btn btn-primary">تأیید</button>
+
+        <!-- Resources -->
+        <div id="resources" class="panel">
+          <h2>منابع طبیعی</h2>
+          <div class="cards-grid">
+            <div class="card"><div class="card-label">نفت</div><div class="card-value" id="res-oil">40</div></div>
+            <div class="card"><div class="card-label">گاز</div><div class="card-value" id="res-gas">35</div></div>
+            <div class="card"><div class="card-label">معادن</div><div class="card-value" id="res-minerals">50</div></div>
+            <div class="card"><div class="card-label">کشاورزی</div><div class="card-value" id="res-agri">60</div></div>
+            <div class="card"><div class="card-label">خاک‌های نادر</div><div class="card-value" id="res-rare">15</div></div>
+          </div>
+          <p class="muted">منابع به‌صورت تدریجی مصرف و در رویدادها کشف می‌شوند. درآمد حاصل از آن‌ها در بودجه لحاظ می‌گردد.</p>
         </div>
-      </div>
+
+        <!-- Population -->
+        <div id="population" class="panel">
+          <h2>جمعیت و رضایت</h2>
+          <div class="cards-grid">
+            <div class="card"><div class="card-label">جمعیت کل</div><div class="card-value" id="pop-total">42 M</div></div>
+            <div class="card"><div class="card-label">رضایت عمومی</div><div class="card-value" id="pop-sat">52</div><div class="bar-track"><div class="bar-fill" id="bar-pop-sat" style="width:52%"></div></div></div>
+            <div class="card"><div class="card-label">شادی</div><div class="card-value" id="pop-happy">50</div></div>
+            <div class="card"><div class="card-label">سلامت</div><div class="card-value" id="pop-health">62</div></div>
+            <div class="card"><div class="card-label">آموزش</div><div class="card-value" id="pop-edu">58</div></div>
+            <div class="card"><div class="card-label">نرخ فقر</div><div class="card-value" id="pop-poverty">14%</div></div>
+          </div>
+          <p class="muted">رضایت مردم تحت تأثیر تورم، بیکاری، مالیات، امنیت و کیفیت زندگی است. رضایت بسیار پایین می‌تواند منجر به اعتراض و بی‌ثباتی شود.</p>
+        </div>
+
+        <!-- Military -->
+        <div id="military" class="panel">
+          <h2>ارتش و دفاع</h2>
+          <div class="cards-grid">
+            <div class="card"><div class="card-label">ارتش</div><div class="card-value" id="mil-army">45</div><div class="bar-track"><div class="bar-fill" id="bar-army" style="width:45%"></div></div></div>
+            <div class="card"><div class="card-label">نیروی هوایی</div><div class="card-value" id="mil-air">38</div><div class="bar-track"><div class="bar-fill" id="bar-air" style="width:38%"></div></div></div>
+            <div class="card"><div class="card-label">نیروی دریایی</div><div class="card-value" id="mil-navy">32</div><div class="bar-track"><div class="bar-fill" id="bar-navy" style="width:32%"></div></div></div>
+            <div class="card"><div class="card-label">سامانه‌های دفاعی</div><div class="card-value" id="mil-defsys">40</div></div>
+            <div class="card"><div class="card-label">بودجه نظامی</div><div class="card-value" id="mil-budget">12</div></div>
+            <div class="card"><div class="card-label">فناوری نظامی</div><div class="card-value" id="mil-tech">42</div></div>
+            <div class="card"><div class="card-label">آمادگی</div><div class="card-value" id="mil-ready">55</div><div class="bar-track"><div class="bar-fill" id="bar-ready" style="width:55%"></div></div></div>
+            <div class="card"><div class="card-label">قدرت حمله</div><div class="card-value" id="mil-attack">48</div></div>
+            <div class="card"><div class="card-label">قدرت دفاع</div><div class="card-value" id="mil-defense">52</div></div>
+            <div class="card"><div class="card-label">نیروی انسانی</div><div class="card-value" id="mil-manpower">280 K</div></div>
+          </div>
+          <div class="section">
+            <h3>اقدامات نظامی</h3>
+            <div class="form-row">
+              <label>بودجه نظامی:</label>
+              <input type="number" id="mil-budget-input" value="12" min="3" max="45" step="0.5" />
+              <button class="btn" onclick="actionMilBudget()">تنظیم</button>
+            </div>
+            <div class="form-row">
+              <label>میزان توسعه نیرو:</label>
+              <input type="number" id="force-amount" value="8" min="3" max="25" />
+              <button class="btn" onclick="actionDevelopForce('army')">ارتش</button>
+              <button class="btn" onclick="actionDevelopForce('airForce')">هوایی</button>
+              <button class="btn" onclick="actionDevelopForce('navy')">دریایی</button>
+              <button class="btn" onclick="actionDevelopForce('defenseSystems')">دفاعی</button>
+            </div>
+            <div class="form-row">
+              <label>امتیاز تحقیق نظامی:</label>
+              <input type="number" id="research-points" value="5" min="2" max="20" />
+              <button class="btn" onclick="actionResearchMil()">تحقیق</button>
+              <button class="btn btn-success" onclick="actionTrain()">تمرین فشرده (+آمادگی)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Intelligence -->
+        <div id="intelligence" class="panel">
+          <h2>سازمان اطلاعات و عملیات مخفی</h2>
+          <div class="cards-grid">
+            <div class="card"><div class="card-label">بودجه اطلاعات</div><div class="card-value" id="int-budget">4.5</div></div>
+            <div class="card"><div class="card-label">سطح کلی</div><div class="card-value" id="int-level">40</div></div>
+            <div class="card"><div class="card-label">اطلاعات داخلی</div><div class="card-value" id="int-domestic">45</div></div>
+            <div class="card"><div class="card-label">اطلاعات خارجی</div><div class="card-value" id="int-foreign">38</div></div>
+            <div class="card"><div class="card-label">ضدجاسوسی</div><div class="card-value" id="int-counter">42</div></div>
+          </div>
+          <div class="two-col">
+            <div class="section">
+              <h3>عملیات فعال</h3>
+              <div id="intel-ops-list"></div>
+            </div>
+            <div class="section">
+              <h3>تهدیدهای شناسایی‌شده</h3>
+              <div id="intel-threats"></div>
+            </div>
+          </div>
+          <div class="section">
+            <h3>اقدامات</h3>
+            <div class="form-row">
+              <label>بودجه اطلاعات:</label>
+              <input type="number" id="intel-budget-input" value="4.5" min="1" max="20" step="0.5" />
+              <button class="btn" onclick="actionIntelBudget()">تنظیم</button>
+              <button class="btn btn-success" onclick="actionGatherIntel()">جمع‌آوری اطلاعات</button>
+            </div>
+            <div class="form-row">
+              <label>هدف عملیات مخفی:</label>
+              <select id="covert-target">
+                <option value="">انتخاب کشور...</option>
+                <option value="northalia">نورثالیا</option>
+                <option value="eastoria">ایستوریا</option>
+                <option value="westland">وست‌لند</option>
+                <option value="southmere">ساوث‌میر</option>
+                <option value="centara">سنتارا</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <button class="btn" onclick="actionStartCovert('spy')">جاسوسی</button>
+              <button class="btn" onclick="actionStartCovert('sabotage')">خرابکاری</button>
+              <button class="btn" onclick="actionStartCovert('infiltrate')">نفوذ</button>
+              <button class="btn btn-danger" onclick="actionStartCovert('targeted')">عملیات هدفمند</button>
+            </div>
+            <p class="muted">عملیات مخفی دارای شانس موفقیت و ریسک افشا هستند. افشا می‌تواند منجر به تحریم و بحران دیپلماتیک شود.</p>
+          </div>
+        </div>
+
+        <!-- Diplomacy -->
+        <div id="diplomacy" class="panel">
+          <h2>دیپلماسی و روابط خارجی</h2>
+          <div class="section">
+            <h3>روابط با کشورها</h3>
+            <div id="relations-list"></div>
+          </div>
+          <div class="two-col">
+            <div class="section">
+              <h3>توافق‌های فعال</h3>
+              <div id="agreements-list"></div>
+            </div>
+            <div class="section">
+              <h3>تحریم‌ها</h3>
+              <div id="sanctions-list"></div>
+            </div>
+          </div>
+          <div class="section">
+            <h3>پیشنهاد توافق جدید</h3>
+            <div class="form-row">
+              <label>کشور هدف:</label>
+              <select id="agree-target">
+                <option value="">انتخاب...</option>
+                <option value="northalia">نورثالیا</option>
+                <option value="eastoria">ایستوریا</option>
+                <option value="westland">وست‌لند</option>
+                <option value="southmere">ساوث‌میر</option>
+                <option value="centara">سنتارا</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <button class="btn" onclick="actionProposeAgreement('trade')">تجاری</button>
+              <button class="btn" onclick="actionProposeAgreement('economic')">اقتصادی</button>
+              <button class="btn" onclick="actionProposeAgreement('energy')">انرژی</button>
+              <button class="btn" onclick="actionProposeAgreement('defense')">دفاعی</button>
+              <button class="btn" onclick="actionProposeAgreement('military')">نظامی</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advisor -->
+        <div id="advisor" class="panel">
+          <h2>مشاور ریاست‌جمهوری</h2>
+          <p class="muted" style="margin-bottom:1rem">مشاور همیشه دقیقاً ۳ پیشنهاد هوشمند بر اساس وضعیت فعلی کشور ارائه می‌دهد.</p>
+          <div id="advisor-cards" class="advisor-grid"></div>
+        </div>
+
+        <!-- Alerts -->
+        <div id="alerts" class="panel">
+          <h2>هشدارها و رویدادها</h2>
+          <div id="alerts-box" class="section"></div>
+        </div>
+      </main>
     </div>
-
-    <!-- Toast Notifications -->
-    <div id="toast-container"></div>
   </div>
 
-  <script type="module" src="main.js"></script>
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Modal -->
+  <div id="modal" class="modal-overlay">
+    <div class="modal">
+      <h3 id="modal-title">عنوان</h3>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button class="btn" id="modal-cancel">انصراف</button>
+        <button class="btn btn-success" id="modal-confirm">تأیید</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts (order matters) -->
+  <script src="data.js"></script>
+  <script src="state.js"></script>
+  <script src="economy.js"></script>
+  <script src="military.js"></script>
+  <script src="intelligence.js"></script>
+  <script src="diplomacy.js"></script>
+  <script src="events.js"></script>
+  <script src="advisor.js"></script>
+  <script src="save.js"></script>
+  <script src="ui.js"></script>
+  <script src="game.js"></script>
 </body>
 </html>
