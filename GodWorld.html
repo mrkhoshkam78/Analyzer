@@ -1,0 +1,2728 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GodWorld V1.0</title>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+:root {
+  --bg-dark: #0a0e17;
+  --bg-panel: #12182a;
+  --bg-card: #1a2238;
+  --border: #2a3555;
+  --accent: #6c5ce7;
+  --accent-hover: #8b7cf0;
+  --success: #00b894;
+  --warning: #fdcb6e;
+  --danger: #e17055;
+  --text: #e8ecf4;
+  --text-muted: #8b95b0;
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: 'Vazirmatn', system-ui, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg-dark);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+  direction: rtl;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ===== TOP BAR ===== */
+#top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: linear-gradient(180deg, var(--bg-panel) 0%, rgba(18, 24, 42, 0.95) 100%);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  z-index: 100;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.world-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 180px;
+}
+
+.world-title h1 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+.world-title small {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.god-icon {
+  font-size: 1.5rem;
+  color: var(--accent);
+  animation: pulse 3s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+.stats-panel {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  flex: 1;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg-card);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  min-width: 70px;
+}
+
+.stat .label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.stat span:last-child {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.time-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-card);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  min-width: 180px;
+  justify-content: center;
+}
+
+#time-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+#speed-indicator {
+  font-size: 1.1rem;
+}
+
+/* ===== GAME AREA ===== */
+#game-area {
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  background: #0d1220;
+}
+
+#map-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#world-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+#selection-overlay {
+  position: absolute;
+  pointer-events: none;
+  border: 2px dashed var(--accent);
+  border-radius: 4px;
+  display: none;
+  background: rgba(108, 92, 231, 0.15);
+}
+
+#weather-effects {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ===== SIDE PANELS ===== */
+.side-panel {
+  width: 280px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 20px rgba(0,0,0,0.3);
+  z-index: 50;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.side-panel.hidden {
+  display: none;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.panel-header h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.btn-icon {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+/* History items */
+.history-item {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  border-right: 3px solid var(--accent);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  animation: slideIn 0.3s ease;
+}
+
+.history-item .time {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  margin-bottom: 4px;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Info panel content */
+.info-section {
+  margin-bottom: 16px;
+}
+
+.info-section h4 {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(42, 53, 85, 0.5);
+  font-size: 0.85rem;
+}
+
+.info-row .value {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.progress-fill.faith { background: linear-gradient(90deg, #6c5ce7, #a29bfe); }
+.progress-fill.happiness { background: linear-gradient(90deg, #00b894, #55efc4); }
+.progress-fill.fear { background: linear-gradient(90deg, #e17055, #fab1a0); }
+.progress-fill.wealth { background: linear-gradient(90deg, #fdcb6e, #ffeaa7); }
+
+/* ===== POWER PANEL ===== */
+#power-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 12px 20px;
+  background: linear-gradient(0deg, var(--bg-panel) 0%, rgba(18, 24, 42, 0.98) 100%);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.power-group {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.power-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 56px;
+  height: 56px;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font);
+  font-size: 0.7rem;
+}
+
+.power-btn:hover {
+  background: rgba(108, 92, 231, 0.15);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.power-btn.active {
+  background: rgba(108, 92, 231, 0.25);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(108, 92, 231, 0.3);
+}
+
+.power-btn .icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.power-btn .label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.power-btn:hover .label,
+.power-btn.active .label {
+  color: var(--text);
+}
+
+.time-controls .power-btn {
+  min-width: 48px;
+}
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal {
+  background: var(--bg-panel);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  width: 90%;
+  max-width: 480px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  animation: modalIn 0.25s ease;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.btn {
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+/* Form elements */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.color-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.color-option {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.color-option.selected {
+  border-color: white;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.target-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.target-btn {
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.target-btn:hover,
+.target-btn.selected {
+  background: rgba(108, 92, 231, 0.2);
+  border-color: var(--accent);
+}
+
+/* Toast */
+#toast-container {
+  position: fixed;
+  top: 80px;
+  left: 20px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-right: 4px solid var(--accent);
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  font-size: 0.85rem;
+  animation: toastIn 0.3s ease;
+  max-width: 320px;
+}
+
+.toast.success { border-right-color: var(--success); }
+.toast.warning { border-right-color: var(--warning); }
+.toast.danger { border-right-color: var(--danger); }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Tribe legend */
+.tribe-legend {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(18, 24, 42, 0.9);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  z-index: 40;
+  font-size: 0.75rem;
+}
+
+.tribe-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.tribe-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .stats-panel {
+    gap: 8px;
+  }
+  .stat {
+    min-width: 55px;
+    padding: 4px 8px;
+  }
+  #power-panel {
+    gap: 10px;
+    padding: 8px 10px;
+    overflow-x: auto;
+  }
+  .power-btn {
+    min-width: 48px;
+    height: 48px;
+  }
+  .side-panel {
+    width: 240px;
+  }
+}
+
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Top Bar: World Info -->
+    <header id="top-bar">
+      <div class="world-title">
+        <span class="god-icon">✦</span>
+        <h1>GodWorld <small>V1.0</small></h1>
+      </div>
+      <div id="world-stats" class="stats-panel">
+        <div class="stat"><span class="label">جمعیت</span><span id="stat-population">0</span></div>
+        <div class="stat"><span class="label">اقوام</span><span id="stat-tribes">0</span></div>
+        <div class="stat"><span class="label">ادیان</span><span id="stat-religions">0</span></div>
+        <div class="stat"><span class="label">خوشحال</span><span id="stat-happy">0</span></div>
+        <div class="stat"><span class="label">برکت</span><span id="stat-blessed">0</span></div>
+        <div class="stat"><span class="label">وسوسه</span><span id="stat-tempted">0</span></div>
+      </div>
+      <div id="time-display" class="time-panel">
+        <span id="time-label">روز ۱ • ساعت ۰۰:۰۰</span>
+        <span id="speed-indicator">⏸</span>
+      </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main id="game-area">
+      <div id="map-container">
+        <canvas id="world-canvas"></canvas>
+        <div id="selection-overlay"></div>
+        <div id="weather-effects"></div>
+      </div>
+
+      <!-- Side Panels -->
+      <aside id="info-panel" class="side-panel hidden">
+        <div class="panel-header">
+          <h3 id="info-title">اطلاعات</h3>
+          <button id="close-info" class="btn-icon">×</button>
+        </div>
+        <div id="info-content" class="panel-body"></div>
+      </aside>
+
+      <aside id="history-panel" class="side-panel">
+        <div class="panel-header">
+          <h3>تاریخچه جهان</h3>
+          <button id="toggle-history" class="btn-icon">−</button>
+        </div>
+        <div id="history-list" class="panel-body"></div>
+      </aside>
+    </main>
+
+    <!-- Bottom Power Panel -->
+    <footer id="power-panel">
+      <div class="power-group">
+        <button class="power-btn" data-power="rain" title="باران">
+          <span class="icon">🌧</span>
+          <span class="label">باران</span>
+        </button>
+        <button class="power-btn" data-power="lightning" title="رعد و برق">
+          <span class="icon">⚡</span>
+          <span class="label">رعد</span>
+        </button>
+        <button class="power-btn" data-power="snow" title="برف">
+          <span class="icon">❄</span>
+          <span class="label">برف</span>
+        </button>
+      </div>
+
+      <div class="power-group time-controls">
+        <button class="power-btn time-btn" data-speed="0" title="توقف">
+          <span class="icon">⏸</span>
+        </button>
+        <button class="power-btn time-btn active" data-speed="1" title="سرعت عادی">
+          <span class="icon">▶</span>
+        </button>
+        <button class="power-btn time-btn" data-speed="2" title="×۲">
+          <span class="icon">⏩</span>
+          <span class="label">×۲</span>
+        </button>
+        <button class="power-btn time-btn" data-speed="4" title="×۴">
+          <span class="icon">⏭</span>
+          <span class="label">×۴</span>
+        </button>
+      </div>
+
+      <div class="power-group">
+        <button class="power-btn" data-power="religion" title="ایجاد دین">
+          <span class="icon">🕊</span>
+          <span class="label">دین</span>
+        </button>
+        <button class="power-btn" data-power="temptation" title="وسوسه">
+          <span class="icon">☠</span>
+          <span class="label">وسوسه</span>
+        </button>
+        <button class="power-btn" data-power="blessing" title="برکت">
+          <span class="icon">✨</span>
+          <span class="label">برکت</span>
+        </button>
+      </div>
+
+      <div class="power-group">
+        <button class="power-btn" data-power="save" title="ذخیره">
+          <span class="icon">💾</span>
+          <span class="label">ذخیره</span>
+        </button>
+        <button class="power-btn" data-power="load" title="بارگذاری">
+          <span class="icon">📂</span>
+          <span class="label">بارگذاری</span>
+        </button>
+      </div>
+    </footer>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+      <div id="modal" class="modal">
+        <div class="modal-header">
+          <h2 id="modal-title"></h2>
+          <button id="close-modal" class="btn-icon">×</button>
+        </div>
+        <div id="modal-body" class="modal-body"></div>
+        <div class="modal-footer">
+          <button id="modal-cancel" class="btn btn-secondary">انصراف</button>
+          <button id="modal-confirm" class="btn btn-primary">تأیید</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+  </div>
+
+  <script>
+// ===== js/entities/NPC.js =====
+/**
+ * NPC Entity - Individual character in the world
+ */
+class NPC {
+  constructor({
+    id,
+    name,
+    tribeId,
+    x,
+    y,
+    age = 20 + Math.floor(Math.random() * 40),
+    faith = 30 + Math.floor(Math.random() * 40),
+    happiness = 40 + Math.floor(Math.random() * 30),
+    fear = 10 + Math.floor(Math.random() * 20),
+    wealth = 20 + Math.floor(Math.random() * 40),
+    loyalty = 50 + Math.floor(Math.random() * 30),
+    personality = null,
+    religionId = null
+  }) {
+    this.id = id;
+    this.name = name;
+    this.tribeId = tribeId;
+    this.x = x;
+    this.y = y;
+    this.age = age;
+    this.faith = Math.max(0, Math.min(100, faith));
+    this.happiness = Math.max(0, Math.min(100, happiness));
+    this.fear = Math.max(0, Math.min(100, fear));
+    this.wealth = Math.max(0, Math.min(100, wealth));
+    this.loyalty = Math.max(0, Math.min(100, loyalty));
+    this.personality = personality || this._randomPersonality();
+    this.religionId = religionId;
+    this.blessings = [];
+    this.temptations = [];
+    this.status = 'idle'; // idle, moving, interacting, scared, blessed
+    this.targetX = null;
+    this.targetY = null;
+    this.speed = 0.3 + Math.random() * 0.4;
+    this.vx = 0;
+    this.vy = 0;
+    this.lastDecision = 0;
+    this.decisionCooldown = 60 + Math.floor(Math.random() * 120);
+    this.homeX = x;
+    this.homeY = y;
+    this.color = null; // set by tribe
+  }
+
+  _randomPersonality() {
+    const types = ['brave', 'cautious', 'curious', 'loyal', 'ambitious', 'peaceful'];
+    return types[Math.floor(Math.random() * types.length)];
+  }
+
+  update(dt, world) {
+    // Apply status effects
+    this._applyEffects(dt);
+
+    // Decision making
+    this.lastDecision += dt;
+    if (this.lastDecision >= this.decisionCooldown) {
+      this.lastDecision = 0;
+      this._makeDecision(world);
+    }
+
+    // Movement
+    if (this.targetX !== null && this.targetY !== null) {
+      const dx = this.targetX - this.x;
+      const dy = this.targetY - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < 2) {
+        this.targetX = null;
+        this.targetY = null;
+        this.status = 'idle';
+        this.vx = 0;
+        this.vy = 0;
+      } else {
+        this.vx = (dx / dist) * this.speed;
+        this.vy = (dy / dist) * this.speed;
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.status = 'moving';
+      }
+    }
+
+    // Clamp to map bounds (will be set by world)
+    if (world && world.map) {
+      this.x = Math.max(5, Math.min(world.map.width - 5, this.x));
+      this.y = Math.max(5, Math.min(world.map.height - 5, this.y));
+    }
+  }
+
+  _makeDecision(world) {
+    // Simple decision system based on state
+    if (this.fear > 70) {
+      // Flee toward home
+      this.targetX = this.homeX + (Math.random() - 0.5) * 30;
+      this.targetY = this.homeY + (Math.random() - 0.5) * 30;
+      this.status = 'scared';
+      return;
+    }
+
+    if (this.happiness > 70 && Math.random() < 0.3) {
+      // Wander near home happily
+      this.targetX = this.homeX + (Math.random() - 0.5) * 60;
+      this.targetY = this.homeY + (Math.random() - 0.5) * 60;
+      return;
+    }
+
+    if (Math.random() < 0.4) {
+      // Random wander
+      this.targetX = this.x + (Math.random() - 0.5) * 80;
+      this.targetY = this.y + (Math.random() - 0.5) * 80;
+    }
+  }
+
+  _applyEffects(dt) {
+    // Blessings slowly increase happiness/faith
+    for (const b of this.blessings) {
+      if (b.active) {
+        this.happiness = Math.min(100, this.happiness + 0.01 * dt);
+        if (b.type === 'faith') this.faith = Math.min(100, this.faith + 0.015 * dt);
+        if (b.type === 'wealth') this.wealth = Math.min(100, this.wealth + 0.01 * dt);
+      }
+    }
+
+    // Fear decays over time
+    if (this.fear > 0) {
+      this.fear = Math.max(0, this.fear - 0.02 * dt);
+    }
+
+    // Temptation effects
+    for (const t of this.temptations) {
+      if (t.active && !t.resolved) {
+        // Subtle negative influence
+        if (Math.random() < 0.001 * dt) {
+          this.faith = Math.max(0, this.faith - 1);
+          this.loyalty = Math.max(0, this.loyalty - 0.5);
+        }
+      }
+    }
+  }
+
+  applyBlessing(blessing) {
+    this.blessings.push(blessing);
+    this.status = 'blessed';
+    if (blessing.type === 'happiness' || blessing.type === 'all') {
+      this.happiness = Math.min(100, this.happiness + 15);
+    }
+    if (blessing.type === 'faith' || blessing.type === 'all') {
+      this.faith = Math.min(100, this.faith + 10);
+    }
+    if (blessing.type === 'wealth' || blessing.type === 'all') {
+      this.wealth = Math.min(100, this.wealth + 12);
+    }
+    if (blessing.type === 'loyalty' || blessing.type === 'all') {
+      this.loyalty = Math.min(100, this.loyalty + 10);
+    }
+  }
+
+  applyTemptation(temptation) {
+    this.temptations.push(temptation);
+    // Probability based on traits
+    const resistChance = (this.faith * 0.5 + this.loyalty * 0.3 + this.happiness * 0.2) / 100;
+    const fearBonus = this.fear * 0.002;
+    const acceptChance = 1 - resistChance + fearBonus;
+
+    if (Math.random() < acceptChance) {
+      temptation.accepted = true;
+      temptation.resolved = true;
+      this.faith = Math.max(0, this.faith - 20);
+      this.happiness = Math.max(0, this.happiness - 10);
+      this.loyalty = Math.max(0, this.loyalty - 15);
+      this.status = 'tempted';
+      return 'accepted';
+    } else {
+      temptation.accepted = false;
+      temptation.resolved = true;
+      this.faith = Math.min(100, this.faith + 5); // resistance strengthens faith
+      return 'resisted';
+    }
+  }
+
+  setReligion(religionId) {
+    this.religionId = religionId;
+    this.faith = Math.min(100, this.faith + 15);
+  }
+
+  reactToWeather(type, intensity = 1) {
+    if (type === 'rain') {
+      this.happiness = Math.min(100, this.happiness + 5 * intensity);
+      this.fear = Math.max(0, this.fear - 3);
+    } else if (type === 'lightning') {
+      this.fear = Math.min(100, this.fear + 25 * intensity);
+      this.happiness = Math.max(0, this.happiness - 10);
+      // Flee a bit
+      this.targetX = this.x + (Math.random() - 0.5) * 40;
+      this.targetY = this.y + (Math.random() - 0.5) * 40;
+      this.status = 'scared';
+    } else if (type === 'snow') {
+      // Depends on location preference later
+      this.happiness = Math.max(0, this.happiness - 3 * intensity);
+      this.fear = Math.min(100, this.fear + 5);
+    }
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      name: this.name,
+      tribeId: this.tribeId,
+      x: this.x,
+      y: this.y,
+      age: this.age,
+      faith: this.faith,
+      happiness: this.happiness,
+      fear: this.fear,
+      wealth: this.wealth,
+      loyalty: this.loyalty,
+      personality: this.personality,
+      religionId: this.religionId,
+      blessings: this.blessings,
+      temptations: this.temptations,
+      status: this.status,
+      homeX: this.homeX,
+      homeY: this.homeY,
+      color: this.color
+    };
+  }
+
+  static fromJSON(data) {
+    const npc = new NPC(data);
+    npc.blessings = data.blessings || [];
+    npc.temptations = data.temptations || [];
+    npc.status = data.status || 'idle';
+    npc.homeX = data.homeX ?? data.x;
+    npc.homeY = data.homeY ?? data.y;
+    npc.color = data.color;
+    return npc;
+  }
+}
+
+// ===== js/entities/Tribe.js =====
+/**
+ * Tribe Entity - A group/nation of NPCs
+ */
+class Tribe {
+  constructor({
+    id,
+    name,
+    color,
+    startX,
+    startY,
+    region,
+    population = 12,
+    faith = 40,
+    happiness = 50,
+    wealth = 40,
+    relations = {}
+  }) {
+    this.id = id;
+    this.name = name;
+    this.color = color;
+    this.startX = startX;
+    this.startY = startY;
+    this.region = region;
+    this.population = population;
+    this.faith = faith;
+    this.happiness = happiness;
+    this.wealth = wealth;
+    this.relations = relations; // { tribeId: value -100 to 100 }
+    this.memberIds = [];
+    this.blessings = [];
+  }
+
+  addMember(npcId) {
+    if (!this.memberIds.includes(npcId)) {
+      this.memberIds.push(npcId);
+      this.population = this.memberIds.length;
+    }
+  }
+
+  removeMember(npcId) {
+    this.memberIds = this.memberIds.filter(id => id !== npcId);
+    this.population = this.memberIds.length;
+  }
+
+  updateStats(npcs) {
+    const members = npcs.filter(n => n.tribeId === this.id);
+    if (members.length === 0) return;
+
+    this.population = members.length;
+    this.faith = members.reduce((s, n) => s + n.faith, 0) / members.length;
+    this.happiness = members.reduce((s, n) => s + n.happiness, 0) / members.length;
+    this.wealth = members.reduce((s, n) => s + n.wealth, 0) / members.length;
+  }
+
+  applyBlessing(blessing) {
+    this.blessings.push(blessing);
+  }
+
+  getRelation(otherTribeId) {
+    return this.relations[otherTribeId] ?? 0;
+  }
+
+  setRelation(otherTribeId, value) {
+    this.relations[otherTribeId] = Math.max(-100, Math.min(100, value));
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      name: this.name,
+      color: this.color,
+      startX: this.startX,
+      startY: this.startY,
+      region: this.region,
+      population: this.population,
+      faith: this.faith,
+      happiness: this.happiness,
+      wealth: this.wealth,
+      relations: this.relations,
+      memberIds: this.memberIds,
+      blessings: this.blessings
+    };
+  }
+
+  static fromJSON(data) {
+    const t = new Tribe(data);
+    t.memberIds = data.memberIds || [];
+    t.blessings = data.blessings || [];
+    t.relations = data.relations || {};
+    return t;
+  }
+}
+
+// ===== js/entities/Religion.js =====
+/**
+ * Religion Entity
+ */
+class Religion {
+  constructor({
+    id,
+    name,
+    doctrine,
+    color = '#a29bfe',
+    symbol = '✦',
+    founderId = null,
+    followerIds = [],
+    createdAt = 0
+  }) {
+    this.id = id;
+    this.name = name;
+    this.doctrine = doctrine;
+    this.color = color;
+    this.symbol = symbol;
+    this.founderId = founderId;
+    this.followerIds = followerIds;
+    this.createdAt = createdAt;
+    this.spreadRate = 0.002; // base chance per tick to convert nearby
+  }
+
+  addFollower(npcId) {
+    if (!this.followerIds.includes(npcId)) {
+      this.followerIds.push(npcId);
+    }
+  }
+
+  removeFollower(npcId) {
+    this.followerIds = this.followerIds.filter(id => id !== npcId);
+  }
+
+  get followerCount() {
+    return this.followerIds.length;
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      name: this.name,
+      doctrine: this.doctrine,
+      color: this.color,
+      symbol: this.symbol,
+      founderId: this.founderId,
+      followerIds: this.followerIds,
+      createdAt: this.createdAt,
+      spreadRate: this.spreadRate
+    };
+  }
+
+  static fromJSON(data) {
+    const r = new Religion(data);
+    r.followerIds = data.followerIds || [];
+    r.spreadRate = data.spreadRate ?? 0.002;
+    return r;
+  }
+}
+
+// ===== js/systems/TimeSystem.js =====
+/**
+ * Time System - Controls game time flow and speed
+ */
+class TimeSystem {
+  constructor() {
+    this.day = 1;
+    this.hour = 0;
+    this.minute = 0;
+    this.speed = 1; // 0 = paused, 1 = normal, 2, 4, ...
+    this.tickAccumulator = 0;
+    this.minutesPerTick = 1; // at speed 1, each tick advances 1 minute
+    this.listeners = [];
+  }
+
+  setSpeed(speed) {
+    this.speed = Math.max(0, speed);
+  }
+
+  isPaused() {
+    return this.speed === 0;
+  }
+
+  update(realDt) {
+    if (this.speed === 0) return 0;
+
+    // Convert real delta to game delta
+    const gameDt = realDt * this.speed;
+    this.tickAccumulator += gameDt;
+
+    // Advance time (every ~1 second of game time at speed 1 = 1 minute)
+    while (this.tickAccumulator >= 1) {
+      this.tickAccumulator -= 1;
+      this.minute += this.minutesPerTick;
+
+      if (this.minute >= 60) {
+        this.minute = 0;
+        this.hour += 1;
+        if (this.hour >= 24) {
+          this.hour = 0;
+          this.day += 1;
+          this._emit('newDay', { day: this.day });
+        }
+        this._emit('newHour', { day: this.day, hour: this.hour });
+      }
+    }
+
+    return gameDt;
+  }
+
+  getTimeString() {
+    const h = String(this.hour).padStart(2, '0');
+    const m = String(this.minute).padStart(2, '0');
+    return `روز ${this.day} • ساعت ${h}:${m}`;
+  }
+
+  getSpeedLabel() {
+    if (this.speed === 0) return '⏸';
+    if (this.speed === 1) return '▶';
+    return `×${this.speed}`;
+  }
+
+  on(event, cb) {
+    this.listeners.push({ event, cb });
+  }
+
+  _emit(event, data) {
+    for (const l of this.listeners) {
+      if (l.event === event) l.cb(data);
+    }
+  }
+
+  toJSON() {
+    return {
+      day: this.day,
+      hour: this.hour,
+      minute: this.minute,
+      speed: this.speed
+    };
+  }
+
+  fromJSON(data) {
+    this.day = data.day ?? 1;
+    this.hour = data.hour ?? 0;
+    this.minute = data.minute ?? 0;
+    this.speed = data.speed ?? 1;
+  }
+}
+
+// ===== js/systems/MapSystem.js =====
+/**
+ * Map System - Generates and renders the 2D world map
+ */
+class MapSystem {
+  constructor(width = 1200, height = 700) {
+    this.width = width;
+    this.height = height;
+    this.tiles = [];
+    this.tileSize = 20;
+    this.cols = Math.ceil(width / this.tileSize);
+    this.rows = Math.ceil(height / this.tileSize);
+    this.regions = {
+      plains: { color: '#2d5a27', name: 'دشت' },
+      forest: { color: '#1a3d1a', name: 'جنگل' },
+      mountain: { color: '#5a5a5a', name: 'کوهستان' },
+      water: { color: '#1a4a6e', name: 'رودخانه' },
+      snow: { color: '#c8d6e5', name: 'برفی' },
+      desert: { color: '#c4a35a', name: 'خشک' }
+    };
+    this.activeWeather = []; // { type, x, y, radius, duration, intensity }
+  }
+
+  generate() {
+    this.tiles = [];
+    for (let r = 0; r < this.rows; r++) {
+      const row = [];
+      for (let c = 0; c < this.cols; c++) {
+        const nx = c / this.cols;
+        const ny = r / this.rows;
+        let type = 'plains';
+
+        // Simple procedural regions
+        if (nx < 0.25 && ny < 0.45) type = 'forest';
+        else if (nx > 0.7 && ny < 0.4) type = 'mountain';
+        else if (nx > 0.55 && ny > 0.65) type = 'desert';
+        else if (nx < 0.35 && ny > 0.6) type = 'snow';
+        else if (Math.abs(nx - 0.5) < 0.08 || Math.abs(ny - 0.5) < 0.06) type = 'water';
+        else if (nx > 0.4 && nx < 0.6 && ny > 0.3 && ny < 0.55) type = 'plains';
+
+        // Noise variation
+        const noise = Math.sin(c * 0.3) * Math.cos(r * 0.25) + Math.random() * 0.3;
+        if (noise > 0.7 && type === 'plains') type = 'forest';
+        if (noise < -0.5 && type === 'plains') type = 'desert';
+
+        row.push({ type, fertility: type === 'plains' || type === 'forest' ? 0.7 : 0.3 });
+      }
+      this.tiles.push(row);
+    }
+  }
+
+  getTileAt(x, y) {
+    const c = Math.floor(x / this.tileSize);
+    const r = Math.floor(y / this.tileSize);
+    if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) {
+      return this.tiles[r][c];
+    }
+    return null;
+  }
+
+  getRegionAt(x, y) {
+    const tile = this.getTileAt(x, y);
+    return tile ? this.regions[tile.type] : null;
+  }
+
+  addWeather(type, x, y, radius = 80, duration = 300, intensity = 1) {
+    this.activeWeather.push({ type, x, y, radius, duration, intensity, age: 0 });
+  }
+
+  updateWeather(dt) {
+    this.activeWeather = this.activeWeather.filter(w => {
+      w.age += dt;
+      return w.age < w.duration;
+    });
+  }
+
+  render(ctx, camera = { x: 0, y: 0 }) {
+    // Draw tiles
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        const tile = this.tiles[r][c];
+        const region = this.regions[tile.type];
+        ctx.fillStyle = region.color;
+        ctx.fillRect(c * this.tileSize, r * this.tileSize, this.tileSize + 1, this.tileSize + 1);
+
+        // Subtle variation
+        if (tile.type === 'forest' && (c + r) % 3 === 0) {
+          ctx.fillStyle = 'rgba(0,0,0,0.15)';
+          ctx.beginPath();
+          ctx.arc(c * this.tileSize + 10, r * this.tileSize + 10, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (tile.type === 'mountain' && (c * r) % 5 === 0) {
+          ctx.fillStyle = 'rgba(255,255,255,0.1)';
+          ctx.beginPath();
+          ctx.moveTo(c * this.tileSize + 5, r * this.tileSize + 18);
+          ctx.lineTo(c * this.tileSize + 10, r * this.tileSize + 4);
+          ctx.lineTo(c * this.tileSize + 15, r * this.tileSize + 18);
+          ctx.fill();
+        }
+      }
+    }
+
+    // Draw weather overlays
+    for (const w of this.activeWeather) {
+      const progress = w.age / w.duration;
+      const alpha = Math.sin(progress * Math.PI) * 0.4 * w.intensity;
+
+      if (w.type === 'rain') {
+        ctx.fillStyle = `rgba(100, 150, 255, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, w.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rain drops
+        ctx.strokeStyle = `rgba(180, 200, 255, ${alpha + 0.2})`;
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 20; i++) {
+          const rx = w.x + (Math.random() - 0.5) * w.radius * 1.8;
+          const ry = w.y + (Math.random() - 0.5) * w.radius * 1.8;
+          ctx.beginPath();
+          ctx.moveTo(rx, ry);
+          ctx.lineTo(rx - 2, ry + 8);
+          ctx.stroke();
+        }
+      } else if (w.type === 'snow') {
+        ctx.fillStyle = `rgba(220, 230, 255, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, w.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = `rgba(255,255,255,${alpha + 0.3})`;
+        for (let i = 0; i < 15; i++) {
+          const sx = w.x + (Math.random() - 0.5) * w.radius * 1.6;
+          const sy = w.y + (Math.random() - 0.5) * w.radius * 1.6;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (w.type === 'lightning') {
+        // Flash
+        if (w.age < 15) {
+          ctx.fillStyle = `rgba(255, 255, 200, ${0.5 * (1 - w.age / 15)})`;
+          ctx.beginPath();
+          ctx.arc(w.x, w.y, w.radius * 1.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Bolt
+          ctx.strokeStyle = `rgba(255, 255, 150, ${1 - w.age / 15})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(w.x, w.y - 40);
+          ctx.lineTo(w.x + 8, w.y - 10);
+          ctx.lineTo(w.x - 5, w.y + 5);
+          ctx.lineTo(w.x + 10, w.y + 30);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  toJSON() {
+    return {
+      width: this.width,
+      height: this.height,
+      tiles: this.tiles,
+      activeWeather: this.activeWeather
+    };
+  }
+
+  fromJSON(data) {
+    this.width = data.width;
+    this.height = data.height;
+    this.tiles = data.tiles;
+    this.activeWeather = data.activeWeather || [];
+    this.cols = Math.ceil(this.width / this.tileSize);
+    this.rows = Math.ceil(this.height / this.tileSize);
+  }
+}
+
+// ===== js/systems/NPCSystem.js =====
+/**
+ * NPC System - Manages all characters
+ */
+
+const NAMES = {
+  male: ['آریا', 'کاوه', 'رستم', 'بهرام', 'سیاوش', 'داریوش', 'فرهاد', 'کیان', 'آرش', 'پدرام', 'نیما', 'سامان', 'هومن', 'بابک', 'فریدون'],
+  female: ['آتنا', 'سارا', 'مینا', 'لیلا', 'نسترن', 'پریسا', 'الناز', 'شیوا', 'یاسمن', 'گلناز', 'مهسا', 'نیلوفر', 'فرشته', 'آیدا', 'زهرا']
+};
+
+class NPCSystem {
+  constructor() {
+    this.npcs = [];
+    this.nextId = 1;
+  }
+
+  generateForTribe(tribe, count = 12) {
+    const generated = [];
+    for (let i = 0; i < count; i++) {
+      const isMale = Math.random() > 0.45;
+      const nameList = isMale ? NAMES.male : NAMES.female;
+      const name = nameList[Math.floor(Math.random() * nameList.length)] + (Math.random() > 0.7 ? ' ' + (isMale ? 'فرزند' : 'دخت') + ' ' + nameList[Math.floor(Math.random() * 5)] : '');
+
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 20 + Math.random() * 50;
+      const x = tribe.startX + Math.cos(angle) * dist;
+      const y = tribe.startY + Math.sin(angle) * dist;
+
+      const npc = new NPC({
+        id: this.nextId++,
+        name,
+        tribeId: tribe.id,
+        x,
+        y,
+        faith: tribe.faith + (Math.random() - 0.5) * 20,
+        happiness: tribe.happiness + (Math.random() - 0.5) * 20,
+        wealth: tribe.wealth + (Math.random() - 0.5) * 25
+      });
+      npc.color = tribe.color;
+      npc.homeX = x;
+      npc.homeY = y;
+
+      this.npcs.push(npc);
+      tribe.addMember(npc.id);
+      generated.push(npc);
+    }
+    return generated;
+  }
+
+  update(dt, world) {
+    for (const npc of this.npcs) {
+      npc.update(dt, world);
+    }
+  }
+
+  getById(id) {
+    return this.npcs.find(n => n.id === id);
+  }
+
+  getByTribe(tribeId) {
+    return this.npcs.filter(n => n.tribeId === tribeId);
+  }
+
+  getNear(x, y, radius) {
+    return this.npcs.filter(n => {
+      const dx = n.x - x;
+      const dy = n.y - y;
+      return dx * dx + dy * dy <= radius * radius;
+    });
+  }
+
+  getAt(x, y, threshold = 12) {
+    return this.npcs.find(n => {
+      const dx = n.x - x;
+      const dy = n.y - y;
+      return dx * dx + dy * dy <= threshold * threshold;
+    });
+  }
+
+  render(ctx) {
+    for (const npc of this.npcs) {
+      // Body
+      ctx.beginPath();
+      ctx.arc(npc.x, npc.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = npc.color || '#888';
+      ctx.fill();
+
+      // Outline
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Status indicators
+      if (npc.status === 'blessed' || npc.blessings.some(b => b.active)) {
+        ctx.beginPath();
+        ctx.arc(npc.x, npc.y - 10, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#fdcb6e';
+        ctx.fill();
+      }
+      if (npc.temptations.some(t => t.active && t.accepted)) {
+        ctx.beginPath();
+        ctx.arc(npc.x + 7, npc.y - 5, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#e17055';
+        ctx.fill();
+      }
+      if (npc.fear > 60) {
+        ctx.fillStyle = 'rgba(225, 112, 85, 0.6)';
+        ctx.beginPath();
+        ctx.arc(npc.x, npc.y, 9, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Religion symbol
+      if (npc.religionId) {
+        ctx.fillStyle = '#a29bfe';
+        ctx.font = '8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('✦', npc.x, npc.y + 3);
+      }
+    }
+  }
+
+  getStats() {
+    const total = this.npcs.length;
+    const happy = this.npcs.filter(n => n.happiness >= 60).length;
+    const blessed = this.npcs.filter(n => n.blessings.some(b => b.active)).length;
+    const tempted = this.npcs.filter(n => n.temptations.some(t => t.accepted)).length;
+    return { total, happy, blessed, tempted };
+  }
+
+  toJSON() {
+    return {
+      npcs: this.npcs.map(n => n.toJSON()),
+      nextId: this.nextId
+    };
+  }
+
+  fromJSON(data) {
+    this.npcs = (data.npcs || []).map(d => NPC.fromJSON(d));
+    this.nextId = data.nextId || (this.npcs.length + 1);
+  }
+}
+
+// ===== js/systems/ReligionSystem.js =====
+/**
+ * Religion System
+ */
+
+class ReligionSystem {
+  constructor() {
+    this.religions = [];
+    this.nextId = 1;
+  }
+
+  create({ name, doctrine, color, symbol, founderId, worldTime }) {
+    const religion = new Religion({
+      id: this.nextId++,
+      name,
+      doctrine,
+      color: color || '#a29bfe',
+      symbol: symbol || '✦',
+      founderId,
+      followerIds: founderId ? [founderId] : [],
+      createdAt: worldTime
+    });
+    this.religions.push(religion);
+    return religion;
+  }
+
+  getById(id) {
+    return this.religions.find(r => r.id === id);
+  }
+
+  update(dt, npcSystem) {
+    // Spread religion to nearby NPCs with low faith or no religion
+    for (const religion of this.religions) {
+      if (religion.followerIds.length === 0) continue;
+
+      const followers = religion.followerIds
+        .map(id => npcSystem.getById(id))
+        .filter(Boolean);
+
+      for (const follower of followers) {
+        if (!follower) continue;
+        const nearby = npcSystem.getNear(follower.x, follower.y, 40);
+        for (const other of nearby) {
+          if (other.id === follower.id) continue;
+          if (other.religionId === religion.id) continue;
+
+          // Chance based on follower faith and target openness
+          const chance = religion.spreadRate * dt * (follower.faith / 100) * ((100 - other.faith) / 100 + 0.2);
+          if (Math.random() < chance) {
+            // Convert
+            if (other.religionId) {
+              const oldRel = this.getById(other.religionId);
+              if (oldRel) oldRel.removeFollower(other.id);
+            }
+            other.setReligion(religion.id);
+            religion.addFollower(other.id);
+          }
+        }
+      }
+    }
+  }
+
+  toJSON() {
+    return {
+      religions: this.religions.map(r => r.toJSON()),
+      nextId: this.nextId
+    };
+  }
+
+  fromJSON(data) {
+    this.religions = (data.religions || []).map(d => Religion.fromJSON(d));
+    this.nextId = data.nextId || (this.religions.length + 1);
+  }
+}
+
+// ===== js/systems/WeatherSystem.js =====
+/**
+ * Weather System - Handles rain, lightning, snow effects on world & NPCs
+ */
+class WeatherSystem {
+  constructor(mapSystem) {
+    this.map = mapSystem;
+  }
+
+  createRain(x, y, radius = 90, duration = 400) {
+    this.map.addWeather('rain', x, y, radius, duration, 1);
+    return { type: 'rain', x, y, radius };
+  }
+
+  createLightning(x, y) {
+    this.map.addWeather('lightning', x, y, 50, 40, 1.5);
+    return { type: 'lightning', x, y };
+  }
+
+  createSnow(x, y, radius = 100, duration = 500) {
+    this.map.addWeather('snow', x, y, radius, duration, 1);
+    return { type: 'snow', x, y, radius };
+  }
+
+  applyToNPCs(npcSystem, event) {
+    const affected = npcSystem.getNear(event.x, event.y, event.radius || 60);
+    for (const npc of affected) {
+      npc.reactToWeather(event.type, 1);
+    }
+
+    // Increase fertility for rain
+    if (event.type === 'rain') {
+      const tile = this.map.getTileAt(event.x, event.y);
+      if (tile) {
+        tile.fertility = Math.min(1, (tile.fertility || 0.3) + 0.15);
+      }
+    }
+
+    return affected;
+  }
+
+  update(dt) {
+    this.map.updateWeather(dt);
+  }
+}
+
+// ===== js/systems/BlessingSystem.js =====
+/**
+ * Blessing System
+ */
+class BlessingSystem {
+  constructor() {
+    this.nextId = 1;
+  }
+
+  bless(target, type = 'all', worldTime = 0) {
+    const blessing = {
+      id: this.nextId++,
+      type, // happiness, faith, wealth, loyalty, all
+      active: true,
+      createdAt: worldTime,
+      strength: 1
+    };
+
+    if (Array.isArray(target)) {
+      // Multiple NPCs
+      for (const npc of target) {
+        npc.applyBlessing({ ...blessing });
+      }
+    } else if (target.applyBlessing) {
+      // Single NPC
+      target.applyBlessing(blessing);
+    } else if (target.memberIds) {
+      // Tribe - applied later via members
+      target.applyBlessing(blessing);
+    }
+
+    return blessing;
+  }
+}
+
+// ===== js/systems/TemptationSystem.js =====
+/**
+ * Temptation System - Non-deterministic temptation force
+ */
+class TemptationSystem {
+  constructor() {
+    this.nextId = 1;
+  }
+
+  tempt(targets, worldTime = 0) {
+    const results = [];
+    const list = Array.isArray(targets) ? targets : [targets];
+
+    for (const npc of list) {
+      if (!npc || !npc.applyTemptation) continue;
+
+      const temptation = {
+        id: this.nextId++,
+        active: true,
+        accepted: false,
+        resolved: false,
+        createdAt: worldTime
+      };
+
+      const outcome = npc.applyTemptation(temptation);
+      results.push({ npc, outcome, temptation });
+    }
+
+    return results;
+  }
+}
+
+// ===== js/systems/HistorySystem.js =====
+/**
+ * World History System
+ */
+class HistorySystem {
+  constructor() {
+    this.events = [];
+    this.maxEvents = 200;
+  }
+
+  add(text, type = 'general', timeStr = '') {
+    this.events.unshift({
+      id: Date.now() + Math.random(),
+      text,
+      type,
+      time: timeStr,
+      timestamp: Date.now()
+    });
+    if (this.events.length > this.maxEvents) {
+      this.events.pop();
+    }
+  }
+
+  getRecent(count = 50) {
+    return this.events.slice(0, count);
+  }
+
+  toJSON() {
+    return { events: this.events };
+  }
+
+  fromJSON(data) {
+    this.events = data.events || [];
+  }
+}
+
+// ===== js/systems/SaveSystem.js =====
+/**
+ * Save / Load System using localStorage
+ */
+const SAVE_KEY = 'godworld_v1_save';
+
+class SaveSystem {
+  save(worldState) {
+    try {
+      const json = JSON.stringify(worldState);
+      localStorage.setItem(SAVE_KEY, json);
+      return true;
+    } catch (e) {
+      console.error('Save failed:', e);
+      return false;
+    }
+  }
+
+  load() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      console.error('Load failed:', e);
+      return null;
+    }
+  }
+
+  hasSave() {
+    return !!localStorage.getItem(SAVE_KEY);
+  }
+
+  clear() {
+    localStorage.removeItem(SAVE_KEY);
+  }
+}
+
+// ===== js/systems/WorldSystem.js =====
+/**
+ * World System - Central world state & coordination
+ */
+
+
+
+
+
+
+
+
+
+
+const TRIBES_CONFIG = [
+  {
+    id: 1,
+    name: 'قوم آریایی',
+    color: '#e74c3c',
+    startXRatio: 0.15,
+    startYRatio: 0.25,
+    region: 'forest',
+    population: 14,
+    faith: 55,
+    happiness: 50,
+    wealth: 45
+  },
+  {
+    id: 2,
+    name: 'قوم پارس',
+    color: '#3498db',
+    startXRatio: 0.78,
+    startYRatio: 0.22,
+    region: 'mountain',
+    population: 12,
+    faith: 45,
+    happiness: 55,
+    wealth: 55
+  },
+  {
+    id: 3,
+    name: 'قوم کویری',
+    color: '#f39c12',
+    startXRatio: 0.72,
+    startYRatio: 0.75,
+    region: 'desert',
+    population: 11,
+    faith: 35,
+    happiness: 40,
+    wealth: 30
+  },
+  {
+    id: 4,
+    name: 'قوم برفی',
+    color: '#9b59b6',
+    startXRatio: 0.18,
+    startYRatio: 0.78,
+    region: 'snow',
+    population: 13,
+    faith: 60,
+    happiness: 45,
+    wealth: 35
+  }
+];
+
+class WorldSystem {
+  constructor(canvasWidth = 1200, canvasHeight = 700) {
+    this.map = new MapSystem(canvasWidth, canvasHeight);
+    this.npcs = new NPCSystem();
+    this.religions = new ReligionSystem();
+    this.weather = new WeatherSystem(this.map);
+    this.blessings = new BlessingSystem();
+    this.temptations = new TemptationSystem();
+    this.time = new TimeSystem();
+    this.history = new HistorySystem();
+    this.saveSystem = new SaveSystem();
+    this.tribes = [];
+    this.initialized = false;
+  }
+
+  init() {
+    this.map.generate();
+    const w = this.map.width;
+    const h = this.map.height;
+    this.tribes = TRIBES_CONFIG.map(cfg => {
+      const tribe = new Tribe({
+        ...cfg,
+        startX: cfg.startXRatio * w,
+        startY: cfg.startYRatio * h
+      });
+      return tribe;
+    });
+
+    // Initialize relations
+    for (const t of this.tribes) {
+      for (const other of this.tribes) {
+        if (t.id !== other.id) {
+          t.setRelation(other.id, -10 + Math.floor(Math.random() * 30));
+        }
+      }
+    }
+
+    // Generate NPCs
+    for (const tribe of this.tribes) {
+      this.npcs.generateForTribe(tribe, tribe.population);
+    }
+
+    this.history.add('جهان آفریده شد. چهار قوم در سرزمین‌های خود ساکن شدند.', 'world', this.time.getTimeString());
+    this.initialized = true;
+  }
+
+  update(realDt) {
+    if (!this.initialized) return;
+
+    const gameDt = this.time.update(realDt);
+    if (gameDt === 0) return; // paused
+
+    this.npcs.update(gameDt, this);
+    this.weather.update(gameDt);
+    this.religions.update(gameDt, this.npcs);
+
+    // Update tribe stats periodically
+    for (const tribe of this.tribes) {
+      tribe.updateStats(this.npcs.npcs);
+    }
+  }
+
+  // --- God Powers ---
+
+  castRain(x, y) {
+    const event = this.weather.createRain(x, y);
+    const affected = this.weather.applyToNPCs(this.npcs, event);
+    this.history.add(
+      `باران الهی در منطقه فرود آمد. ${affected.length} نفر تحت تأثیر قرار گرفتند.`,
+      'weather',
+      this.time.getTimeString()
+    );
+    return affected;
+  }
+
+  castLightning(x, y) {
+    const event = this.weather.createLightning(x, y);
+    const affected = this.weather.applyToNPCs(this.npcs, { ...event, radius: 70 });
+    this.history.add(
+      `رعد و برق آسمانی فرود آمد! ${affected.length} نفر وحشت‌زده شدند.`,
+      'weather',
+      this.time.getTimeString()
+    );
+    return affected;
+  }
+
+  castSnow(x, y) {
+    const event = this.weather.createSnow(x, y);
+    const affected = this.weather.applyToNPCs(this.npcs, event);
+    this.history.add(
+      `برف الهی منطقه را پوشاند. ${affected.length} نفر تحت تأثیر قرار گرفتند.`,
+      'weather',
+      this.time.getTimeString()
+    );
+    return affected;
+  }
+
+  createReligion({ name, doctrine, color, founderId }) {
+    const religion = this.religions.create({
+      name,
+      doctrine,
+      color,
+      founderId,
+      worldTime: this.time.day
+    });
+
+    if (founderId) {
+      const founder = this.npcs.getById(founderId);
+      if (founder) {
+        founder.setReligion(religion.id);
+      }
+    }
+
+    this.history.add(
+      `دین جدید «${name}» با آموزه «${doctrine}» ایجاد شد.`,
+      'religion',
+      this.time.getTimeString()
+    );
+    return religion;
+  }
+
+  blessTarget(targets, type = 'all') {
+    const list = Array.isArray(targets) ? targets : [targets];
+    this.blessings.bless(list, type, this.time.day);
+
+    const names = list.map(t => t.name || t.id).join('، ');
+    this.history.add(
+      `برکت الهی بر ${names} نازل شد.`,
+      'blessing',
+      this.time.getTimeString()
+    );
+  }
+
+  temptTarget(targets) {
+    const results = this.temptations.tempt(targets, this.time.day);
+    let accepted = 0;
+    let resisted = 0;
+
+    for (const r of results) {
+      if (r.outcome === 'accepted') {
+        accepted++;
+        this.history.add(
+          `${r.npc.name} وسوسه را پذیرفت و ایمانش سست شد.`,
+          'temptation',
+          this.time.getTimeString()
+        );
+      } else {
+        resisted++;
+        this.history.add(
+          `${r.npc.name} در برابر وسوسه مقاومت کرد و ایمانش قوی‌تر شد.`,
+          'temptation',
+          this.time.getTimeString()
+        );
+      }
+    }
+
+    return { accepted, resisted, results };
+  }
+
+  getStats() {
+    const npcStats = this.npcs.getStats();
+    return {
+      population: npcStats.total,
+      tribes: this.tribes.length,
+      religions: this.religions.religions.length,
+      happy: npcStats.happy,
+      blessed: npcStats.blessed,
+      tempted: npcStats.tempted
+    };
+  }
+
+  // --- Save / Load ---
+
+  serialize() {
+    return {
+      version: '1.0',
+      time: this.time.toJSON(),
+      map: this.map.toJSON(),
+      tribes: this.tribes.map(t => t.toJSON()),
+      npcs: this.npcs.toJSON(),
+      religions: this.religions.toJSON(),
+      history: this.history.toJSON()
+    };
+  }
+
+  deserialize(data) {
+    if (!data || data.version !== '1.0') return false;
+
+    this.time.fromJSON(data.time);
+    this.map.fromJSON(data.map);
+    this.tribes = (data.tribes || []).map(d => Tribe.fromJSON(d));
+    this.npcs.fromJSON(data.npcs);
+    this.religions.fromJSON(data.religions);
+    this.history.fromJSON(data.history);
+    this.initialized = true;
+    return true;
+  }
+
+  save() {
+    return this.saveSystem.save(this.serialize());
+  }
+
+  load() {
+    const data = this.saveSystem.load();
+    if (!data) return false;
+    return this.deserialize(data);
+  }
+}
+
+// ===== js/systems/UISystem.js =====
+/**
+ * UI System - Handles all interface interactions
+ */
+class UISystem {
+  constructor(world, canvas) {
+    this.world = world;
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.selectedNPC = null;
+    this.activePower = null;
+    this.selectingTarget = false;
+    this.selectionMode = null; // 'point', 'area', 'npc', 'tribe'
+    this.pendingAction = null;
+
+    this._bindElements();
+    this._bindEvents();
+    this._createLegend();
+  }
+
+  _bindElements() {
+    this.els = {
+      population: document.getElementById('stat-population'),
+      tribes: document.getElementById('stat-tribes'),
+      religions: document.getElementById('stat-religions'),
+      happy: document.getElementById('stat-happy'),
+      blessed: document.getElementById('stat-blessed'),
+      tempted: document.getElementById('stat-tempted'),
+      timeLabel: document.getElementById('time-label'),
+      speedIndicator: document.getElementById('speed-indicator'),
+      infoPanel: document.getElementById('info-panel'),
+      infoTitle: document.getElementById('info-title'),
+      infoContent: document.getElementById('info-content'),
+      historyList: document.getElementById('history-list'),
+      modalOverlay: document.getElementById('modal-overlay'),
+      modalTitle: document.getElementById('modal-title'),
+      modalBody: document.getElementById('modal-body'),
+      modalConfirm: document.getElementById('modal-confirm'),
+      modalCancel: document.getElementById('modal-cancel'),
+      closeModal: document.getElementById('close-modal'),
+      closeInfo: document.getElementById('close-info'),
+      toastContainer: document.getElementById('toast-container'),
+      selectionOverlay: document.getElementById('selection-overlay')
+    };
+  }
+
+  _bindEvents() {
+    // Power buttons
+    document.querySelectorAll('.power-btn[data-power]').forEach(btn => {
+      btn.addEventListener('click', () => this._onPowerClick(btn.dataset.power));
+    });
+
+    // Time buttons
+    document.querySelectorAll('.time-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const speed = parseInt(btn.dataset.speed, 10);
+        this.world.time.setSpeed(speed);
+        document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.toast(speed === 0 ? 'زمان متوقف شد' : `سرعت زمان: ×${speed}`, 'success');
+      });
+    });
+
+    // Canvas click
+    this.canvas.addEventListener('click', (e) => this._onCanvasClick(e));
+
+    // Modal
+    this.els.closeModal.addEventListener('click', () => this.hideModal());
+    this.els.modalCancel.addEventListener('click', () => this.hideModal());
+    this.els.closeInfo.addEventListener('click', () => {
+      this.els.infoPanel.classList.add('hidden');
+      this.selectedNPC = null;
+    });
+  }
+
+  _createLegend() {
+    const legend = document.createElement('div');
+    legend.className = 'tribe-legend';
+    legend.innerHTML = this.world.tribes.map(t => `
+      <div class="tribe-legend-item">
+        <span class="tribe-dot" style="background:${t.color}"></span>
+        <span>${t.name}</span>
+      </div>
+    `).join('');
+    document.getElementById('map-container').appendChild(legend);
+  }
+
+  _onPowerClick(power) {
+    // Clear previous
+    document.querySelectorAll('.power-btn[data-power]').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`.power-btn[data-power="${power}"]`);
+    if (btn) btn.classList.add('active');
+
+    this.activePower = power;
+
+    switch (power) {
+      case 'rain':
+      case 'lightning':
+      case 'snow':
+        this.selectingTarget = true;
+        this.selectionMode = 'point';
+        this.toast('روی نقشه کلیک کنید تا قدرت اعمال شود', 'warning');
+        break;
+
+      case 'religion':
+        this._showReligionModal();
+        break;
+
+      case 'blessing':
+        this._showBlessingModal();
+        break;
+
+      case 'temptation':
+        this._showTemptationModal();
+        break;
+
+      case 'save':
+        if (this.world.save()) {
+          this.toast('جهان با موفقیت ذخیره شد', 'success');
+        } else {
+          this.toast('خطا در ذخیره‌سازی', 'danger');
+        }
+        this.activePower = null;
+        if (btn) btn.classList.remove('active');
+        break;
+
+      case 'load':
+        if (this.world.load()) {
+          this.toast('جهان بارگذاری شد', 'success');
+          this._refreshHistory();
+          this.updateStats();
+        } else {
+          this.toast('ذخیره‌ای یافت نشد', 'warning');
+        }
+        this.activePower = null;
+        if (btn) btn.classList.remove('active');
+        break;
+    }
+  }
+
+  _onCanvasClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    if (this.selectingTarget && this.activePower) {
+      this._applyPowerAt(x, y);
+      return;
+    }
+
+    // Select NPC
+    const npc = this.world.npcs.getAt(x, y, 14);
+    if (npc) {
+      this.selectedNPC = npc;
+      this._showNPCInfo(npc);
+    }
+  }
+
+  _applyPowerAt(x, y) {
+    switch (this.activePower) {
+      case 'rain':
+        this.world.castRain(x, y);
+        this.toast('باران نازل شد 🌧', 'success');
+        break;
+      case 'lightning':
+        this.world.castLightning(x, y);
+        this.toast('رعد و برق فرود آمد ⚡', 'warning');
+        break;
+      case 'snow':
+        this.world.castSnow(x, y);
+        this.toast('برف بارید ❄', 'success');
+        break;
+    }
+
+    this.selectingTarget = false;
+    this.activePower = null;
+    document.querySelectorAll('.power-btn[data-power]').forEach(b => b.classList.remove('active'));
+    this._refreshHistory();
+  }
+
+  _showNPCInfo(npc) {
+    const tribe = this.world.tribes.find(t => t.id === npc.tribeId);
+    const religion = npc.religionId ? this.world.religions.getById(npc.religionId) : null;
+
+    this.els.infoTitle.textContent = npc.name;
+    this.els.infoContent.innerHTML = `
+      <div class="info-section">
+        <h4>اطلاعات پایه</h4>
+        <div class="info-row"><span>قوم</span><span class="value">${tribe ? tribe.name : '—'}</span></div>
+        <div class="info-row"><span>سن</span><span class="value">${npc.age}</span></div>
+        <div class="info-row"><span>شخصیت</span><span class="value">${this._personalityFa(npc.personality)}</span></div>
+        <div class="info-row"><span>وضعیت</span><span class="value">${this._statusFa(npc.status)}</span></div>
+        <div class="info-row"><span>دین</span><span class="value">${religion ? religion.name : 'بدون دین'}</span></div>
+      </div>
+      <div class="info-section">
+        <h4>ایمان ${Math.round(npc.faith)}</h4>
+        <div class="progress-bar"><div class="progress-fill faith" style="width:${npc.faith}%"></div></div>
+      </div>
+      <div class="info-section">
+        <h4>خوشحالی ${Math.round(npc.happiness)}</h4>
+        <div class="progress-bar"><div class="progress-fill happiness" style="width:${npc.happiness}%"></div></div>
+      </div>
+      <div class="info-section">
+        <h4>ترس ${Math.round(npc.fear)}</h4>
+        <div class="progress-bar"><div class="progress-fill fear" style="width:${npc.fear}%"></div></div>
+      </div>
+      <div class="info-section">
+        <h4>ثروت ${Math.round(npc.wealth)}</h4>
+        <div class="progress-bar"><div class="progress-fill wealth" style="width:${npc.wealth}%"></div></div>
+      </div>
+      <div class="info-section">
+        <h4>وفاداری ${Math.round(npc.loyalty)}</h4>
+        <div class="progress-bar"><div class="progress-fill faith" style="width:${npc.loyalty}%"></div></div>
+      </div>
+      ${npc.blessings.length ? `<div class="info-section"><h4>برکت‌های فعال: ${npc.blessings.filter(b=>b.active).length}</h4></div>` : ''}
+      ${npc.temptations.some(t=>t.accepted) ? `<div class="info-section"><h4 style="color:var(--danger)">تحت تأثیر وسوسه</h4></div>` : ''}
+    `;
+    this.els.infoPanel.classList.remove('hidden');
+  }
+
+  _personalityFa(p) {
+    const map = {
+      brave: 'شجاع', cautious: 'محتاط', curious: 'کنجکاو',
+      loyal: 'وفادار', ambitious: 'جاه‌طلب', peaceful: 'صلح‌جو'
+    };
+    return map[p] || p;
+  }
+
+  _statusFa(s) {
+    const map = {
+      idle: 'آرام', moving: 'در حال حرکت', scared: 'ترسیده',
+      blessed: 'مبارک', tempted: 'وسوسه‌شده', interacting: 'در تعامل'
+    };
+    return map[s] || s;
+  }
+
+  _showReligionModal() {
+    this.els.modalTitle.textContent = 'ایجاد دین جدید';
+    this.els.modalBody.innerHTML = `
+      <div class="form-group">
+        <label>نام دین</label>
+        <input type="text" id="rel-name" placeholder="مثلاً: آیین نور">
+      </div>
+      <div class="form-group">
+        <label>آموزه اصلی</label>
+        <input type="text" id="rel-doctrine" placeholder="مثلاً: صلح و همدلی">
+      </div>
+      <div class="form-group">
+        <label>رنگ</label>
+        <div class="color-options" id="rel-colors">
+          ${['#a29bfe','#fd79a8','#00b894','#fdcb6e','#74b9ff','#e17055'].map((c,i) =>
+            `<div class="color-option ${i===0?'selected':''}" data-color="${c}" style="background:${c}"></div>`
+          ).join('')}
+        </div>
+      </div>
+      <div class="form-group">
+        <label>انتخاب بنیان‌گذار (روی نقشه فرد را انتخاب کنید یا از لیست)</label>
+        <select id="rel-founder">
+          <option value="">— بدون بنیان‌گذار —</option>
+          ${this.world.npcs.npcs.slice(0, 40).map(n =>
+            `<option value="${n.id}">${n.name} (${this.world.tribes.find(t=>t.id===n.tribeId)?.name || ''})</option>`
+          ).join('')}
+        </select>
+      </div>
+    `;
+
+    // Color select
+    setTimeout(() => {
+      document.querySelectorAll('#rel-colors .color-option').forEach(el => {
+        el.addEventListener('click', () => {
+          document.querySelectorAll('#rel-colors .color-option').forEach(c => c.classList.remove('selected'));
+          el.classList.add('selected');
+        });
+      });
+    }, 50);
+
+    this.els.modalConfirm.onclick = () => {
+      const name = document.getElementById('rel-name').value.trim();
+      const doctrine = document.getElementById('rel-doctrine').value.trim();
+      const colorEl = document.querySelector('#rel-colors .color-option.selected');
+      const color = colorEl ? colorEl.dataset.color : '#a29bfe';
+      const founderId = parseInt(document.getElementById('rel-founder').value, 10) || null;
+
+      if (!name || !doctrine) {
+        this.toast('نام و آموزه الزامی است', 'warning');
+        return;
+      }
+
+      this.world.createReligion({ name, doctrine, color, founderId });
+      this.toast(`دین «${name}» ایجاد شد 🕊`, 'success');
+      this.hideModal();
+      this._refreshHistory();
+      this.updateStats();
+      this.activePower = null;
+      document.querySelectorAll('.power-btn[data-power]').forEach(b => b.classList.remove('active'));
+    };
+
+    this.showModal();
+  }
+
+  _showBlessingModal() {
+    this.els.modalTitle.textContent = 'اعطای برکت';
+    this.els.modalBody.innerHTML = `
+      <div class="form-group">
+        <label>هدف</label>
+        <div class="target-options" id="bless-target-type">
+          <button class="target-btn selected" data-type="npc">فرد</button>
+          <button class="target-btn" data-type="tribe">قوم</button>
+        </div>
+      </div>
+      <div class="form-group" id="bless-npc-group">
+        <label>انتخاب فرد</label>
+        <select id="bless-npc">
+          ${this.world.npcs.npcs.map(n =>
+            `<option value="${n.id}">${n.name}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div class="form-group hidden" id="bless-tribe-group">
+        <label>انتخاب قوم</label>
+        <select id="bless-tribe">
+          ${this.world.tribes.map(t =>
+            `<option value="${t.id}">${t.name}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>نوع برکت</label>
+        <select id="bless-type">
+          <option value="all">همه چیز</option>
+          <option value="happiness">خوشحالی</option>
+          <option value="faith">ایمان</option>
+          <option value="wealth">ثروت</option>
+          <option value="loyalty">وفاداری</option>
+        </select>
+      </div>
+    `;
+
+    setTimeout(() => {
+      document.querySelectorAll('#bless-target-type .target-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#bless-target-type .target-btn').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          const type = btn.dataset.type;
+          document.getElementById('bless-npc-group').classList.toggle('hidden', type !== 'npc');
+          document.getElementById('bless-tribe-group').classList.toggle('hidden', type !== 'tribe');
+        });
+      });
+    }, 50);
+
+    this.els.modalConfirm.onclick = () => {
+      const targetType = document.querySelector('#bless-target-type .target-btn.selected')?.dataset.type || 'npc';
+      const blessType = document.getElementById('bless-type').value;
+
+      if (targetType === 'npc') {
+        const id = parseInt(document.getElementById('bless-npc').value, 10);
+        const npc = this.world.npcs.getById(id);
+        if (npc) {
+          this.world.blessTarget(npc, blessType);
+          this.toast(`برکت بر ${npc.name} نازل شد ✨`, 'success');
+        }
+      } else {
+        const tid = parseInt(document.getElementById('bless-tribe').value, 10);
+        const members = this.world.npcs.getByTribe(tid);
+        this.world.blessTarget(members, blessType);
+        const tribe = this.world.tribes.find(t => t.id === tid);
+        this.toast(`برکت بر قوم ${tribe?.name} نازل شد ✨`, 'success');
+      }
+
+      this.hideModal();
+      this._refreshHistory();
+      this.updateStats();
+      this.activePower = null;
+      document.querySelectorAll('.power-btn[data-power]').forEach(b => b.classList.remove('active'));
+    };
+
+    this.showModal();
+  }
+
+  _showTemptationModal() {
+    this.els.modalTitle.textContent = 'ایجاد نیروی وسوسه‌گر';
+    this.els.modalBody.innerHTML = `
+      <div class="form-group">
+        <label>هدف</label>
+        <div class="target-options" id="tempt-target-type">
+          <button class="target-btn selected" data-type="npc">فرد</button>
+          <button class="target-btn" data-type="multi">چند فرد</button>
+          <button class="target-btn" data-type="tribe">قوم</button>
+        </div>
+      </div>
+      <div class="form-group" id="tempt-npc-group">
+        <label>انتخاب فرد</label>
+        <select id="tempt-npc">
+          ${this.world.npcs.npcs.map(n =>
+            `<option value="${n.id}">${n.name} (ایمان: ${Math.round(n.faith)})</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div class="form-group hidden" id="tempt-multi-group">
+        <label>انتخاب افراد (Ctrl برای چندتایی)</label>
+        <select id="tempt-multi" multiple size="6" style="height:120px">
+          ${this.world.npcs.npcs.map(n =>
+            `<option value="${n.id}">${n.name} (ایمان: ${Math.round(n.faith)})</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div class="form-group hidden" id="tempt-tribe-group">
+        <label>انتخاب قوم</label>
+        <select id="tempt-tribe">
+          ${this.world.tribes.map(t =>
+            `<option value="${t.id}">${t.name}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin-top:8px">
+        نتیجه قطعی نیست. ایمان، خوشحالی و وفاداری فرد بر احتمال پذیرش تأثیر می‌گذارد.
+      </p>
+    `;
+
+    setTimeout(() => {
+      document.querySelectorAll('#tempt-target-type .target-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#tempt-target-type .target-btn').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          const type = btn.dataset.type;
+          document.getElementById('tempt-npc-group').classList.toggle('hidden', type !== 'npc');
+          document.getElementById('tempt-multi-group').classList.toggle('hidden', type !== 'multi');
+          document.getElementById('tempt-tribe-group').classList.toggle('hidden', type !== 'tribe');
+        });
+      });
+    }, 50);
+
+    this.els.modalConfirm.onclick = () => {
+      const targetType = document.querySelector('#tempt-target-type .target-btn.selected')?.dataset.type || 'npc';
+      let targets = [];
+
+      if (targetType === 'npc') {
+        const id = parseInt(document.getElementById('tempt-npc').value, 10);
+        const npc = this.world.npcs.getById(id);
+        if (npc) targets = [npc];
+      } else if (targetType === 'multi') {
+        const select = document.getElementById('tempt-multi');
+        const ids = Array.from(select.selectedOptions).map(o => parseInt(o.value, 10));
+        targets = ids.map(id => this.world.npcs.getById(id)).filter(Boolean);
+      } else {
+        const tid = parseInt(document.getElementById('tempt-tribe').value, 10);
+        targets = this.world.npcs.getByTribe(tid);
+      }
+
+      if (targets.length === 0) {
+        this.toast('هدفی انتخاب نشده', 'warning');
+        return;
+      }
+
+      const result = this.world.temptTarget(targets);
+      this.toast(
+        `وسوسه اعمال شد: ${result.accepted} پذیرفتند، ${result.resisted} مقاومت کردند ☠`,
+        result.accepted > 0 ? 'warning' : 'success'
+      );
+
+      this.hideModal();
+      this._refreshHistory();
+      this.updateStats();
+      this.activePower = null;
+      document.querySelectorAll('.power-btn[data-power]').forEach(b => b.classList.remove('active'));
+    };
+
+    this.showModal();
+  }
+
+  showModal() {
+    this.els.modalOverlay.classList.remove('hidden');
+  }
+
+  hideModal() {
+    this.els.modalOverlay.classList.add('hidden');
+  }
+
+  toast(message, type = 'success') {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = message;
+    this.els.toastContainer.appendChild(el);
+    setTimeout(() => {
+      el.style.opacity = '0';
+      el.style.transition = 'opacity 0.3s';
+      setTimeout(() => el.remove(), 300);
+    }, 3000);
+  }
+
+  updateStats() {
+    const s = this.world.getStats();
+    this.els.population.textContent = s.population;
+    this.els.tribes.textContent = s.tribes;
+    this.els.religions.textContent = s.religions;
+    this.els.happy.textContent = s.happy;
+    this.els.blessed.textContent = s.blessed;
+    this.els.tempted.textContent = s.tempted;
+    this.els.timeLabel.textContent = this.world.time.getTimeString();
+    this.els.speedIndicator.textContent = this.world.time.getSpeedLabel();
+  }
+
+  _refreshHistory() {
+    const events = this.world.history.getRecent(30);
+    this.els.historyList.innerHTML = events.map(e => `
+      <div class="history-item">
+        <div class="time">${e.time}</div>
+        <div>${e.text}</div>
+      </div>
+    `).join('');
+  }
+
+  render() {
+    // Clear
+    this.ctx.fillStyle = '#0d1220';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // Map
+    this.world.map.render(this.ctx);
+
+    // NPCs
+    this.world.npcs.render(this.ctx);
+
+    // Highlight selected
+    if (this.selectedNPC) {
+      this.ctx.beginPath();
+      this.ctx.arc(this.selectedNPC.x, this.selectedNPC.y, 12, 0, Math.PI * 2);
+      this.ctx.strokeStyle = '#6c5ce7';
+      this.ctx.lineWidth = 2;
+      this.ctx.stroke();
+    }
+  }
+}
+
+// ===== js/main.js =====
+/**
+ * GodWorld V1.0 - Main Entry Point
+ */
+
+
+class Game {
+  constructor() {
+    this.canvas = document.getElementById('world-canvas');
+    // Use a solid logical map size for consistency
+    const mapW = 1100;
+    const mapH = 620;
+    this.canvas.width = mapW;
+    this.canvas.height = mapH;
+
+    window.addEventListener('resize', () => this.fitCanvas());
+
+    this.world = new WorldSystem(mapW, mapH);
+    this.world.init();
+
+    this.ui = new UISystem(this.world, this.canvas);
+    this.fitCanvas();
+
+    this.lastTime = performance.now();
+    this.running = true;
+
+    // Initial UI update
+    this.ui.updateStats();
+    this.ui._refreshHistory();
+
+    // Start loop
+    requestAnimationFrame((t) => this.loop(t));
+  }
+
+  fitCanvas() {
+    // CSS handles display size; canvas internal resolution is fixed for stable sim
+    const container = document.getElementById('map-container');
+    // Keep internal resolution fixed
+  }
+
+  loop(timestamp) {
+    if (!this.running) return;
+
+    const realDt = Math.min((timestamp - this.lastTime) / 16.67, 3); // normalize ~60fps, cap
+    this.lastTime = timestamp;
+
+    // Update world
+    this.world.update(realDt);
+
+    // Render
+    this.ui.render();
+
+    // UI stats (throttle a bit)
+    if (Math.floor(timestamp / 500) !== Math.floor((timestamp - realDt * 16.67) / 500)) {
+      this.ui.updateStats();
+    }
+
+    requestAnimationFrame((t) => this.loop(t));
+  }
+}
+
+// Boot
+window.addEventListener('DOMContentLoaded', () => {
+  window.game = new Game();
+  console.log('GodWorld V1.0 started');
+});
+
+  </script>
+</body>
+</html>

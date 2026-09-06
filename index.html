@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GodWorld V1.0</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <!-- Top Bar: World Info -->
+    <header id="top-bar">
+      <div class="world-title">
+        <span class="god-icon">✦</span>
+        <h1>GodWorld <small>V1.0</small></h1>
+      </div>
+      <div id="world-stats" class="stats-panel">
+        <div class="stat"><span class="label">جمعیت</span><span id="stat-population">0</span></div>
+        <div class="stat"><span class="label">اقوام</span><span id="stat-tribes">0</span></div>
+        <div class="stat"><span class="label">ادیان</span><span id="stat-religions">0</span></div>
+        <div class="stat"><span class="label">خوشحال</span><span id="stat-happy">0</span></div>
+        <div class="stat"><span class="label">برکت</span><span id="stat-blessed">0</span></div>
+        <div class="stat"><span class="label">وسوسه</span><span id="stat-tempted">0</span></div>
+      </div>
+      <div id="time-display" class="time-panel">
+        <span id="time-label">روز ۱ • ساعت ۰۰:۰۰</span>
+        <span id="speed-indicator">⏸</span>
+      </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main id="game-area">
+      <div id="map-container">
+        <canvas id="world-canvas"></canvas>
+        <div id="selection-overlay"></div>
+        <div id="weather-effects"></div>
+      </div>
+
+      <!-- Side Panels -->
+      <aside id="info-panel" class="side-panel hidden">
+        <div class="panel-header">
+          <h3 id="info-title">اطلاعات</h3>
+          <button id="close-info" class="btn-icon">×</button>
+        </div>
+        <div id="info-content" class="panel-body"></div>
+      </aside>
+
+      <aside id="history-panel" class="side-panel">
+        <div class="panel-header">
+          <h3>تاریخچه جهان</h3>
+          <button id="toggle-history" class="btn-icon">−</button>
+        </div>
+        <div id="history-list" class="panel-body"></div>
+      </aside>
+    </main>
+
+    <!-- Bottom Power Panel -->
+    <footer id="power-panel">
+      <div class="power-group">
+        <button class="power-btn" data-power="rain" title="باران">
+          <span class="icon">🌧</span>
+          <span class="label">باران</span>
+        </button>
+        <button class="power-btn" data-power="lightning" title="رعد و برق">
+          <span class="icon">⚡</span>
+          <span class="label">رعد</span>
+        </button>
+        <button class="power-btn" data-power="snow" title="برف">
+          <span class="icon">❄</span>
+          <span class="label">برف</span>
+        </button>
+      </div>
+
+      <div class="power-group time-controls">
+        <button class="power-btn time-btn" data-speed="0" title="توقف">
+          <span class="icon">⏸</span>
+        </button>
+        <button class="power-btn time-btn active" data-speed="1" title="سرعت عادی">
+          <span class="icon">▶</span>
+        </button>
+        <button class="power-btn time-btn" data-speed="2" title="×۲">
+          <span class="icon">⏩</span>
+          <span class="label">×۲</span>
+        </button>
+        <button class="power-btn time-btn" data-speed="4" title="×۴">
+          <span class="icon">⏭</span>
+          <span class="label">×۴</span>
+        </button>
+      </div>
+
+      <div class="power-group">
+        <button class="power-btn" data-power="religion" title="ایجاد دین">
+          <span class="icon">🕊</span>
+          <span class="label">دین</span>
+        </button>
+        <button class="power-btn" data-power="temptation" title="وسوسه">
+          <span class="icon">☠</span>
+          <span class="label">وسوسه</span>
+        </button>
+        <button class="power-btn" data-power="blessing" title="برکت">
+          <span class="icon">✨</span>
+          <span class="label">برکت</span>
+        </button>
+      </div>
+
+      <div class="power-group">
+        <button class="power-btn" data-power="save" title="ذخیره">
+          <span class="icon">💾</span>
+          <span class="label">ذخیره</span>
+        </button>
+        <button class="power-btn" data-power="load" title="بارگذاری">
+          <span class="icon">📂</span>
+          <span class="label">بارگذاری</span>
+        </button>
+      </div>
+    </footer>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+      <div id="modal" class="modal">
+        <div class="modal-header">
+          <h2 id="modal-title"></h2>
+          <button id="close-modal" class="btn-icon">×</button>
+        </div>
+        <div id="modal-body" class="modal-body"></div>
+        <div class="modal-footer">
+          <button id="modal-cancel" class="btn btn-secondary">انصراف</button>
+          <button id="modal-confirm" class="btn btn-primary">تأیید</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
