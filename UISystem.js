@@ -70,6 +70,21 @@ export class UISystem {
       this.els.infoPanel.classList.add('hidden');
       this.selectedNPC = null;
     });
+
+    // Mobile history toggle
+    const mobBtn = document.getElementById('mobile-history-btn');
+    const histPanel = document.getElementById('history-panel');
+    if (mobBtn && histPanel) {
+      if (window.innerWidth <= 768) {
+        histPanel.classList.remove('open');
+      }
+      mobBtn.addEventListener('click', () => {
+        histPanel.classList.toggle('open');
+      });
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) histPanel.classList.add('open');
+      });
+    }
   }
 
   _createLegend() {

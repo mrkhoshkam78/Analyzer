@@ -1,12 +1,4 @@
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GodWorld V1.0</title>
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-:root {
+<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>GodWorld V1.0</title><link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet"><style>:root {
   --bg-dark: #0a0e17;
   --bg-panel: #12182a;
   --bg-card: #1a2238;
@@ -306,27 +298,40 @@ body {
 .progress-fill.fear { background: linear-gradient(90deg, #e17055, #fab1a0); }
 .progress-fill.wealth { background: linear-gradient(90deg, #fdcb6e, #ffeaa7); }
 
-/* ===== POWER PANEL ===== */
+/* ===== POWER PANEL (base, enhanced in responsive) ===== */
 #power-panel {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 24px;
-  padding: 12px 20px;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
   background: linear-gradient(0deg, var(--bg-panel) 0%, rgba(18, 24, 42, 0.98) 100%);
   border-top: 1px solid var(--border);
   box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
   z-index: 100;
   flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+#power-panel::-webkit-scrollbar {
+  height: 4px;
+}
+#power-panel::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
 }
 
 .power-group {
   display: flex;
-  gap: 8px;
-  padding: 6px;
+  gap: 6px;
+  padding: 5px;
   background: var(--bg-card);
   border-radius: var(--radius);
   border: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .power-btn {
@@ -335,9 +340,9 @@ body {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-width: 56px;
-  height: 56px;
-  padding: 6px 10px;
+  min-width: 52px;
+  height: 52px;
+  padding: 4px 8px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -346,6 +351,8 @@ body {
   transition: all 0.2s ease;
   font-family: var(--font);
   font-size: 0.7rem;
+  flex-shrink: 0;
+  touch-action: manipulation;
 }
 
 .power-btn:hover {
@@ -620,32 +627,360 @@ body {
   background: var(--text-muted);
 }
 
-/* Responsive */
-@media (max-width: 900px) {
+
+/* ===== POWER PANEL base improvements ===== */
+#power-panel {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(0deg, var(--bg-panel) 0%, rgba(18, 24, 42, 0.98) 100%);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+  z-index: 100;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+#power-panel::-webkit-scrollbar {
+  height: 4px;
+}
+#power-panel::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.power-group {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.power-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 52px;
+  height: 52px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font);
+  font-size: 0.65rem;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+
+/* ===== RESPONSIVE ===== */
+
+/* Tablet */
+@media (max-width: 1024px) {
+  #top-bar {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 10px;
+  }
+  .world-title {
+    min-width: auto;
+  }
+  .world-title h1 {
+    font-size: 1.1rem;
+  }
   .stats-panel {
     gap: 8px;
+    order: 3;
+    width: 100%;
+    justify-content: space-around;
   }
   .stat {
-    min-width: 55px;
+    min-width: 56px;
+    padding: 4px 10px;
+  }
+  .stat .label {
+    font-size: 0.6rem;
+  }
+  .stat span:last-child {
+    font-size: 0.9rem;
+  }
+  .time-panel {
+    min-width: auto;
+    padding: 6px 12px;
+  }
+  .side-panel {
+    width: 220px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  body {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  #app {
+    height: 100dvh;
+  }
+
+  #top-bar {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+  .world-title h1 {
+    font-size: 0.95rem;
+  }
+  .world-title small {
+    display: none;
+  }
+  .god-icon {
+    font-size: 1.2rem;
+  }
+  .stats-panel {
+    gap: 4px;
+  }
+  .stat {
+    min-width: 44px;
+    padding: 3px 6px;
+  }
+  .stat .label {
+    font-size: 0.55rem;
+  }
+  .stat span:last-child {
+    font-size: 0.8rem;
+  }
+  .time-panel {
+    font-size: 0.75rem;
     padding: 4px 8px;
   }
+  #time-label {
+    font-size: 0.75rem;
+  }
+
+  /* History panel becomes overlay / narrower */
+  .side-panel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: min(280px, 85vw);
+    z-index: 80;
+    transform: translateX(0);
+  }
+  #history-panel {
+    /* keep visible but compact */
+  }
+  #info-panel {
+    z-index: 90;
+  }
+
+  /* Power panel - horizontal scroll menu */
   #power-panel {
-    gap: 10px;
     padding: 8px 10px;
-    overflow-x: auto;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+  .power-group {
+    padding: 4px;
+    gap: 4px;
   }
   .power-btn {
     min-width: 48px;
     height: 48px;
+    font-size: 0.6rem;
   }
-  .side-panel {
-    width: 240px;
+  .power-btn .icon {
+    font-size: 1.15rem;
+  }
+  .power-btn .label {
+    font-size: 0.55rem;
+  }
+
+  .tribe-legend {
+    top: 8px;
+    left: 8px;
+    padding: 6px 10px;
+    font-size: 0.65rem;
+  }
+
+  .modal {
+    width: 95%;
+    max-width: none;
+    max-height: 85dvh;
+  }
+  .modal-body {
+    padding: 14px;
+  }
+
+  #toast-container {
+    top: 70px;
+    left: 10px;
+    right: 10px;
+  }
+  .toast {
+    max-width: 100%;
   }
 }
 
-  </style>
-</head>
-<body>
+/* Small phones */
+@media (max-width: 480px) {
+  .stats-panel {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    width: 100%;
+  }
+  .stat {
+    min-width: 0;
+  }
+  .world-title {
+    display: none; /* save space on very small screens */
+  }
+  #power-panel {
+    padding: 6px 8px;
+  }
+  .power-btn {
+    min-width: 44px;
+    height: 44px;
+  }
+  .power-btn .label {
+    display: none; /* icons only on tiny screens */
+  }
+  .side-panel {
+    width: min(260px, 90vw);
+  }
+}
+
+/* Landscape mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+  #top-bar {
+    padding: 4px 10px;
+  }
+  .stats-panel .stat .label {
+    display: none;
+  }
+  #power-panel {
+    padding: 4px 8px;
+  }
+  .power-btn {
+    height: 40px;
+    min-width: 42px;
+  }
+  .power-btn .label {
+    display: none;
+  }
+}
+
+/* Mobile: history collapsed by default, toggle button expands */
+@media (max-width: 768px) {
+  #history-panel {
+    transform: translateX(100%);
+    pointer-events: none;
+    transition: transform 0.3s ease;
+  }
+  #history-panel:not(.collapsed) {
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+  #history-panel.collapsed {
+    transform: translateX(100%);
+    pointer-events: none;
+  }
+  /* floating toggle for history on mobile */
+  #mobile-history-btn {
+    display: flex;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 85;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+}
+@media (min-width: 769px) {
+  #mobile-history-btn {
+    display: none !important;
+  }
+}
+
+/* ===== FINAL MOBILE OVERRIDES ===== */
+@media (max-width: 768px) {
+  #game-area {
+    position: relative;
+  }
+  #history-panel {
+    position: fixed !important;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: min(280px, 85vw) !important;
+    z-index: 200 !important;
+    transform: translateX(110%) !important;
+    transition: transform 0.3s ease !important;
+    pointer-events: none !important;
+    box-shadow: -8px 0 30px rgba(0,0,0,0.5);
+  }
+  #history-panel.open {
+    transform: translateX(0) !important;
+    pointer-events: auto !important;
+  }
+  #info-panel {
+    position: fixed !important;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: min(280px, 85vw) !important;
+    z-index: 210 !important;
+  }
+  #mobile-history-btn {
+    display: flex !important;
+  }
+  /* Power panel full horizontal scroll */
+  #power-panel {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    justify-content: flex-start !important;
+  }
+}
+
+/* Nuclear mobile fix for history */
+@media (max-width: 768px) {
+  #history-panel {
+    display: none !important;
+  }
+  #history-panel.open {
+    display: flex !important;
+    position: fixed !important;
+    top: 0; bottom: 0; right: 0;
+    width: min(280px, 85vw) !important;
+    z-index: 200 !important;
+    transform: none !important;
+    pointer-events: auto !important;
+  }
+}
+</style></head><body>
   <div id="app">
     <!-- Top Bar: World Info -->
     <header id="top-bar">
@@ -673,6 +1008,7 @@ body {
         <canvas id="world-canvas"></canvas>
         <div id="selection-overlay"></div>
         <div id="weather-effects"></div>
+        <button id="mobile-history-btn" title="تاریخچه">📜</button>
       </div>
 
       <!-- Side Panels -->
@@ -773,8 +1109,8 @@ body {
     <div id="toast-container"></div>
   </div>
 
-  <script>
-// ===== js/entities/NPC.js =====
+  
+<script>// NPC.js
 /**
  * NPC Entity - Individual character in the world
  */
@@ -1016,7 +1352,7 @@ class NPC {
   }
 }
 
-// ===== js/entities/Tribe.js =====
+// Tribe.js
 /**
  * Tribe Entity - A group/nation of NPCs
  */
@@ -1110,7 +1446,7 @@ class Tribe {
   }
 }
 
-// ===== js/entities/Religion.js =====
+// Religion.js
 /**
  * Religion Entity
  */
@@ -1172,7 +1508,7 @@ class Religion {
   }
 }
 
-// ===== js/systems/TimeSystem.js =====
+// TimeSystem.js
 /**
  * Time System - Controls game time flow and speed
  */
@@ -1261,7 +1597,7 @@ class TimeSystem {
   }
 }
 
-// ===== js/systems/MapSystem.js =====
+// MapSystem.js
 /**
  * Map System - Generates and renders the 2D world map
  */
@@ -1441,7 +1777,7 @@ class MapSystem {
   }
 }
 
-// ===== js/systems/NPCSystem.js =====
+// NPCSystem.js
 /**
  * NPC System - Manages all characters
  */
@@ -1584,7 +1920,7 @@ class NPCSystem {
   }
 }
 
-// ===== js/systems/ReligionSystem.js =====
+// ReligionSystem.js
 /**
  * Religion System
  */
@@ -1659,7 +1995,7 @@ class ReligionSystem {
   }
 }
 
-// ===== js/systems/WeatherSystem.js =====
+// WeatherSystem.js
 /**
  * Weather System - Handles rain, lightning, snow effects on world & NPCs
  */
@@ -1705,7 +2041,7 @@ class WeatherSystem {
   }
 }
 
-// ===== js/systems/BlessingSystem.js =====
+// BlessingSystem.js
 /**
  * Blessing System
  */
@@ -1740,7 +2076,7 @@ class BlessingSystem {
   }
 }
 
-// ===== js/systems/TemptationSystem.js =====
+// TemptationSystem.js
 /**
  * Temptation System - Non-deterministic temptation force
  */
@@ -1772,7 +2108,7 @@ class TemptationSystem {
   }
 }
 
-// ===== js/systems/HistorySystem.js =====
+// HistorySystem.js
 /**
  * World History System
  */
@@ -1808,7 +2144,7 @@ class HistorySystem {
   }
 }
 
-// ===== js/systems/SaveSystem.js =====
+// SaveSystem.js
 /**
  * Save / Load System using localStorage
  */
@@ -1846,7 +2182,7 @@ class SaveSystem {
   }
 }
 
-// ===== js/systems/WorldSystem.js =====
+// WorldSystem.js
 /**
  * World System - Central world state & coordination
  */
@@ -2120,7 +2456,7 @@ class WorldSystem {
   }
 }
 
-// ===== js/systems/UISystem.js =====
+// UISystem.js
 /**
  * UI System - Handles all interface interactions
  */
@@ -2193,6 +2529,21 @@ class UISystem {
       this.els.infoPanel.classList.add('hidden');
       this.selectedNPC = null;
     });
+
+    // Mobile history toggle
+    const mobBtn = document.getElementById('mobile-history-btn');
+    const histPanel = document.getElementById('history-panel');
+    if (mobBtn && histPanel) {
+      if (window.innerWidth <= 768) {
+        histPanel.classList.remove('open');
+      }
+      mobBtn.addEventListener('click', () => {
+        histPanel.classList.toggle('open');
+      });
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) histPanel.classList.add('open');
+      });
+    }
   }
 
   _createLegend() {
@@ -2656,7 +3007,7 @@ class UISystem {
   }
 }
 
-// ===== js/main.js =====
+// main.js
 /**
  * GodWorld V1.0 - Main Entry Point
  */
@@ -2722,7 +3073,4 @@ window.addEventListener('DOMContentLoaded', () => {
   window.game = new Game();
   console.log('GodWorld V1.0 started');
 });
-
-  </script>
-</body>
-</html>
+</script></body></html>
