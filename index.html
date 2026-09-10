@@ -98,7 +98,30 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="import-title">
+    
+    <!-- Market Data BRENT -->
+    <section class="card" id="brentMarketCard" aria-labelledby="brent-md-title" hidden>
+      <div class="md-head">
+        <h2 class="card-title" id="brent-md-title">داده بازار — نفت برنت</h2>
+        <button type="button" class="btn-refresh" id="brentRefreshBtn" title="بروزرسانی">بروزرسانی</button>
+      </div>
+      <div id="brentMdStatus" class="md-status" role="status">در انتظار اتصال…</div>
+      <div class="md-grid" id="brentMdGrid">
+        <div class="md-item"><span class="md-label">قیمت فعلی</span><span class="md-value" id="brentPrice">—</span></div>
+        <div class="md-item"><span class="md-label">تغییر</span><span class="md-value" id="brentChange">—</span></div>
+        <div class="md-item"><span class="md-label">درصد تغییر</span><span class="md-value" id="brentChangePct">—</span></div>
+        <div class="md-item"><span class="md-label">سقف روزانه</span><span class="md-value" id="brentHigh">—</span></div>
+        <div class="md-item"><span class="md-label">کف روزانه</span><span class="md-value" id="brentLow">—</span></div>
+        <div class="md-item"><span class="md-label">بسته قبلی</span><span class="md-value" id="brentPrev">—</span></div>
+        <div class="md-item"><span class="md-label">آخرین بروزرسانی</span><span class="md-value md-sm" id="brentUpdated">—</span></div>
+        <div class="md-item"><span class="md-label">عمر داده</span><span class="md-value md-sm" id="brentAge">—</span></div>
+        <div class="md-item"><span class="md-label">منبع</span><span class="md-value md-sm" id="brentSource">—</span></div>
+        <div class="md-item"><span class="md-label">وضعیت اتصال</span><span class="md-value md-sm" id="brentConn">—</span></div>
+      </div>
+      <p class="field-hint" id="brentHint">داده از سرور داخلی دریافت می‌شود؛ کلید API در مرورگر قرار ندارد. برای تحلیل تکنیکال همچنان CSV تاریخی لازم است.</p>
+    </section>
+
+<section class="card" aria-labelledby="import-title">
       <h2 class="card-title" id="import-title">داده بازار</h2>
       <p class="card-desc">فایل CSV را از پلتفرم نموداری خود بگیرید. ستون‌ها به‌صورت خودکار تشخیص داده می‌شوند (Date, Open, High, Low, Close, Volume).</p>
 

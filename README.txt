@@ -24,3 +24,18 @@ Market Data (CSV دستی) → Validation → Technical Engine → Fundamental E
 → Decision Engine → Prediction → Evaluation → Learning Memory
 
 نمادهای مجاز: فقط XAUUSD، USDEUR، BRENT — بدون API آنلاین نماد/قیمت.
+
+Market Data — BRENT (API Ninjas)
+--------------------------------
+Backend: server/index.js
+  API_NINJAS_KEY=<key> node server/index.js
+  GET /api/market/brent  → quote استاندارد
+  GET /api/health
+
+Frontend هرگز مستقیماً به api-ninjas وصل نمی‌شود.
+فقط به /api/market/brent روی سرور داخلی درخواست می‌زند.
+
+Provider: logic/marketData.js + logic/providers.js
+تاریخچه: فقط از quoteهای واقعی دریافت‌شده (بدون داده ساختگی)
+
+فرمول‌های تکنیکال/تصمیم: بدون تغییر در این مرحله.

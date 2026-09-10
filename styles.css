@@ -433,3 +433,70 @@ button { cursor: pointer; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Market Data Card (BRENT) */
+.md-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.md-head .card-title { margin: 0; }
+.btn-refresh {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-refresh:hover { background: var(--surface-3); color: var(--text); }
+.md-status {
+  font-size: var(--fs-sm);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.md-status.is-live { background: var(--success-bg); border-color: var(--success-border); color: var(--success); }
+.md-status.is-cache { background: var(--warning-bg); border-color: var(--warning-border); color: var(--warning); }
+.md-status.is-error { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); }
+.md-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+.md-item {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.md-label {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.md-value {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+.md-value.md-sm { font-size: var(--fs-sm); font-weight: 600; }
+.md-value.up { color: var(--success); }
+.md-value.down { color: var(--danger); }
+@media (max-width: 720px) {
+  .md-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 400px) {
+  .md-grid { grid-template-columns: 1fr; }
+}
