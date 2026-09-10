@@ -1,11 +1,12 @@
 /**
  * Data Provider interface — analysis never depends on a specific API.
- * Current providers: Manual (CSV/paste). Future: live providers can implement same shape.
  */
+import { createBrentApiNinjasProvider } from './marketData.js';
 
 export const ProviderType = Object.freeze({
   MANUAL: 'manual',
   HISTORICAL: 'historical',
+  BRENT_API_NINJAS: 'brent_api_ninjas',
   FUTURE_LIVE: 'future_live'
 });
 
@@ -18,7 +19,6 @@ export function validateCandles(candles) {
     return { ok: false, issues: ['empty'], validCount: 0, dataAgeMs: null };
   }
   let valid = 0;
-  let duplicates = 0;
   let outliers = 0;
   const closes = [];
   for (let i = 0; i < candles.length; i++) {
@@ -40,7 +40,7 @@ export function validateCandles(candles) {
     outlierHints: outliers,
     source: ProviderType.MANUAL,
     isRealtime: false,
-    dataAgeMs: null // unknown for manual CSV
+    dataAgeMs: null
   };
 }
 
@@ -56,3 +56,15 @@ export function createManualProvider(text, parseFn) {
     }
   };
 }
+
+/** Live Brent quote via backend proxy (API key never in browser) */
+export function getBrentProvider() {
+  return createBrentApiNinjasProvider();
+}
+
+/**
+ * Registry for future providers (MetaTrader, etc.)
+ */
+export const MarketDataProviders = {
+  BRENT: getBrentProvider
+};
