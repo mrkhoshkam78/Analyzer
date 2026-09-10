@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="تحلیل‌گر بازار آفلاین — طلا، دلار/یورو و نفت برنت">
-  <title>تحلیل‌گر بازار آفلاین</title>
+  <title>تحلیل‌گر بازار آفلاین V5</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -36,8 +36,8 @@
           </svg>
         </div>
         <div class="brand-text">
-          <h1 class="brand-title">تحلیل‌گر بازار آفلاین</h1>
-          <p class="brand-sub">کاملاً آفلاین · بدون سرور و بدون API</p>
+          <h1 class="brand-title">تحلیل‌گر بازار آفلاین <span class="version-badge">V5</span></h1>
+          <p class="brand-sub">کاملاً آفلاین · Dataset مستقل هر دارایی · بدون سرور</p>
         </div>
       </div>
       <div class="header-actions">
@@ -58,7 +58,7 @@
 
     <section class="card" aria-labelledby="ws-title">
       <h2 class="card-title" id="ws-title">میز کار تحلیل</h2>
-      <p class="card-desc">نماد را انتخاب کنید، تایم‌فریم را مشخص کنید و داده OHLCV را وارد کنید. تمام محاسبات آفلاین انجام می‌شود.</p>
+      <p class="card-desc">نماد را انتخاب کنید؛ فقط داده همان دارایی بارگذاری می‌شود. قیمت روزانه را ساده وارد کنید یا در صورت نیاز تاریخچه OHLCV را اضافه کنید.</p>
 
       <div class="grid-2">
         <div class="field">
@@ -99,9 +99,37 @@
     </section>
 
     
+
+    <section class="card" id="dailyCard" aria-labelledby="daily-title" hidden>
+      <h2 class="card-title" id="daily-title">ورود قیمت روزانه</h2>
+      <p class="card-desc" id="dailyDesc">فقط قیمت پایانی (Close). تاریخ‌ها خودکار‌اند. داده فقط برای دارایی انتخاب‌شده ذخیره می‌شود.</p>
+      <div class="daily-grid" id="dailyGrid">
+        <div class="daily-row">
+          <label class="daily-label" for="priceToday">امروز <span class="daily-date" id="dateToday">—</span></label>
+          <input id="priceToday" class="input" type="number" step="any" min="0" inputmode="decimal" placeholder="قیمت">
+          <input id="dateTodayEdit" class="input input-date" type="date" title="اصلاح تاریخ (اختیاری)" aria-label="تاریخ امروز">
+        </div>
+        <div class="daily-row">
+          <label class="daily-label" for="priceY1">روز قبل <span class="daily-date" id="dateY1">—</span></label>
+          <input id="priceY1" class="input" type="number" step="any" min="0" inputmode="decimal" placeholder="قیمت">
+          <input id="dateY1Edit" class="input input-date" type="date" title="اصلاح تاریخ (اختیاری)" aria-label="تاریخ روز قبل">
+        </div>
+        <div class="daily-row">
+          <label class="daily-label" for="priceY2">۲ روز قبل <span class="daily-date" id="dateY2">—</span></label>
+          <input id="priceY2" class="input" type="number" step="any" min="0" inputmode="decimal" placeholder="قیمت">
+          <input id="dateY2Edit" class="input input-date" type="date" title="اصلاح تاریخ (اختیاری)" aria-label="تاریخ ۲ روز قبل">
+        </div>
+      </div>
+      <div class="daily-actions">
+        <button type="button" class="btn btn-primary" id="saveDailyBtn">ذخیره قیمت‌ها</button>
+        <span class="field-hint" id="assetDataHint">—</span>
+      </div>
+      <div id="manualList" class="manual-list" aria-live="polite"></div>
+    </section>
+
 <section class="card" aria-labelledby="import-title">
-      <h2 class="card-title" id="import-title">ورود داده بازار</h2>
-      <p class="card-desc">داده را بچسبانید یا در جدول وارد کنید. ستون‌ها خودکار تشخیص داده می‌شوند. بدون سرور و بدون API.</p>
+      <h2 class="card-title" id="import-title">تاریخچه OHLCV <span class="opt">(اختیاری)</span></h2>
+      <p class="card-desc">برای تحلیل تکنیکال کامل، تاریخچه همان دارایی را بچسبانید یا فایل بدهید. داده فقط روی دارایی انتخاب‌شده ذخیره می‌شود و با قیمت‌های روزانه ادغام می‌شود.</p>
 
       <div class="input-tabs" role="tablist" aria-label="روش ورود داده">
         <button type="button" class="input-tab active" role="tab" id="tabPaste" aria-selected="true" data-tab="paste">چسباندن سریع</button>

@@ -1,13 +1,26 @@
 /**
- * کنترلر UI — ورود داده Browser-Based (Paste / جدول / فایل)
- * بدون سرور و API. موتور تحلیل در logic/ دست‌نخورده می‌ماند.
+ * UI Controller V5 — per-asset datasets, daily close entry, offline only.
+ * Analysis formulas remain in logic/ (unchanged).
  */
 import { getSymbol, formatPrice, SYMBOL_LIST } from './logic/symbols.js';
+import {
+  loadHistorical,
+  loadManual,
+  setHistorical,
+  upsertManualPrices,
+  buildAnalysisSeries,
+  getAssetSummary,
+  dayKeyOffset,
+  dayKey,
+  getCachedSymbols,
+  dropSessionCache
+} from './logic/datasets.js';
 
 const $ = (id) => document.getElementById(id);
 
 let worker = null;
 let activeTab = 'paste';
+let currentSymbol = null;
 
 function getWorker() {
   if (worker) return worker;
@@ -35,30 +48,13 @@ function formatNow() {
 
 function tickClock() {
   const { date, time, full } = formatNow();
-  const cd = $('clockDate');
-  const ct = $('clockTime');
-  if (cd) cd.textContent = date;
-  if (ct) ct.textContent = time;
+  if ($('clockDate')) $('clockDate').textContent = date;
+  if ($('clockTime')) $('clockTime').textContent = time;
   const rc = $('resultClock');
-  if (rc && $('result') && $('result').classList.contains('show')) {
-    rc.textContent = full;
-  }
+  if (rc && $('result')?.classList.contains('show')) rc.textContent = full;
 }
 
-function onSymbolChange() {
-  const id = $('symbol').value;
-  const meta = getSymbol(id);
-  if (!meta) {
-    $('assetChip').classList.remove('show');
-    return;
-  }
-  $('chipSym').textContent = meta.symbol;
-  $('chipName').textContent = meta.nameFa;
-  $('chipMeta').textContent = `${meta.typeFa} · ${meta.unitFa}`;
-  $('assetChip').classList.add('show');
-}
-
-function setProcessing(on, msg = 'در حال پردازش داده…') {
+function setProcessing(on, msg = 'در حال پردازش…') {
   const el = $('processing');
   if (on) {
     el.classList.add('show');
@@ -78,7 +74,6 @@ function setDataStatus(msg, kind = '') {
   el.className = 'data-status' + (kind ? ' is-' + kind : '');
 }
 
-// ---------- Tabs ----------
 function switchTab(name) {
   activeTab = name;
   document.querySelectorAll('.input-tab').forEach(btn => {
@@ -95,11 +90,149 @@ function switchTab(name) {
   });
 }
 
-// ---------- Manual table ----------
+// ---------- Daily form ----------
+function setupDailyDates() {
+  const pairs = [
+    { label: 'dateToday', edit: 'dateTodayEdit', off: 0 },
+    { label: 'dateY1', edit: 'dateY1Edit', off: -1 },
+    { label: 'dateY2', edit: 'dateY2Edit', off: -2 }
+  ];
+  for (const p of pairs) {
+    const key = dayKeyOffset(p.off);
+    const lab = $(p.label);
+    const ed = $(p.edit);
+    if (lab) lab.textContent = key || '—';
+    if (ed && key) ed.value = key;
+  }
+}
+
+function fillDailyFromManual(symbol) {
+  $('priceToday').value = '';
+  $('priceY1').value = '';
+  $('priceY2').value = '';
+  if (!symbol) return;
+  const manual = loadManual(symbol);
+  const byDay = new Map(manual.map(m => [m.day, m.close]));
+  const map = [
+    ['dateTodayEdit', 'priceToday'],
+    ['dateY1Edit', 'priceY1'],
+    ['dateY2Edit', 'priceY2']
+  ];
+  for (const [dId, pId] of map) {
+    const day = $(dId)?.value;
+    if (day && byDay.has(day)) $(pId).value = byDay.get(day);
+  }
+}
+
+function renderManualList(symbol) {
+  const box = $('manualList');
+  if (!box) return;
+  if (!symbol) { box.innerHTML = ''; return; }
+  const manual = loadManual(symbol).slice().reverse().slice(0, 12);
+  if (!manual.length) {
+    box.innerHTML = '<p class="field-hint">هنوز قیمت دستی برای این دارایی ذخیره نشده است.</p>';
+    return;
+  }
+  box.innerHTML =
+    '<div class="manual-list-title">آخرین قیمت‌های ذخیره‌شده</div>' +
+    manual.map(m =>
+      `<div class="manual-item"><span>${m.day}</span><strong>${formatPrice(m.close, symbol)}</strong></div>`
+    ).join('');
+}
+
+function refreshAssetPanel(symbol) {
+  const card = $('dailyCard');
+  const meta = getSymbol(symbol);
+  if (!meta || !symbol) {
+    if (card) card.hidden = true;
+    currentSymbol = null;
+    return;
+  }
+  currentSymbol = symbol;
+  // Lazy-load ONLY this symbol
+  loadHistorical(symbol);
+  loadManual(symbol);
+  if (card) card.hidden = false;
+  setupDailyDates();
+  fillDailyFromManual(symbol);
+  const sum = getAssetSummary(symbol);
+  const hint = $('assetDataHint');
+  if (hint) {
+    hint.textContent =
+      `تاریخچه: ${sum.histCount.toLocaleString('fa-IR')} کندل · دستی: ${sum.manualCount.toLocaleString('fa-IR')} قیمت`;
+  }
+  renderManualList(symbol);
+  const desc = $('dailyDesc');
+  if (desc) {
+    desc.textContent =
+      `قیمت پایانی ${meta.nameFa} (${meta.unitFa}). فقط همین دارایی ذخیره و تحلیل می‌شود.`;
+  }
+}
+
+function onSymbolChange() {
+  const id = $('symbol').value;
+  const meta = getSymbol(id);
+  if (!meta) {
+    $('assetChip').classList.remove('show');
+    refreshAssetPanel(null);
+    return;
+  }
+  $('chipSym').textContent = meta.symbol;
+  $('chipName').textContent = meta.nameFa;
+  $('chipMeta').textContent = `${meta.typeFa} · ${meta.unitFa}`;
+  $('assetChip').classList.add('show');
+  refreshAssetPanel(id);
+}
+
+function saveDailyPrices() {
+  const sym = $('symbol').value;
+  if (!sym || !getSymbol(sym)) {
+    alert('ابتدا نماد را انتخاب کنید.');
+    return;
+  }
+  const fields = [
+    { dateId: 'dateTodayEdit', priceId: 'priceToday' },
+    { dateId: 'dateY1Edit', priceId: 'priceY1' },
+    { dateId: 'dateY2Edit', priceId: 'priceY2' }
+  ];
+  const entries = [];
+  const errors = [];
+  for (const f of fields) {
+    const raw = ($(f.priceId).value || '').trim();
+    if (!raw) continue;
+    const close = Number(raw);
+    if (!Number.isFinite(close) || close <= 0) {
+      errors.push('قیمت نامعتبر (باید عدد بزرگ‌تر از صفر باشد).');
+      continue;
+    }
+    let day = $(f.dateId).value;
+    if (!day) day = dayKey(new Date());
+    entries.push({ day, close });
+  }
+  if (errors.length) {
+    alert(errors[0]);
+    return;
+  }
+  if (!entries.length) {
+    alert('حداقل یک قیمت وارد کنید.');
+    return;
+  }
+  const res = upsertManualPrices(sym, entries);
+  refreshAssetPanel(sym);
+  setDataStatus(
+    `${res.saved.toLocaleString('fa-IR')} قیمت برای ${sym} ذخیره شد (جمع: ${res.total.toLocaleString('fa-IR')}).`,
+    'ok'
+  );
+}
+
+// ---------- Table helpers (OHLCV optional import) ----------
 function emptyRow() {
   return { date: '', o: '', h: '', l: '', c: '', v: '' };
 }
-
+function esc(v) {
+  if (v == null || v === '') return '';
+  return String(v).replace(/"/g, '&quot;');
+}
 function addTableRow(data = null) {
   const tbody = $('manualBody');
   if (!tbody) return;
@@ -107,182 +240,132 @@ function addTableRow(data = null) {
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td><input type="text" class="cell" data-k="date" value="${esc(r.date)}" placeholder="2024-01-02"></td>
-    <td><input type="number" class="cell" data-k="o" step="any" value="${esc(r.o)}" placeholder="Open"></td>
-    <td><input type="number" class="cell" data-k="h" step="any" value="${esc(r.h)}" placeholder="High"></td>
-    <td><input type="number" class="cell" data-k="l" step="any" value="${esc(r.l)}" placeholder="Low"></td>
-    <td><input type="number" class="cell" data-k="c" step="any" value="${esc(r.c)}" placeholder="Close"></td>
-    <td><input type="number" class="cell" data-k="v" step="any" value="${esc(r.v)}" placeholder="—"></td>
-    <td class="col-act"><button type="button" class="row-del" title="حذف ردیف" aria-label="حذف ردیف">×</button></td>
-  `;
+    <td><input type="number" class="cell" data-k="o" step="any" value="${esc(r.o)}"></td>
+    <td><input type="number" class="cell" data-k="h" step="any" value="${esc(r.h)}"></td>
+    <td><input type="number" class="cell" data-k="l" step="any" value="${esc(r.l)}"></td>
+    <td><input type="number" class="cell" data-k="c" step="any" value="${esc(r.c)}"></td>
+    <td><input type="number" class="cell" data-k="v" step="any" value="${esc(r.v)}"></td>
+    <td class="col-act"><button type="button" class="row-del" aria-label="حذف">×</button></td>`;
   tr.querySelector('.row-del').addEventListener('click', () => {
     tr.remove();
     if (!$('manualBody').children.length) addTableRow();
   });
   tbody.appendChild(tr);
 }
-
-function esc(v) {
-  if (v == null || v === '') return '';
-  return String(v).replace(/"/g, '&quot;');
-}
-
-function readTableRows() {
-  const rows = [];
-  $('manualBody').querySelectorAll('tr').forEach(tr => {
-    const get = (k) => {
-      const inp = tr.querySelector(`[data-k="${k}"]`);
-      return inp ? inp.value.trim() : '';
-    };
-    const date = get('date');
-    const o = get('o'), h = get('h'), l = get('l'), c = get('c'), v = get('v');
-    if (!o && !h && !l && !c && !date) return; // skip blank
-    rows.push({ date, o, h, l, c, v });
-  });
-  return rows;
-}
-
 function tableToText() {
-  const rows = readTableRows();
   const lines = ['Date,Open,High,Low,Close,Volume'];
-  for (const r of rows) {
-    lines.push([r.date, r.o, r.h, r.l, r.c, r.v].join(','));
-  }
+  $('manualBody')?.querySelectorAll('tr').forEach(tr => {
+    const get = k => tr.querySelector(`[data-k="${k}"]`)?.value.trim() || '';
+    const o = get('o'), h = get('h'), l = get('l'), c = get('c');
+    if (!o && !h && !l && !c) return;
+    lines.push([get('date'), o, h, l, c, get('v')].join(','));
+  });
   return lines.join('\n');
 }
-
 function pasteIntoTable() {
-  const raw = prompt('چند ردیف داده را اینجا بچسبانید (کاما / تب / فاصله):');
-  if (!raw || !raw.trim()) return;
-  // Use parser path: put in temp and fill rows via simple split
-  const lines = raw.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const raw = prompt('چند ردیف OHLCV را بچسبانید:');
+  if (!raw?.trim()) return;
   let added = 0;
-  for (const line of lines) {
-    let cols;
-    if (line.includes('\t')) cols = line.split('\t');
-    else if (line.includes(';')) cols = line.split(';');
-    else if (line.includes(',')) cols = line.split(',');
-    else cols = line.trim().split(/\s+/);
-    cols = cols.map(x => x.trim().replace(/^["']|["']$/g, ''));
-    // skip header-like
-    if (/date|open|high|low|close/i.test(cols.join(' '))) continue;
+  for (const line of raw.trim().split(/\r?\n/)) {
+    let cols = line.includes('\t') ? line.split('\t')
+      : line.includes(';') ? line.split(';')
+      : line.includes(',') ? line.split(',')
+      : line.trim().split(/\s+/);
+    cols = cols.map(x => x.trim());
+    if (/date|open|high/i.test(cols.join(' '))) continue;
     if (cols.length < 5) continue;
-    // assume Date O H L C [V]
-    addTableRow({
-      date: cols[0],
-      o: cols[1],
-      h: cols[2],
-      l: cols[3],
-      c: cols[4],
-      v: cols[5] || ''
-    });
+    addTableRow({ date: cols[0], o: cols[1], h: cols[2], l: cols[3], c: cols[4], v: cols[5] || '' });
     added++;
   }
-  setDataStatus(added ? `${added.toLocaleString('fa-IR')} ردیف به جدول اضافه شد.` : 'ردیفی اضافه نشد.', added ? 'ok' : 'warn');
+  setDataStatus(added ? `${added} ردیف اضافه شد.` : 'ردیفی اضافه نشد.', added ? 'ok' : 'warn');
 }
 
-// ---------- Collect text from active input ----------
-function collectInputText() {
+function collectImportText() {
   if (activeTab === 'table') return tableToText();
   return ($('data').value || '').trim();
 }
 
-function readFileAsText(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = () => reject(new Error('خواندن فایل ناموفق بود.'));
-    r.readAsText(file);
-  });
-}
-
-function showFileInfo(name, sizeKb) {
-  $('fileNameText').textContent = name;
-  $('fileMeta').textContent = sizeKb != null ? `${Number(sizeKb).toLocaleString('fa-IR')} کیلوبایت` : '';
-  $('fileName').classList.add('show');
-}
-
-function hideFileInfo() {
-  const fn = $('fileName');
-  if (!fn) return;
-  fn.classList.remove('show');
-  $('fileNameText').textContent = 'فایلی انتخاب نشده';
-  $('fileMeta').textContent = '';
+/** Import pasted/file OHLCV into historical of CURRENT symbol only */
+async function importHistoricalIfAny(sym) {
+  const text = collectImportText();
+  if (!text || text.split(/\n/).filter(Boolean).length < 2) return { imported: 0 };
+  const { parseOHLCV } = await import('./logic/analysis.js');
+  const { candles, error, rejected } = parseOHLCV(text);
+  if (error || !candles.length) return { imported: 0, error, rejected };
+  // attach day keys
+  const withDay = candles.map(c => ({
+    ...c,
+    day: c.ts != null ? dayKey(c.ts) : null
+  }));
+  const n = setHistorical(sym, withDay);
+  return { imported: n, rejected };
 }
 
 async function runAnalysis() {
   const sym = $('symbol').value;
   if (!sym || !getSymbol(sym)) {
-    alert('لطفاً یکی از سه نماد مجاز (XAUUSD، USDEUR یا BRENT) را انتخاب کنید.');
-    return;
-  }
-  const text = collectInputText();
-  if (!text || text.split(/\n/).filter(Boolean).length < 2) {
-    alert('لطفاً داده را بچسبانید یا در جدول وارد کنید (حداقل چند ردیف OHLC).');
+    alert('لطفاً یکی از سه نماد مجاز را انتخاب کنید.');
     return;
   }
 
-  setProcessing(true, 'در حال تشخیص و اعتبارسنجی داده…');
+  setProcessing(true, 'آماده‌سازی Dataset دارایی…');
   $('result').classList.remove('show');
-  setDataStatus('');
 
-  const currentPrice = parseFloat($('current').value);
-  const payload = {
-    type: 'analyze',
-    text,
-    currentPrice: Number.isFinite(currentPrice) ? currentPrice : undefined,
-    symbol: sym,
-    timeframe: $('tf').value,
-    recordPrediction: true
-  };
-
-  const w = getWorker();
-  if (w) {
-    const onMsg = (e) => {
-      w.removeEventListener('message', onMsg);
+  try {
+    // Optional OHLCV import for this symbol only
+    const imp = await importHistoricalIfAny(sym);
+    if (imp.error && imp.imported === 0 && collectImportText().length > 20) {
       setProcessing(false);
-      if (e.data.type === 'error') {
-        setDataStatus(e.data.message || 'داده نامعتبر است.', 'err');
-        alert(e.data.message || 'تحلیل انجام نشد. ستون‌های OHLC و حداقل ۳۰ کندل را بررسی کنید.');
-        return;
-      }
-      const r = e.data.result;
-      if (r && r.candleCount != null) {
-        setDataStatus(`${r.candleCount.toLocaleString('fa-IR')} کندل معتبر · تحلیل انجام شد.`, 'ok');
-      }
-      showResult(r, sym);
-    };
-    w.addEventListener('message', onMsg);
-    w.postMessage(payload);
-  } else {
-    try {
-      const { parseOHLCV, analyze } = await import('./logic/analysis.js');
-      await new Promise(r => setTimeout(r, 0));
-      const { candles, error, rejected } = parseOHLCV(text);
-      if (error || !candles.length) {
-        setProcessing(false);
-        setDataStatus(error || 'کندل معتبری یافت نشد.', 'err');
-        alert(error || 'کندل معتبری یافت نشد.');
-        return;
-      }
-      if (rejected) {
-        setDataStatus(`${candles.length.toLocaleString('fa-IR')} معتبر · ${rejected.toLocaleString('fa-IR')} ردیف رد شد.`, 'warn');
-      } else {
-        setDataStatus(`${candles.length.toLocaleString('fa-IR')} کندل معتبر.`, 'ok');
-      }
-      await new Promise(r => setTimeout(r, 0));
-      const result = analyze(candles, {
-        currentPrice: payload.currentPrice,
-        symbol: sym,
-        timeframe: payload.timeframe,
-        recordPrediction: true
-      });
-      setProcessing(false);
-      showResult(result, sym);
-    } catch (err) {
-      setProcessing(false);
-      setDataStatus(err.message || 'خطا', 'err');
-      alert(err.message || 'خطا در تحلیل. لطفاً دوباره تلاش کنید.');
+      setDataStatus(imp.error, 'err');
+      alert(imp.error);
+      return;
     }
+
+    // Lazy series for THIS symbol only
+    const series = buildAnalysisSeries(sym);
+    refreshAssetPanel(sym);
+
+    if (!series.hasFullOHLC || series.candles.length < 30) {
+      setProcessing(false);
+      const msg =
+        `برای تحلیل تکنیکال ${sym} حداقل ۳۰ کندل OHLCV کامل در تاریخچه لازم است (فعلی: ${series.histCount}). ` +
+        'قیمت‌های روزانه فقط Close هستند و به‌تنهایی جایگزین تاریخچه نمی‌شوند.';
+      setDataStatus(msg, 'warn');
+      alert(msg);
+      return;
+    }
+
+    const uiPrice = parseFloat($('current').value);
+    const currentPrice = Number.isFinite(uiPrice) && uiPrice > 0
+      ? uiPrice
+      : series.currentPrice;
+
+    // Run analysis on main thread with prepared candles (no mixing symbols)
+    const { analyze } = await import('./logic/analysis.js');
+    await new Promise(r => setTimeout(r, 0));
+    const result = analyze(series.candles, {
+      currentPrice,
+      symbol: sym,
+      timeframe: $('tf').value,
+      recordPrediction: true
+    });
+    setProcessing(false);
+    if (imp.imported) {
+      setDataStatus(
+        `تاریخچه ${sym}: ${imp.imported.toLocaleString('fa-IR')} کندل · دستی: ${series.manualCount.toLocaleString('fa-IR')}`,
+        'ok'
+      );
+    } else {
+      setDataStatus(
+        `${sym}: ${series.histCount.toLocaleString('fa-IR')} کندل تاریخچه · ${series.manualCount.toLocaleString('fa-IR')} قیمت دستی`,
+        'ok'
+      );
+    }
+    showResult(result, sym);
+  } catch (err) {
+    setProcessing(false);
+    setDataStatus(err.message || 'خطا', 'err');
+    alert(err.message || 'خطا در تحلیل');
   }
 }
 
@@ -300,25 +383,20 @@ const SIGNAL_ICONS = {
 
 function showResult(r, symbolId) {
   if (!r || !r.ok) {
-    alert(r?.error || 'تحلیل ناموفق بود. حداقل ۳۰ کندل معتبر OHLC لازم است.');
+    alert(r?.error || 'تحلیل ناموفق بود.');
     return;
   }
   const sig = r.signal;
-  const panel = $('signalPanel');
-  panel.className = 'signal-panel ' + sig;
-
-  const signalEl = $('signal');
-  signalEl.className = 'signal ' + sig;
+  $('signalPanel').className = 'signal-panel ' + sig;
+  $('signal').className = 'signal ' + sig;
   $('signalText').textContent = SIGNAL_FA[sig] || sig;
   $('signalIcon').innerHTML = SIGNAL_ICONS[sig] || SIGNAL_ICONS.HOLD;
 
   const meta = getSymbol(symbolId);
-  const symLabel = meta ? meta.symbol : symbolId || 'دارایی';
-  $('scoreContext').textContent = `${symLabel} · ${$('tf').value}`;
+  $('scoreContext').textContent = `${meta ? meta.symbol : symbolId} · ${$('tf').value}`;
   $('score').textContent = `امتیاز ${r.score.toLocaleString('fa-IR')} از ۱۰۰`;
   $('bar').style.width = r.score + '%';
-  const barWrap = $('scoreBar');
-  if (barWrap) barWrap.setAttribute('aria-valuenow', String(r.score));
+  $('scoreBar')?.setAttribute('aria-valuenow', String(r.score));
 
   const trendEl = $('trend');
   trendEl.textContent = TREND_FA[r.trend] || r.trend;
@@ -342,25 +420,23 @@ function showResult(r, symbolId) {
   if (r.confidence != null) {
     reportExtra += ' اطمینان مدل: ' + Math.round(r.confidence * 100).toLocaleString('fa-IR') + '٪.';
   }
-  if (r.analysis && r.analysis.fundamentalStatus === 'insufficient_data') {
-    reportExtra += ' ' + (r.analysis.fundamentalMessage || 'داده فاندامنتال کافی نیست.');
-  }
-  if (r.prediction && r.prediction.learningNote) {
-    reportExtra += ' ' + r.prediction.learningNote;
+  if (r.analysis?.fundamentalStatus === 'insufficient_data') {
+    reportExtra += ' ' + (r.analysis.fundamentalMessage || '');
   }
   $('report').textContent = reportExtra;
   $('suggestionText').textContent = r.suggestion || 'شرایط برای پیشنهاد مشخص کافی نیست.';
-
   $('resultClock').textContent = formatNow().full;
   $('result').classList.add('show');
   $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function clearAll() {
-  $('symbol').value = '';
+  // Clear form UI only — does NOT wipe other assets' storage
   $('current').value = '';
   $('data').value = '';
-  $('assetChip').classList.remove('show');
+  $('priceToday').value = '';
+  $('priceY1').value = '';
+  $('priceY2').value = '';
   hideFileInfo();
   $('result').classList.remove('show');
   const csv = $('csv');
@@ -370,8 +446,15 @@ function clearAll() {
     body.innerHTML = '';
     for (let i = 0; i < 5; i++) addTableRow();
   }
-  setDataStatus('');
+  setDataStatus('فرم پاک شد. داده‌های ذخیره‌شده دارایی‌ها دست‌نخورده ماندند.', 'ok');
   switchTab('paste');
+  if (currentSymbol) refreshAssetPanel(currentSymbol);
+}
+
+function hideFileInfo() {
+  $('fileName')?.classList.remove('show');
+  if ($('fileNameText')) $('fileNameText').textContent = 'فایلی انتخاب نشده';
+  if ($('fileMeta')) $('fileMeta').textContent = '';
 }
 
 function getTheme() {
@@ -390,62 +473,64 @@ function applyTheme(theme) {
 
 function init() {
   applyTheme(getTheme());
-  $('themeBtn').addEventListener('click', () => {
-    applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
-  });
+  $('themeBtn').addEventListener('click', () => applyTheme(getTheme() === 'dark' ? 'light' : 'dark'));
   tickClock();
   setInterval(tickClock, 1000);
-  $('symbol').addEventListener('change', onSymbolChange);
+  setupDailyDates();
 
-  // tabs
+  $('symbol').addEventListener('change', onSymbolChange);
+  $('saveDailyBtn')?.addEventListener('click', saveDailyPrices);
+
   document.querySelectorAll('.input-tab').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  // table
   for (let i = 0; i < 5; i++) addTableRow();
   $('addRowBtn')?.addEventListener('click', () => addTableRow());
   $('pasteRowsBtn')?.addEventListener('click', pasteIntoTable);
 
-  // file drop
   const drop = $('drop');
   const csvInput = $('csv');
   if (drop && csvInput) {
     drop.addEventListener('click', () => csvInput.click());
-    drop.addEventListener('keydown', (e) => {
+    drop.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); csvInput.click(); }
     });
-    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
     drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
-    drop.addEventListener('drop', async (e) => {
+    drop.addEventListener('drop', async e => {
       e.preventDefault();
       drop.classList.remove('dragover');
       const f = e.dataTransfer.files[0];
       if (f) await handleFile(f);
     });
-    csvInput.addEventListener('change', async (e) => {
+    csvInput.addEventListener('change', async e => {
       const f = e.target.files[0];
       if (f) await handleFile(f);
     });
   }
 
   async function handleFile(file) {
-    showFileInfo(file.name, (file.size / 1024).toFixed(1));
-    setProcessing(true, 'در حال خواندن فایل…');
-    try {
-      const text = await readFileAsText(file);
-      $('data').value = text;
-      switchTab('paste');
-      setDataStatus(`فایل «${file.name}» خوانده شد و در چسباندن قرار گرفت.`, 'ok');
-      setProcessing(false);
-    } catch (err) {
-      setProcessing(false);
-      alert(err.message || 'خواندن فایل ممکن نشد.');
-    }
+    hideFileInfo();
+    $('fileNameText').textContent = file.name;
+    $('fileMeta').textContent = `${(file.size / 1024).toFixed(1)} کیلوبایت`;
+    $('fileName').classList.add('show');
+    const text = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = () => rej(new Error('خواندن فایل ناموفق'));
+      r.readAsText(file);
+    });
+    $('data').value = text;
+    switchTab('paste');
+    setDataStatus(`فایل خوانده شد. با «ثبت داده و تحلیل» روی دارایی انتخاب‌شده ذخیره می‌شود.`, 'ok');
   }
 
   $('analyzeBtn').addEventListener('click', runAnalysis);
   $('clearBtn').addEventListener('click', clearAll);
+
+  // expose for tests
+  window.__OMA_V5__ = { getCachedSymbols, dropSessionCache, buildAnalysisSeries, loadManual, loadHistorical };
 
   const sel = $('symbol');
   if (sel) {
