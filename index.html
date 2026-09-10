@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Offline Market Analyst V4</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Offline Market Analyst V4</h1>
+      <div class="muted">Local technical analysis · Only symbol search is online · No market-data APIs</div>
+    </header>
+
+    <section class="card">
+      <div class="grid">
+        <div class="symbol-wrap">
+          <label for="symbol">Symbol / Asset</label>
+          <input id="symbol" type="text" placeholder="AAPL, BTC-USD, EURUSD=X, Gold…" autocomplete="off" spellcheck="false">
+          <div id="ac" class="autocomplete" role="listbox"></div>
+        </div>
+        <div>
+          <label for="tf">Timeframe</label>
+          <select id="tf">
+            <option>1m</option>
+            <option>5m</option>
+            <option>15m</option>
+            <option>1h</option>
+            <option selected>Daily</option>
+            <option>Weekly</option>
+            <option>Monthly</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <label for="current">Current price (optional – default = last Close)</label>
+        <input id="current" type="number" step="any" placeholder="Leave empty to use last Close">
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Market Data (OHLCV)</h3>
+      <p class="muted" style="margin:0 0 10px;font-size:.85rem">
+        Upload a CSV from any charting platform or paste data. Columns are auto-detected (Date, Open, High, Low, Close, Volume – case-insensitive). Extra columns are ignored.
+      </p>
+      <div id="drop" class="drop">
+        📁 Drop CSV here or click to select
+        <input id="csv" type="file" accept=".csv,text/csv,text/plain">
+      </div>
+      <div id="fileName" class="file-info">No file selected</div>
+      <label style="margin-top:14px" for="data">Or paste OHLCV data</label>
+      <textarea id="data" placeholder="Date,Open,High,Low,Close,Volume
+2024-01-02,185.64,186.95,183.89,185.64,82488700
+2024-01-03,184.22,185.88,183.43,184.25,58414500"></textarea>
+    </section>
+
+    <section class="card">
+      <button id="analyzeBtn" class="btn">Analyze</button>
+      <button id="clearBtn" class="btn secondary">Clear</button>
+      <div id="processing" class="processing"></div>
+    </section>
+
+    <section id="result" class="card result">
+      <div id="signal" class="signal">HOLD</div>
+      <div id="score" class="score"></div>
+      <div class="bar"><i id="bar"></i></div>
+      <div class="stats">
+        <div class="stat">Trend<b id="trend">—</b></div>
+        <div class="stat">Risk<b id="risk">—</b></div>
+        <div class="stat">Support<b id="support">—</b></div>
+        <div class="stat">Resistance<b id="resistance">—</b></div>
+        <div class="stat">Target<b id="target">—</b></div>
+        <div class="stat">Stop Loss<b id="stop">—</b></div>
+      </div>
+      <div id="report" class="report"></div>
+      <div class="disclaimer">Educational tool only. BUY / HOLD / SELL is the output of a local scoring model, not investment advice.</div>
+    </section>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
