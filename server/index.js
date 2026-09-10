@@ -6,7 +6,7 @@ import http from 'http';
 import { URL } from 'url';
 
 const PORT = Number(process.env.PORT) || 8787;
-const API_KEY = process.env.API_NINJAS_KEY || '';
+const API_KEY = VHfWtXt65ZHVQgWJSP3Joexfp8rmWWuKlGOA9SFM || '';
 const UPSTREAM = 'https://api.api-ninjas.com/v1/commodityprice?name=brent_crude_oil';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
