@@ -1,23 +1,26 @@
-تحلیل‌گر بازار آفلاین V4
-========================
+تحلیل‌گر بازار آفلاین — هسته تصمیم‌گیری ترکیبی
+==============================================
 
 ساختار
 ------
-index.html     رابط کاربری (ریشه)
-styles.css     استایل (ریشه)
-app.js         کنترلر UI (ریشه)
-logic/         منطق پردازشی
-  analysis.js  موتور تحلیل و اندیکاتورها
-  worker.js    Web Worker
-  symbols.js   رجیستری نمادهای آفلاین
+index.html / styles.css / app.js     رابط (ریشه)
+logic/
+  config.js         وزن‌ها و آستانه‌ها (قابل تنظیم)
+  indicators.js     SMA EMA RSI MACD ATR BB Stoch ADX ROC Momentum S/R Volume Breakout
+  technical.js      امتیاز تکنیکال چندعاملی
+  fundamental.js    لایه فاندامنتال (بدون حدس؛ insufficient_data)
+  decision.js       موتور ترکیبی Technical + Fundamental + Learning
+  prediction.js     ذخیره و ارزیابی پیش‌بینی
+  learning.js       تنظیم اطمینان بر اساس سابقه (بدون تغییر فرمول)
+  storage.js        حافظه محلی نسخه‌دار
+  providers.js      رابط Provider (Manual فعلی)
+  symbols.js        رجیستری XAUUSD / USDEUR / BRENT
+  analysis.js       ارکستراتور parse + analyze
+  worker.js         Web Worker
 
-نمادهای مجاز (فقط آفلاین)
---------------------------
-XAUUSD  طلا (انس دلار)
-USDEUR  دلار / یورو
-BRENT   نفت برنت
+جریان داده
+----------
+Market Data (CSV دستی) → Validation → Technical Engine → Fundamental Engine
+→ Decision Engine → Prediction → Evaluation → Learning Memory
 
-هیچ API آنلاینی برای لیست نماد یا قیمت فراخوانی نمی‌شود.
-داده OHLCV فقط از فایل یا چسباندن کاربر خوانده می‌شود.
-
-حداقل ۳۰ کندل معتبر لازم است.
+نمادهای مجاز: فقط XAUUSD، USDEUR، BRENT — بدون API آنلاین نماد/قیمت.

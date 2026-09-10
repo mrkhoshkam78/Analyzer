@@ -118,7 +118,10 @@ async function runAnalysis() {
   const payload = {
     type: 'analyze',
     text,
-    currentPrice: Number.isFinite(currentPrice) ? currentPrice : undefined
+    currentPrice: Number.isFinite(currentPrice) ? currentPrice : undefined,
+    symbol: sym,
+    timeframe: $('tf').value,
+    recordPrediction: true
   };
 
   const w = getWorker();
@@ -213,7 +216,17 @@ function showResult(r, symbolId) {
   $('target').textContent = fmt(r.target);
   $('stop').textContent = fmt(r.stop);
 
-  $('report').textContent = r.report || '';
+  let reportExtra = r.report || '';
+  if (r.confidence != null) {
+    reportExtra += ' اطمینان مدل: ' + Math.round(r.confidence * 100).toLocaleString('fa-IR') + '٪.';
+  }
+  if (r.analysis && r.analysis.fundamentalStatus === 'insufficient_data') {
+    reportExtra += ' ' + (r.analysis.fundamentalMessage || 'داده فاندامنتال کافی نیست.');
+  }
+  if (r.prediction && r.prediction.learningNote) {
+    reportExtra += ' ' + r.prediction.learningNote;
+  }
+  $('report').textContent = reportExtra;
   $('suggestionText').textContent = r.suggestion || 'شرایط برای پیشنهاد مشخص کافی نیست.';
 
   const { full } = formatNow();
