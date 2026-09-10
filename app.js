@@ -1,190 +1,74 @@
 /**
- * Offline Market Analyst V4 – UI controller
- * Symbol search is the only network call. All analysis is local via Worker.
- * Presentation layer updated for redesign; analysis logic unchanged.
+ * کنترلر UI — تحلیل‌گر بازار آفلاین
+ * بدون API آنلاین نماد. منطق تحلیل در logic/
  */
 
-import { CONFIG } from './analysis.js';
+import { getSymbol, formatPrice, SYMBOL_LIST } from './logic/symbols.js';
 
 const $ = (id) => document.getElementById(id);
 
-// ---------- State ----------
 let worker = null;
-let searchTimer = null;
-let acItems = [];
-let acIndex = -1;
-let selectedAsset = null; // { symbol, name, exchange, type }
-const searchCache = new Map();
-const CACHE_KEY = 'oma_v4_symbol_cache';
-const CACHE_TTL = 1000 * 60 * 60 * 24;
 
-// Load persistent cache
-try {
-  const raw = localStorage.getItem(CACHE_KEY);
-  if (raw) {
-    const obj = JSON.parse(raw);
-    if (obj && obj.ts && Date.now() - obj.ts < CACHE_TTL && obj.data) {
-      Object.entries(obj.data).forEach(([k, v]) => searchCache.set(k, v));
-    }
-  }
-} catch (_) {}
-
-function persistCache() {
-  try {
-    const data = {};
-    let i = 0;
-    for (const [k, v] of searchCache) {
-      if (i++ > 80) break;
-      data[k] = v;
-    }
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
-  } catch (_) {}
-}
-
-// ---------- Worker (unchanged logic) ----------
 function getWorker() {
   if (worker) return worker;
   try {
-    worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+    worker = new Worker(new URL('./logic/worker.js', import.meta.url), { type: 'module' });
   } catch (e) {
-    console.warn('Module worker failed, falling back', e);
+    console.warn('Worker fallback', e);
     worker = null;
   }
   return worker;
 }
 
-// ---------- Symbol Search (logic unchanged) ----------
-async function fetchSymbols(query) {
-  const q = query.trim().toLowerCase();
-  if (q.length < 1) return [];
-
-  if (searchCache.has(q)) return searchCache.get(q);
-
-  const yahoo = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0&listsCount=0`;
-  const urls = [
-    yahoo,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(yahoo)}`
-  ];
-
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, { headers: { Accept: 'application/json' } });
-      if (!res.ok) continue;
-      const json = await res.json();
-      const quotes = (json.quotes || []).filter(x => x.symbol);
-      const results = quotes.map(item => ({
-        symbol: item.symbol,
-        name: item.longname || item.shortname || item.symbol,
-        exchange: item.exchDisp || item.exchange || '',
-        type: item.typeDisp || item.quoteType || ''
-      }));
-      searchCache.set(q, results);
-      persistCache();
-      return results;
-    } catch (_) {
-      /* try next */
-    }
-  }
-
-  const cached = [];
-  for (const [k, v] of searchCache) {
-    if (k.includes(q) || q.includes(k)) cached.push(...v);
-  }
-  const seen = new Set();
-  return cached.filter(r => {
-    if (seen.has(r.symbol)) return false;
-    seen.add(r.symbol);
-    return true;
-  }).slice(0, 8);
+// ---------- ساعت زنده ----------
+function pad(n) {
+  return String(n).padStart(2, '0');
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function escapeAttr(s) {
-  return String(s).replace(/"/g, '&quot;');
-}
-
-function renderAutocomplete(items, opts = {}) {
-  const box = $('ac');
-  const input = $('symbol');
-  acItems = items || [];
-  acIndex = -1;
-
-  if (opts.loading) {
-    box.innerHTML = '<div class="ac-loading">Searching…</div>';
-    box.classList.add('show');
-    input.setAttribute('aria-expanded', 'true');
-    return;
-  }
-
-  if (!acItems.length) {
-    if (opts.empty) {
-      box.innerHTML = '<div class="ac-empty">No symbols found. Try another query or check connection.</div>';
-      box.classList.add('show');
-      input.setAttribute('aria-expanded', 'true');
-    } else {
-      box.classList.remove('show');
-      box.innerHTML = '';
-      input.setAttribute('aria-expanded', 'false');
-    }
-    return;
-  }
-
-  box.innerHTML = acItems.map((it, i) =>
-    `<div class="ac-item" role="option" id="ac-opt-${i}" data-idx="${i}" data-symbol="${escapeAttr(it.symbol)}" tabindex="-1">
-      <div class="ac-row">
-        <span class="ac-sym">${escapeHtml(it.symbol)}</span>
-        <span class="ac-name">${escapeHtml(it.name)}</span>
-      </div>
-      <div class="ac-meta">${escapeHtml(it.exchange)}${it.type ? ' · ' + escapeHtml(it.type) : ''}</div>
-    </div>`
-  ).join('');
-  box.classList.add('show');
-  input.setAttribute('aria-expanded', 'true');
-
-  box.querySelectorAll('.ac-item').forEach(el => {
-    el.addEventListener('click', () => selectAsset(acItems[+el.dataset.idx]));
+function formatNow() {
+  const d = new Date();
+  const date = d.toLocaleDateString('fa-IR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short'
   });
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return { date, time, full: `${date} — ${time}` };
 }
 
-function selectAsset(item) {
-  if (!item) return;
-  selectedAsset = item;
-  $('symbol').value = item.symbol;
-  $('chipSym').textContent = item.symbol;
-  $('chipName').textContent = item.name || item.symbol;
-  $('chipMeta').textContent = [item.exchange, item.type].filter(Boolean).join(' · ') || '—';
-  $('assetChip').classList.add('show');
-  renderAutocomplete([]);
-  $('symbol').setAttribute('aria-expanded', 'false');
-}
-
-function clearAssetChip() {
-  selectedAsset = null;
-  $('assetChip').classList.remove('show');
-  $('chipSym').textContent = '—';
-  $('chipName').textContent = '—';
-  $('chipMeta').textContent = '—';
-}
-
-function highlightAc(idx) {
-  const nodes = $('ac').querySelectorAll('.ac-item');
-  nodes.forEach((n, i) => n.classList.toggle('active', i === idx));
-  if (idx >= 0 && nodes[idx]) {
-    nodes[idx].scrollIntoView({ block: 'nearest' });
-    $('symbol').setAttribute('aria-activedescendant', `ac-opt-${idx}`);
-  } else {
-    $('symbol').removeAttribute('aria-activedescendant');
+function tickClock() {
+  const { date, time, full } = formatNow();
+  const cd = $('clockDate');
+  const ct = $('clockTime');
+  if (cd) cd.textContent = date;
+  if (ct) ct.textContent = time;
+  const rc = $('resultClock');
+  if (rc && $('result').classList.contains('show')) {
+    rc.textContent = full;
   }
 }
 
-// ---------- File / Paste handling (presentation) ----------
-function setProcessing(on, msg = 'Processing market data…') {
+// ---------- نماد آفلاین ----------
+function onSymbolChange() {
+  const id = $('symbol').value;
+  const meta = getSymbol(id);
+  if (!meta) {
+    $('assetChip').classList.remove('show');
+    return;
+  }
+  $('chipSym').textContent = meta.symbol;
+  $('chipName').textContent = meta.nameFa;
+  $('chipMeta').textContent = `${meta.typeFa} · ${meta.unitFa}`;
+  $('assetChip').classList.add('show');
+}
+
+// ---------- فایل ----------
+function setProcessing(on, msg = 'در حال پردازش داده بازار…') {
   const el = $('processing');
   if (on) {
     el.classList.add('show');
-    el.innerHTML = `<span class="spinner" aria-hidden="true"></span><span>${escapeHtml(msg)}</span>`;
+    el.innerHTML = `<span class="spinner" aria-hidden="true"></span><span>${msg}</span>`;
     $('analyzeBtn').disabled = true;
   } else {
     el.classList.remove('show');
@@ -197,33 +81,37 @@ function readFileAsText(file) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(r.result);
-    r.onerror = () => reject(new Error('Failed to read file'));
+    r.onerror = () => reject(new Error('خواندن فایل ناموفق بود.'));
     r.readAsText(file);
   });
 }
 
 function showFileInfo(name, sizeKb) {
-  const box = $('fileName');
   $('fileNameText').textContent = name;
-  $('fileMeta').textContent = sizeKb != null ? `${sizeKb} KB` : '';
-  box.classList.add('show');
+  $('fileMeta').textContent = sizeKb != null ? `${Number(sizeKb).toLocaleString('fa-IR')} کیلوبایت` : '';
+  $('fileName').classList.add('show');
 }
 
 function hideFileInfo() {
   $('fileName').classList.remove('show');
-  $('fileNameText').textContent = 'No file selected';
+  $('fileNameText').textContent = 'فایلی انتخاب نشده';
   $('fileMeta').textContent = '';
 }
 
-// ---------- Run analysis (logic unchanged) ----------
+// ---------- تحلیل ----------
 async function runAnalysis() {
+  const sym = $('symbol').value;
+  if (!sym || !getSymbol(sym)) {
+    alert('لطفاً یکی از سه نماد مجاز (XAUUSD، USDEUR یا BRENT) را انتخاب کنید.');
+    return;
+  }
   const text = ($('data').value || '').trim();
   if (!text) {
-    alert('Please upload a CSV or paste OHLCV data before running analysis.');
+    alert('لطفاً فایل CSV را بارگذاری کنید یا داده OHLCV را بچسبانید.');
     return;
   }
 
-  setProcessing(true, 'Processing market data…');
+  setProcessing(true, 'در حال پردازش داده بازار…');
   $('result').classList.remove('show');
 
   const currentPrice = parseFloat($('current').value);
@@ -234,44 +122,48 @@ async function runAnalysis() {
   };
 
   const w = getWorker();
-
   if (w) {
     const onMsg = (e) => {
       w.removeEventListener('message', onMsg);
       setProcessing(false);
       if (e.data.type === 'error') {
-        alert(e.data.message || 'Analysis could not be completed. Check that your CSV has valid OHLC columns and at least 30 candles.');
+        alert(e.data.message || 'تحلیل انجام نشد. فایل را از نظر ستون‌های OHLC و حداقل ۳۰ کندل بررسی کنید.');
         return;
       }
-      showResult(e.data.result);
+      showResult(e.data.result, sym);
     };
     w.addEventListener('message', onMsg);
     w.postMessage(payload);
   } else {
     try {
-      const { parseOHLCV, analyze } = await import('./analysis.js');
+      const { parseOHLCV, analyze } = await import('./logic/analysis.js');
       await new Promise(r => setTimeout(r, 0));
       const { candles, error } = parseOHLCV(text);
       if (error || !candles.length) {
         setProcessing(false);
-        alert(error || 'No valid candles found. Ensure the file has Open, High, Low, Close columns.');
+        alert(error || 'کندل معتبری یافت نشد.');
         return;
       }
       await new Promise(r => setTimeout(r, 0));
       const result = analyze(candles, { currentPrice: payload.currentPrice });
       setProcessing(false);
-      showResult(result);
+      showResult(result, sym);
     } catch (err) {
       setProcessing(false);
-      alert(err.message || 'Analysis failed. Please try again with a different file.');
+      alert(err.message || 'خطا در تحلیل. لطفاً دوباره تلاش کنید.');
     }
   }
 }
 
-function fmt(n, digits = 2) {
-  if (!Number.isFinite(n)) return '—';
-  return n.toLocaleString('en-US', { maximumFractionDigits: digits });
-}
+const SIGNAL_FA = { BUY: 'خرید', HOLD: 'نگهداری', SELL: 'فروش' };
+const TREND_FA = {
+  'Strong Bullish': 'قوی صعودی',
+  Bullish: 'صعودی',
+  Neutral: 'خنثی',
+  Bearish: 'نزولی',
+  'Strong Bearish': 'قوی نزولی'
+};
+const RISK_FA = { High: 'بالا', Medium: 'متوسط', Low: 'پایین' };
 
 const SIGNAL_ICONS = {
   BUY: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`,
@@ -279,9 +171,9 @@ const SIGNAL_ICONS = {
   HOLD: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12h8"/></svg>`
 };
 
-function showResult(r) {
+function showResult(r, symbolId) {
   if (!r || !r.ok) {
-    alert(r?.error || 'Analysis failed. Ensure at least 30 valid OHLC candles are present.');
+    alert(r?.error || 'تحلیل ناموفق بود. حداقل ۳۰ کندل معتبر OHLC لازم است.');
     return;
   }
 
@@ -291,36 +183,41 @@ function showResult(r) {
 
   const signalEl = $('signal');
   signalEl.className = 'signal ' + sig;
-  $('signalText').textContent = sig;
+  $('signalText').textContent = SIGNAL_FA[sig] || sig;
   $('signalIcon').innerHTML = SIGNAL_ICONS[sig] || SIGNAL_ICONS.HOLD;
 
-  const sym = (selectedAsset && selectedAsset.symbol) || $('symbol').value.trim() || 'Asset';
+  const meta = getSymbol(symbolId);
+  const symLabel = meta ? meta.symbol : symbolId || 'دارایی';
   const tf = $('tf').value;
-  $('scoreContext').textContent = `${sym} · ${tf}`;
-  $('score').textContent = `Score ${r.score}/100`;
+  $('scoreContext').textContent = `${symLabel} · ${tf}`;
+  $('score').textContent = `امتیاز ${r.score.toLocaleString('fa-IR')} از ۱۰۰`;
   $('bar').style.width = r.score + '%';
   const barWrap = $('scoreBar');
   if (barWrap) barWrap.setAttribute('aria-valuenow', String(r.score));
 
   const trendEl = $('trend');
-  trendEl.textContent = r.trend;
+  trendEl.textContent = TREND_FA[r.trend] || r.trend;
   trendEl.className = 'metric-value';
-  if (/bull/i.test(r.trend)) trendEl.classList.add('trend-bull');
-  else if (/bear/i.test(r.trend)) trendEl.classList.add('trend-bear');
+  if (/Bull/i.test(r.trend)) trendEl.classList.add('trend-bull');
+  else if (/Bear/i.test(r.trend)) trendEl.classList.add('trend-bear');
 
   const riskEl = $('risk');
-  riskEl.textContent = r.riskLevel;
+  riskEl.textContent = RISK_FA[r.riskLevel] || r.riskLevel;
   riskEl.className = 'metric-value';
-  if (/high/i.test(r.riskLevel)) riskEl.classList.add('risk-high');
-  else if (/low/i.test(r.riskLevel)) riskEl.classList.add('risk-low');
+  if (r.riskLevel === 'High') riskEl.classList.add('risk-high');
+  else if (r.riskLevel === 'Low') riskEl.classList.add('risk-low');
 
+  const fmt = (n) => formatPrice(n, symbolId);
   $('support').textContent = fmt(r.support);
   $('resistance').textContent = fmt(r.resistance);
   $('target').textContent = fmt(r.target);
   $('stop').textContent = fmt(r.stop);
 
-  $('report').textContent = r.report +
-    ` (${r.candleCount} candles used. Indicators: Close-based except S/R from High/Low, ATR from True Range.)`;
+  $('report').textContent = r.report || '';
+  $('suggestionText').textContent = r.suggestion || 'شرایط برای پیشنهاد مشخص کافی نیست.';
+
+  const { full } = formatNow();
+  $('resultClock').textContent = full;
 
   $('result').classList.add('show');
   $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -330,124 +227,50 @@ function clearAll() {
   $('symbol').value = '';
   $('current').value = '';
   $('data').value = '';
-  clearAssetChip();
+  $('assetChip').classList.remove('show');
   hideFileInfo();
   $('result').classList.remove('show');
-  renderAutocomplete([]);
   const csv = $('csv');
   if (csv) csv.value = '';
   $('pasteArea').classList.remove('show');
   $('pasteToggle').setAttribute('aria-expanded', 'false');
 }
 
-// ---------- Theme ----------
+// ---------- تم ----------
 function getTheme() {
   return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 }
-
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   try { localStorage.setItem('oma_theme', theme); } catch (_) {}
   const sun = document.querySelector('.icon-sun');
   const moon = document.querySelector('.icon-moon');
   if (sun && moon) {
-    if (theme === 'dark') {
-      sun.style.display = 'none';
-      moon.style.display = 'block';
-    } else {
-      sun.style.display = 'block';
-      moon.style.display = 'none';
-    }
+    sun.style.display = theme === 'dark' ? 'none' : 'block';
+    moon.style.display = theme === 'dark' ? 'block' : 'none';
   }
 }
 
-function toggleTheme() {
-  applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
-}
-
-// ---------- Network status pill ----------
-function updateNetStatus() {
-  const el = $('netStatus');
-  if (!el) return;
-  if (navigator.onLine) {
-    el.classList.remove('is-offline');
-    el.querySelector('span:last-child').textContent = 'Online';
-  } else {
-    el.classList.add('is-offline');
-    el.querySelector('span:last-child').textContent = 'Offline';
-  }
-}
-
-// ---------- Init ----------
 function init() {
-  // Theme icons
   applyTheme(getTheme());
-
-  $('themeBtn').addEventListener('click', toggleTheme);
-
-  updateNetStatus();
-  window.addEventListener('online', updateNetStatus);
-  window.addEventListener('offline', updateNetStatus);
-
-  // Symbol search with debounce
-  const symInput = $('symbol');
-  symInput.addEventListener('input', () => {
-    clearTimeout(searchTimer);
-    const q = symInput.value.trim();
-    if (q.length < 1) {
-      renderAutocomplete([]);
-      return;
-    }
-    renderAutocomplete([], { loading: true });
-    searchTimer = setTimeout(async () => {
-      const items = await fetchSymbols(q);
-      renderAutocomplete(items, { empty: true });
-    }, 320);
+  $('themeBtn').addEventListener('click', () => {
+    applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
   });
 
-  // Keyboard navigation for autocomplete
-  symInput.addEventListener('keydown', (e) => {
-    const open = $('ac').classList.contains('show') && acItems.length;
-    if (e.key === 'Escape') {
-      renderAutocomplete([]);
-      return;
-    }
-    if (!open) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      acIndex = Math.min(acIndex + 1, acItems.length - 1);
-      highlightAc(acIndex);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      acIndex = Math.max(acIndex - 1, 0);
-      highlightAc(acIndex);
-    } else if (e.key === 'Enter' && acIndex >= 0) {
-      e.preventDefault();
-      selectAsset(acItems[acIndex]);
-    }
-  });
+  // ساعت — هر ۱ ثانیه، سبک
+  tickClock();
+  setInterval(tickClock, 1000);
 
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.symbol-wrap')) renderAutocomplete([]);
-  });
+  $('symbol').addEventListener('change', onSymbolChange);
 
-  $('chipClear').addEventListener('click', () => {
-    $('symbol').value = '';
-    clearAssetChip();
-    $('symbol').focus();
-  });
-
-  // Paste toggle
   $('pasteToggle').addEventListener('click', () => {
     const area = $('pasteArea');
     const open = area.classList.toggle('show');
     $('pasteToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
   });
 
-  // File upload
   const drop = $('drop');
   const csvInput = $('csv');
-
   drop.addEventListener('click', () => csvInput.click());
   drop.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -466,7 +289,6 @@ function init() {
     const f = e.dataTransfer.files[0];
     if (f) await handleFile(f);
   });
-
   csvInput.addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if (f) await handleFile(f);
@@ -474,19 +296,28 @@ function init() {
 
   async function handleFile(file) {
     showFileInfo(file.name, (file.size / 1024).toFixed(1));
-    setProcessing(true, 'Reading file…');
+    setProcessing(true, 'در حال خواندن فایل…');
     try {
       const text = await readFileAsText(file);
       $('data').value = text;
       setProcessing(false);
     } catch (err) {
       setProcessing(false);
-      alert(err.message || 'Could not read the selected file. Try another CSV.');
+      alert(err.message || 'خواندن فایل ممکن نشد.');
     }
   }
 
   $('analyzeBtn').addEventListener('click', runAnalysis);
   $('clearBtn').addEventListener('click', clearAll);
+
+  // اطمینان: فقط سه نماد در لیست
+  const sel = $('symbol');
+  if (sel) {
+    const allowed = new Set(SYMBOL_LIST);
+    [...sel.options].forEach(opt => {
+      if (opt.value && !allowed.has(opt.value)) opt.remove();
+    });
+  }
 }
 
 init();

@@ -1,28 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Offline Market Analyst — local technical analysis for international markets. Symbol search online; all analysis offline.">
-  <title>Offline Market Analyst</title>
+  <meta name="description" content="تحلیل‌گر بازار آفلاین — طلا، دلار/یورو و نفت برنت">
+  <title>تحلیل‌گر بازار آفلاین</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script>
-    // Apply theme before paint to avoid flash
     (function () {
       try {
         var t = localStorage.getItem('oma_theme');
         if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
-        else if (window.matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.setAttribute('data-theme', 'dark');
+        else if (window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.setAttribute('data-theme', 'dark');
       } catch (e) {}
     })();
   </script>
 </head>
 <body>
+  <div class="wave-top" aria-hidden="true">
+    <svg viewBox="0 0 1440 80" preserveAspectRatio="none">
+      <path class="wave-path" d="M0,40 C240,80 480,0 720,40 C960,80 1200,0 1440,40 L1440,0 L0,0 Z"/>
+    </svg>
+  </div>
+
   <div class="app">
-    <!-- Header -->
     <header class="app-header">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
@@ -31,16 +36,16 @@
           </svg>
         </div>
         <div class="brand-text">
-          <h1 class="brand-title">Market Analyst</h1>
-          <p class="brand-sub">Local technical analysis · Symbol search online</p>
+          <h1 class="brand-title">تحلیل‌گر بازار آفلاین</h1>
+          <p class="brand-sub">تحلیل تکنیکال محلی · بدون API قیمت</p>
         </div>
       </div>
       <div class="header-actions">
-        <div class="status-pill" id="netStatus" title="Network status for symbol search">
-          <span class="status-dot" aria-hidden="true"></span>
-          <span>Online</span>
+        <div class="clock-box" id="headerClock" title="ساعت سیستم">
+          <span class="clock-date" id="clockDate">—</span>
+          <span class="clock-time" id="clockTime">—</span>
         </div>
-        <button type="button" class="icon-btn" id="themeBtn" aria-label="Toggle light/dark theme" title="Toggle theme">
+        <button type="button" class="icon-btn" id="themeBtn" aria-label="تغییر تم روشن/تاریک" title="تغییر تم">
           <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
           </svg>
@@ -51,66 +56,60 @@
       </div>
     </header>
 
-    <!-- Workspace: Symbol + Timeframe -->
-    <section class="card" aria-labelledby="workspace-title">
-      <h2 class="card-title" id="workspace-title">Analysis Workspace</h2>
-      <p class="card-desc">Search an asset, choose a timeframe, then import OHLCV data. Analysis runs fully offline.</p>
+    <section class="card" aria-labelledby="ws-title">
+      <h2 class="card-title" id="ws-title">میز کار تحلیل</h2>
+      <p class="card-desc">نماد را انتخاب کنید، تایم‌فریم را مشخص کنید و داده OHLCV را وارد کنید. تمام محاسبات آفلاین انجام می‌شود.</p>
 
       <div class="grid-2">
-        <div class="field symbol-wrap">
-          <label class="field-label" for="symbol">Symbol / Asset</label>
-          <div class="search-input-wrap">
-            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>
-            </svg>
-            <input id="symbol" class="input" type="text" placeholder="Search AAPL, BTC-USD, EURUSD=X…" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="ac" aria-expanded="false">
-          </div>
-          <div id="ac" class="autocomplete" role="listbox" aria-label="Symbol search results"></div>
+        <div class="field">
+          <label class="field-label" for="symbol">نماد / دارایی</label>
+          <select id="symbol" class="select" aria-label="انتخاب نماد">
+            <option value="">انتخاب نماد…</option>
+            <option value="XAUUSD">XAUUSD — طلا (انس دلار)</option>
+            <option value="USDEUR">USDEUR — دلار / یورو</option>
+            <option value="BRENT">BRENT — نفت برنت</option>
+          </select>
           <div id="assetChip" class="asset-chip" aria-live="polite">
             <div class="asset-chip-main">
               <div class="asset-chip-sym" id="chipSym">—</div>
               <div class="asset-chip-name" id="chipName">—</div>
               <div class="asset-chip-meta" id="chipMeta">—</div>
             </div>
-            <button type="button" class="asset-chip-clear" id="chipClear" aria-label="Clear selected asset">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-            </button>
           </div>
         </div>
         <div class="field">
-          <label class="field-label" for="tf">Timeframe</label>
-          <select id="tf" class="select" aria-label="Chart timeframe">
-            <option>1m</option>
-            <option>5m</option>
-            <option>15m</option>
-            <option>1h</option>
-            <option selected>Daily</option>
-            <option>Weekly</option>
-            <option>Monthly</option>
+          <label class="field-label" for="tf">تایم‌فریم</label>
+          <select id="tf" class="select" aria-label="تایم‌فریم">
+            <option>۱ دقیقه</option>
+            <option>۵ دقیقه</option>
+            <option>۱۵ دقیقه</option>
+            <option>۱ ساعته</option>
+            <option selected>روزانه</option>
+            <option>هفتگی</option>
+            <option>ماهانه</option>
           </select>
         </div>
       </div>
 
       <div class="field" style="margin-top:16px">
-        <label class="field-label" for="current">Current price <span style="font-weight:500;color:var(--text-faint)">(optional)</span></label>
-        <input id="current" class="input" type="number" step="any" placeholder="Leave empty to use last Close">
-        <p class="field-hint">Used only for the decision price. Indicators always use candle Closes from your data.</p>
+        <label class="field-label" for="current">قیمت فعلی <span class="opt">(اختیاری)</span></label>
+        <input id="current" class="input" type="number" step="any" placeholder="خالی = آخرین Close">
+        <p class="field-hint">فقط برای قیمت تصمیم‌گیری استفاده می‌شود. اندیکاتورها از Close کندل‌های شما محاسبه می‌شوند.</p>
       </div>
     </section>
 
-    <!-- Data import -->
     <section class="card" aria-labelledby="import-title">
-      <h2 class="card-title" id="import-title">Market Data</h2>
-      <p class="card-desc">Upload a CSV from any charting platform. Columns are auto-detected (Date, Open, High, Low, Close, Volume). Extra columns are ignored.</p>
+      <h2 class="card-title" id="import-title">داده بازار</h2>
+      <p class="card-desc">فایل CSV را از پلتفرم نموداری خود بگیرید. ستون‌ها به‌صورت خودکار تشخیص داده می‌شوند (Date, Open, High, Low, Close, Volume).</p>
 
-      <div id="drop" class="drop" role="button" tabindex="0" aria-label="Drop CSV file or click to browse">
+      <div id="drop" class="drop" role="button" tabindex="0" aria-label="رها کردن فایل CSV یا انتخاب فایل">
         <div class="drop-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
         </div>
-        <p class="drop-title">Drop CSV here or click to browse</p>
-        <p class="drop-hint">.csv · text/csv · up to large files supported via offline worker</p>
+        <p class="drop-title">فایل CSV را اینجا رها کنید یا انتخاب کنید</p>
+        <p class="drop-hint">فرمت .csv · پردازش با Web Worker</p>
         <input id="csv" type="file" accept=".csv,text/csv,text/plain" aria-hidden="true" tabindex="-1">
       </div>
 
@@ -121,43 +120,44 @@
           </svg>
         </div>
         <div class="file-info-body">
-          <div class="file-info-name" id="fileNameText">No file selected</div>
+          <div class="file-info-name" id="fileNameText">فایلی انتخاب نشده</div>
           <div class="file-info-meta" id="fileMeta"></div>
         </div>
       </div>
 
-      <button type="button" class="paste-toggle" id="pasteToggle" aria-expanded="false">Or paste OHLCV data</button>
+      <button type="button" class="paste-toggle" id="pasteToggle" aria-expanded="false">یا داده را بچسبانید</button>
       <div class="paste-area" id="pasteArea">
-        <label class="field-label" for="data">Paste data</label>
+        <label class="field-label" for="data">چسباندن داده OHLCV</label>
         <textarea id="data" class="textarea" placeholder="Date,Open,High,Low,Close,Volume
 2024-01-02,185.64,186.95,183.89,185.64,82488700
-2024-01-03,184.22,185.88,183.43,184.25,58414500" aria-label="OHLCV paste area"></textarea>
+2024-01-03,184.22,185.88,183.43,184.25,58414500" aria-label="محل چسباندن داده"></textarea>
       </div>
     </section>
 
-    <!-- Actions -->
     <section class="card">
       <div class="actions">
-        <button type="button" id="analyzeBtn" class="btn btn-primary">Run Analysis</button>
-        <button type="button" id="clearBtn" class="btn btn-secondary">Clear</button>
+        <button type="button" id="analyzeBtn" class="btn btn-primary">اجرای تحلیل</button>
+        <button type="button" id="clearBtn" class="btn btn-secondary">پاک کردن</button>
       </div>
       <div id="processing" class="processing" role="status" aria-live="polite"></div>
     </section>
 
-    <!-- Results -->
     <section id="result" class="card result" aria-labelledby="result-title" aria-live="polite">
-      <h2 class="card-title" id="result-title">Analysis Result</h2>
+      <div class="result-head">
+        <h2 class="card-title" id="result-title">نتیجه تحلیل</h2>
+        <div class="result-clock" id="resultClock">—</div>
+      </div>
 
       <div id="signalPanel" class="signal-panel">
-        <div class="signal-label">Market Signal</div>
+        <div class="signal-label">سیگنال بازار</div>
         <div id="signal" class="signal" role="status">
           <span class="signal-icon" id="signalIcon" aria-hidden="true"></span>
-          <span id="signalText">HOLD</span>
+          <span id="signalText">نگهداری</span>
         </div>
         <div class="score-row">
           <div class="score-meta">
             <span class="score-text" id="scoreContext">—</span>
-            <span class="score-value" id="score">Score —/100</span>
+            <span class="score-value" id="score">امتیاز — از ۱۰۰</span>
           </div>
           <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="scoreBar">
             <i id="bar"></i>
@@ -167,34 +167,46 @@
 
       <div class="metrics">
         <div class="metric">
-          <div class="metric-label">Trend</div>
+          <div class="metric-label">روند</div>
           <div class="metric-value" id="trend">—</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Risk</div>
+          <div class="metric-label">ریسک</div>
           <div class="metric-value" id="risk">—</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Support</div>
+          <div class="metric-label">حمایت</div>
           <div class="metric-value" id="support">—</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Resistance</div>
+          <div class="metric-label">مقاومت</div>
           <div class="metric-value" id="resistance">—</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Target</div>
+          <div class="metric-label">هدف</div>
           <div class="metric-value" id="target">—</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Stop Loss</div>
+          <div class="metric-label">حد ضرر</div>
           <div class="metric-value" id="stop">—</div>
         </div>
       </div>
 
       <div id="report" class="report"></div>
-      <p class="disclaimer">Educational tool only. BUY / HOLD / SELL is the output of a local scoring model and is not investment advice.</p>
+
+      <div class="suggestion-card" id="suggestionCard">
+        <div class="suggestion-label">پیشنهاد</div>
+        <p class="suggestion-text" id="suggestionText">—</p>
+      </div>
+
+      <p class="disclaimer">این ابزار آموزشی است. سیگنال خرید / نگهداری / فروش خروجی مدل امتیازدهی محلی است و توصیه سرمایه‌گذاری قطعی نیست.</p>
     </section>
+  </div>
+
+  <div class="wave-bottom" aria-hidden="true">
+    <svg viewBox="0 0 1440 60" preserveAspectRatio="none">
+      <path class="wave-path" d="M0,20 C360,60 720,0 1080,30 C1260,45 1380,20 1440,25 L1440,60 L0,60 Z"/>
+    </svg>
   </div>
 
   <script type="module" src="app.js"></script>
