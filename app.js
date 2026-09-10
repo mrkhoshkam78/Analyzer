@@ -1,28 +1,8 @@
 /**
- * کنترلر UI — تحلیل‌گر بازار آفلاین
- * بدون API آنلاین نماد. منطق تحلیل در logic/
+ * کنترلر UI — تحلیل‌گر بازار کاملاً آفلاین
+ * بدون سرور، بدون API آنلاین. داده فقط از CSV/چسباندن کاربر.
  */
-
 import { getSymbol, formatPrice, SYMBOL_LIST } from './logic/symbols.js';
-import {
-
-// Backend base for BRENT market proxy (API key stays on server only)
-if (typeof window !== 'undefined' && !window.__OMA_API_BASE__) {
-  // local dev default — same host with port 8787 when UI is not on 8787
-  try {
-    const loc = window.location;
-    if (loc.protocol.startsWith('http') && loc.port !== '8787') {
-      window.__OMA_API_BASE__ = loc.protocol + '//' + loc.hostname + ':8787';
-    }
-  } catch (_) {}
-}
-
-  fetchBrentQuote,
-  startBrentRefresh,
-  stopBrentRefresh,
-  getLastBrentSnapshot,
-  isQuoteUsableForAnalysis
-} from './logic/marketData.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,7 +19,6 @@ function getWorker() {
   return worker;
 }
 
-// ---------- ساعت زنده ----------
 function pad(n) {
   return String(n).padStart(2, '0');
 }
@@ -63,119 +42,24 @@ function tickClock() {
   if (cd) cd.textContent = date;
   if (ct) ct.textContent = time;
   const rc = $('resultClock');
-  if (rc && $('result').classList.contains('show')) {
+  if (rc && $('result') && $('result').classList.contains('show')) {
     rc.textContent = full;
   }
 }
 
-// ---------- نماد آفلاین ----------
 function onSymbolChange() {
   const id = $('symbol').value;
   const meta = getSymbol(id);
   if (!meta) {
     $('assetChip').classList.remove('show');
-    const card = $('brentMarketCard');
-    if (card) card.hidden = true;
-    stopBrentRefresh();
     return;
   }
   $('chipSym').textContent = meta.symbol;
   $('chipName').textContent = meta.nameFa;
   $('chipMeta').textContent = `${meta.typeFa} · ${meta.unitFa}`;
   $('assetChip').classList.add('show');
-
-  const card = $('brentMarketCard');
-  if (card) {
-    if (id === 'BRENT') {
-      card.hidden = false;
-      startBrentRefresh(60000, renderBrentMarket);
-    } else {
-      card.hidden = true;
-      stopBrentRefresh();
-    }
-  }
 }
 
-function fmtBrentNum(n, d = 2) {
-  if (n == null || !Number.isFinite(n)) return '—';
-  return n.toLocaleString('fa-IR', { minimumFractionDigits: d, maximumFractionDigits: d });
-}
-
-function formatAge(ms) {
-  if (ms == null || !Number.isFinite(ms)) return '—';
-  const s = Math.max(0, Math.floor(ms / 1000));
-  if (s < 60) return s.toLocaleString('fa-IR') + ' ثانیه';
-  const m = Math.floor(s / 60);
-  if (m < 60) return m.toLocaleString('fa-IR') + ' دقیقه';
-  const h = Math.floor(m / 60);
-  return h.toLocaleString('fa-IR') + ' ساعت';
-}
-
-function renderBrentMarket(result) {
-  const status = $('brentMdStatus');
-  const q = (result && result.quote) || getLastBrentSnapshot();
-
-  if (!result) {
-    if (status) status.textContent = 'در انتظار داده…';
-    return;
-  }
-
-  if (status) {
-    status.className = 'md-status';
-    if (result.ok) {
-      status.classList.add('is-live');
-      status.textContent = 'اتصال برقرار · داده تازه دریافت شد';
-    } else if (result.usingCache && q) {
-      status.classList.add('is-cache');
-      status.textContent = (result.message || 'خطا در دریافت تازه') + ' · نمایش آخرین داده معتبر';
-    } else {
-      status.classList.add('is-error');
-      status.textContent = result.message || 'دریافت داده ناموفق بود';
-    }
-  }
-
-  if (!q) {
-    ['brentPrice','brentChange','brentChangePct','brentHigh','brentLow','brentPrev','brentUpdated','brentAge','brentSource','brentConn']
-      .forEach(id => { const el = $(id); if (el) el.textContent = '—'; });
-    return;
-  }
-
-  const set = (id, val, cls) => {
-    const el = $(id);
-    if (!el) return;
-    el.textContent = val;
-    el.classList.remove('up', 'down');
-    if (cls) el.classList.add(cls);
-  };
-
-  set('brentPrice', fmtBrentNum(q.price) + ' USD');
-  const ch = q.change;
-  const chCls = ch > 0 ? 'up' : ch < 0 ? 'down' : null;
-  set('brentChange', ch == null ? '—' : ((ch > 0 ? '+' : '') + fmtBrentNum(ch)), chCls);
-  const cp = q.changePercent;
-  set('brentChangePct', cp == null ? '—' : ((cp > 0 ? '+' : '') + fmtBrentNum(cp) + '٪'), cp > 0 ? 'up' : cp < 0 ? 'down' : null);
-  set('brentHigh', fmtBrentNum(q.high));
-  set('brentLow', fmtBrentNum(q.low));
-  set('brentPrev', fmtBrentNum(q.previousClose));
-
-  if (q.timestamp) {
-    const d = new Date(q.timestamp);
-    set('brentUpdated', d.toLocaleString('fa-IR'));
-  } else set('brentUpdated', '—');
-
-  const age = q.dataAge != null ? q.dataAge : (q.fetchedAt ? Date.now() - q.timestamp : null);
-  set('brentAge', formatAge(age) + (q.isStale ? ' (قدیمی)' : ''));
-  set('brentSource', (q.source || 'api-ninjas') + (q.exchange ? ' · ' + q.exchange : ''));
-  set('brentConn', result.ok ? 'متصل' : (result.usingCache ? 'کش محلی' : 'قطع'));
-
-  // Optional: fill current price input when empty
-  const cur = $('current');
-  if (cur && !cur.value && q.price != null && isQuoteUsableForAnalysis(q)) {
-    cur.placeholder = 'آخرین قیمت API: ' + q.price;
-  }
-}
-
-// ---------- فایل ----------
 function setProcessing(on, msg = 'در حال پردازش داده بازار…') {
   const el = $('processing');
   if (on) {
@@ -210,7 +94,6 @@ function hideFileInfo() {
   $('fileMeta').textContent = '';
 }
 
-// ---------- تحلیل ----------
 async function runAnalysis() {
   const sym = $('symbol').value;
   if (!sym || !getSymbol(sym)) {
@@ -260,7 +143,12 @@ async function runAnalysis() {
         return;
       }
       await new Promise(r => setTimeout(r, 0));
-      const result = analyze(candles, { currentPrice: payload.currentPrice });
+      const result = analyze(candles, {
+        currentPrice: payload.currentPrice,
+        symbol: sym,
+        timeframe: payload.timeframe,
+        recordPrediction: true
+      });
       setProcessing(false);
       showResult(result, sym);
     } catch (err) {
@@ -361,7 +249,6 @@ function clearAll() {
   $('pasteToggle').setAttribute('aria-expanded', 'false');
 }
 
-// ---------- تم ----------
 function getTheme() {
   return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 }
@@ -382,25 +269,10 @@ function init() {
     applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
   });
 
-  // ساعت — هر ۱ ثانیه، سبک
   tickClock();
   setInterval(tickClock, 1000);
 
   $('symbol').addEventListener('change', onSymbolChange);
-  const brBtn = $('brentRefreshBtn');
-  if (brBtn) {
-    brBtn.addEventListener('click', async () => {
-      brBtn.disabled = true;
-      try {
-        const r = await fetchBrentQuote();
-        renderBrentMarket(r);
-      } finally {
-        brBtn.disabled = false;
-      }
-    });
-  }
-  // restore BRENT card if already selected
-  if ($('symbol').value === 'BRENT') onSymbolChange();
 
   $('pasteToggle').addEventListener('click', () => {
     const area = $('pasteArea');
@@ -449,7 +321,6 @@ function init() {
   $('analyzeBtn').addEventListener('click', runAnalysis);
   $('clearBtn').addEventListener('click', clearAll);
 
-  // اطمینان: فقط سه نماد در لیست
   const sel = $('symbol');
   if (sel) {
     const allowed = new Set(SYMBOL_LIST);
