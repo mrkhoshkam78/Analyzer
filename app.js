@@ -28,7 +28,7 @@ function tickClock() {
   if ($('clockJalali')) $('clockJalali').textContent = jalali;
   if ($('clockGregorian')) $('clockGregorian').textContent = greg;
   if ($('clockTime')) $('clockTime').textContent = time;
-  if ($('resultClock') && $('result')?.classList.contains('show')) $('resultClock').textContent = full;
+  if ($('resultClock') && $('result') && !$('result').hidden) $('resultClock').textContent = full;
 }
 
 function toast(msg, kind = 'ok') {
@@ -46,13 +46,14 @@ function setHeaderData(text) {
 }
 function setProcessing(on, msg = 'در حال پردازش…') {
   const el = $('processing');
+  if (!el) return;
   if (on) {
-    el.classList.add('show');
+    el.hidden = false;
     el.innerHTML = `<span class="spinner"></span><span>${msg}</span>`;
     $('analyzeBtn').disabled = true;
     setHeaderData('پردازش…');
   } else {
-    el.classList.remove('show');
+    el.hidden = true;
     el.innerHTML = '';
     $('analyzeBtn').disabled = false;
   }
@@ -61,14 +62,15 @@ function setDataStatus(msg, kind = '') {
   const el = $('dataStatus');
   if (!el) return;
   el.textContent = msg || '';
-  el.className = 'data-status' + (kind ? ' is-' + kind : '');
+  el.className = 'status-line' + (kind ? ' is-' + kind : '');
 }
 
 function switchTab(name) {
   activeTab = name;
-  document.querySelectorAll('.input-tab').forEach(btn => {
+  document.querySelectorAll('.tab').forEach(btn => {
     const on = btn.dataset.tab === name;
     btn.classList.toggle('active', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   ['paste', 'table', 'file'].forEach(id => {
     const panel = $('panel' + id[0].toUpperCase() + id.slice(1));
@@ -129,7 +131,7 @@ function onSymbolChange() {
   const id = $('symbol').value;
   const meta = getSymbol(id);
   if (!meta) {
-    $('assetChip').classList.remove('show');
+    if ($('assetChip')) $('assetChip').hidden = true;
     if ($('dailyCard')) $('dailyCard').hidden = true;
     currentSymbol = null;
     setHeaderData('آماده');
@@ -140,7 +142,7 @@ function onSymbolChange() {
   $('chipSym').textContent = meta.symbol;
   $('chipName').textContent = meta.nameFa;
   $('chipMeta').textContent = `${meta.typeFa} · ${meta.unitFa} · ${currentTf}`;
-  $('assetChip').classList.add('show');
+  if ($('assetChip')) $('assetChip').hidden = false;
   refreshAssetPanel(id);
 }
 
@@ -286,7 +288,7 @@ async function runAnalysis(silent = false) {
   }
   currentTf = $('tf').value || '1D';
   setProcessing(true, 'ساخت Analysis Series…');
-  $('result').classList.remove('show');
+  $('result').hidden = true;
   try {
     const imp = await importHistoricalIfAny(sym, currentTf);
     if (imp.error && collectImportText().length > 20) {
@@ -334,8 +336,8 @@ const ICONS = {
 function showResult(r, symbolId) {
   if (!r?.ok) { toast(r?.error || 'تحلیل ناموفق', 'err'); return; }
   const sig = r.signal;
-  $('signalPanel').className = 'signal-panel ' + sig;
-  $('signal').className = 'signal ' + sig;
+  $('signalPanel').className = 'signal-box ' + sig;
+  $('signal').className = 'signal-main ' + sig;
   $('signalText').textContent = SIGNAL_FA[sig] || sig;
   $('signalIcon').innerHTML = ICONS[sig] || ICONS.HOLD;
   $('scoreContext').textContent = `${symbolId} · ${currentTf}`;
@@ -343,10 +345,10 @@ function showResult(r, symbolId) {
   $('bar').style.width = r.score + '%';
   const trendEl = $('trend');
   trendEl.textContent = TREND_FA[r.trend] || r.trend;
-  trendEl.className = 'metric-value' + (/Bull/.test(r.trend) ? ' trend-bull' : /Bear/.test(r.trend) ? ' trend-bear' : '');
+  trendEl.className = 'metric-v' + (/Bull/.test(r.trend) ? ' trend-bull' : /Bear/.test(r.trend) ? ' trend-bear' : '');
   const riskEl = $('risk');
   riskEl.textContent = RISK_FA[r.riskLevel] || r.riskLevel;
-  riskEl.className = 'metric-value' + (r.riskLevel === 'High' ? ' risk-high' : r.riskLevel === 'Low' ? ' risk-low' : '');
+  riskEl.className = 'metric-v' + (r.riskLevel === 'High' ? ' risk-high' : r.riskLevel === 'Low' ? ' risk-low' : '');
   const fmt = n => formatPrice(n, symbolId);
   $('support').textContent = fmt(r.support);
   $('resistance').textContent = fmt(r.resistance);
@@ -357,7 +359,7 @@ function showResult(r, symbolId) {
   $('report').textContent = report;
   $('suggestionText').textContent = r.suggestion || '—';
   $('resultClock').textContent = formatNow().full;
-  $('result').classList.add('show');
+  $('result').hidden = false;
 }
 
 function clearAll() {
@@ -365,7 +367,7 @@ function clearAll() {
   $('data').value = '';
   $('priceOpen').value = '';
   $('priceClose').value = '';
-  $('result').classList.remove('show');
+  $('result').hidden = true;
   if ($('csv')) $('csv').value = '';
   const body = $('manualBody');
   if (body) { body.innerHTML = ''; for (let i = 0; i < 4; i++) addTableRow(); }
@@ -406,7 +408,7 @@ function init() {
   $('analyzeBtn').onclick = () => runAnalysis(false);
   $('clearBtn').onclick = clearAll;
 
-  document.querySelectorAll('.input-tab').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+  document.querySelectorAll('.tab').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
   for (let i = 0; i < 4; i++) addTableRow();
   $('addRowBtn')?.addEventListener('click', () => addTableRow());
   $('pasteRowsBtn')?.addEventListener('click', () => {
@@ -430,6 +432,7 @@ function init() {
       const f = e.dataTransfer.files[0];
       if (f) {
         $('data').value = await f.text();
+        if ($('fileName')) { $('fileName').hidden = false; $('fileNameText').textContent = f.name; }
         switchTab('paste');
         toast('فایل خوانده شد', 'ok');
       }
@@ -438,6 +441,16 @@ function init() {
       const f = csv.files[0];
       if (f) { $('data').value = await f.text(); switchTab('paste'); }
     };
+  }
+
+  const ohlcvToggle = $('ohlcvToggle');
+  const ohlcvBody = $('ohlcvBody');
+  if (ohlcvToggle && ohlcvBody) {
+    ohlcvToggle.addEventListener('click', () => {
+      const open = ohlcvToggle.getAttribute('aria-expanded') === 'true';
+      ohlcvToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      ohlcvBody.hidden = open;
+    });
   }
 
   $('addAssetBtn').onclick = () => $('addAssetDialog').showModal();
