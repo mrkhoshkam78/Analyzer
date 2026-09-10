@@ -1,12 +1,13 @@
 /**
- * کنترلر UI — تحلیل‌گر بازار کاملاً آفلاین
- * بدون سرور، بدون API آنلاین. داده فقط از CSV/چسباندن کاربر.
+ * کنترلر UI — ورود داده Browser-Based (Paste / جدول / فایل)
+ * بدون سرور و API. موتور تحلیل در logic/ دست‌نخورده می‌ماند.
  */
 import { getSymbol, formatPrice, SYMBOL_LIST } from './logic/symbols.js';
 
 const $ = (id) => document.getElementById(id);
 
 let worker = null;
+let activeTab = 'paste';
 
 function getWorker() {
   if (worker) return worker;
@@ -26,10 +27,7 @@ function pad(n) {
 function formatNow() {
   const d = new Date();
   const date = d.toLocaleDateString('fa-IR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short'
+    year: 'numeric', month: 'long', day: 'numeric', weekday: 'short'
   });
   const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   return { date, time, full: `${date} — ${time}` };
@@ -60,7 +58,7 @@ function onSymbolChange() {
   $('assetChip').classList.add('show');
 }
 
-function setProcessing(on, msg = 'در حال پردازش داده بازار…') {
+function setProcessing(on, msg = 'در حال پردازش داده…') {
   const el = $('processing');
   if (on) {
     el.classList.add('show');
@@ -71,6 +69,121 @@ function setProcessing(on, msg = 'در حال پردازش داده بازار�
     el.innerHTML = '';
     $('analyzeBtn').disabled = false;
   }
+}
+
+function setDataStatus(msg, kind = '') {
+  const el = $('dataStatus');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.className = 'data-status' + (kind ? ' is-' + kind : '');
+}
+
+// ---------- Tabs ----------
+function switchTab(name) {
+  activeTab = name;
+  document.querySelectorAll('.input-tab').forEach(btn => {
+    const on = btn.dataset.tab === name;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  ['paste', 'table', 'file'].forEach(id => {
+    const panel = $('panel' + id.charAt(0).toUpperCase() + id.slice(1));
+    if (!panel) return;
+    const on = id === name;
+    panel.hidden = !on;
+    panel.classList.toggle('active', on);
+  });
+}
+
+// ---------- Manual table ----------
+function emptyRow() {
+  return { date: '', o: '', h: '', l: '', c: '', v: '' };
+}
+
+function addTableRow(data = null) {
+  const tbody = $('manualBody');
+  if (!tbody) return;
+  const r = data || emptyRow();
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="cell" data-k="date" value="${esc(r.date)}" placeholder="2024-01-02"></td>
+    <td><input type="number" class="cell" data-k="o" step="any" value="${esc(r.o)}" placeholder="Open"></td>
+    <td><input type="number" class="cell" data-k="h" step="any" value="${esc(r.h)}" placeholder="High"></td>
+    <td><input type="number" class="cell" data-k="l" step="any" value="${esc(r.l)}" placeholder="Low"></td>
+    <td><input type="number" class="cell" data-k="c" step="any" value="${esc(r.c)}" placeholder="Close"></td>
+    <td><input type="number" class="cell" data-k="v" step="any" value="${esc(r.v)}" placeholder="—"></td>
+    <td class="col-act"><button type="button" class="row-del" title="حذف ردیف" aria-label="حذف ردیف">×</button></td>
+  `;
+  tr.querySelector('.row-del').addEventListener('click', () => {
+    tr.remove();
+    if (!$('manualBody').children.length) addTableRow();
+  });
+  tbody.appendChild(tr);
+}
+
+function esc(v) {
+  if (v == null || v === '') return '';
+  return String(v).replace(/"/g, '&quot;');
+}
+
+function readTableRows() {
+  const rows = [];
+  $('manualBody').querySelectorAll('tr').forEach(tr => {
+    const get = (k) => {
+      const inp = tr.querySelector(`[data-k="${k}"]`);
+      return inp ? inp.value.trim() : '';
+    };
+    const date = get('date');
+    const o = get('o'), h = get('h'), l = get('l'), c = get('c'), v = get('v');
+    if (!o && !h && !l && !c && !date) return; // skip blank
+    rows.push({ date, o, h, l, c, v });
+  });
+  return rows;
+}
+
+function tableToText() {
+  const rows = readTableRows();
+  const lines = ['Date,Open,High,Low,Close,Volume'];
+  for (const r of rows) {
+    lines.push([r.date, r.o, r.h, r.l, r.c, r.v].join(','));
+  }
+  return lines.join('\n');
+}
+
+function pasteIntoTable() {
+  const raw = prompt('چند ردیف داده را اینجا بچسبانید (کاما / تب / فاصله):');
+  if (!raw || !raw.trim()) return;
+  // Use parser path: put in temp and fill rows via simple split
+  const lines = raw.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let added = 0;
+  for (const line of lines) {
+    let cols;
+    if (line.includes('\t')) cols = line.split('\t');
+    else if (line.includes(';')) cols = line.split(';');
+    else if (line.includes(',')) cols = line.split(',');
+    else cols = line.trim().split(/\s+/);
+    cols = cols.map(x => x.trim().replace(/^["']|["']$/g, ''));
+    // skip header-like
+    if (/date|open|high|low|close/i.test(cols.join(' '))) continue;
+    if (cols.length < 5) continue;
+    // assume Date O H L C [V]
+    addTableRow({
+      date: cols[0],
+      o: cols[1],
+      h: cols[2],
+      l: cols[3],
+      c: cols[4],
+      v: cols[5] || ''
+    });
+    added++;
+  }
+  setDataStatus(added ? `${added.toLocaleString('fa-IR')} ردیف به جدول اضافه شد.` : 'ردیفی اضافه نشد.', added ? 'ok' : 'warn');
+}
+
+// ---------- Collect text from active input ----------
+function collectInputText() {
+  if (activeTab === 'table') return tableToText();
+  return ($('data').value || '').trim();
 }
 
 function readFileAsText(file) {
@@ -89,7 +202,9 @@ function showFileInfo(name, sizeKb) {
 }
 
 function hideFileInfo() {
-  $('fileName').classList.remove('show');
+  const fn = $('fileName');
+  if (!fn) return;
+  fn.classList.remove('show');
   $('fileNameText').textContent = 'فایلی انتخاب نشده';
   $('fileMeta').textContent = '';
 }
@@ -100,14 +215,15 @@ async function runAnalysis() {
     alert('لطفاً یکی از سه نماد مجاز (XAUUSD، USDEUR یا BRENT) را انتخاب کنید.');
     return;
   }
-  const text = ($('data').value || '').trim();
-  if (!text) {
-    alert('لطفاً فایل CSV را بارگذاری کنید یا داده OHLCV را بچسبانید.');
+  const text = collectInputText();
+  if (!text || text.split(/\n/).filter(Boolean).length < 2) {
+    alert('لطفاً داده را بچسبانید یا در جدول وارد کنید (حداقل چند ردیف OHLC).');
     return;
   }
 
-  setProcessing(true, 'در حال پردازش داده بازار…');
+  setProcessing(true, 'در حال تشخیص و اعتبارسنجی داده…');
   $('result').classList.remove('show');
+  setDataStatus('');
 
   const currentPrice = parseFloat($('current').value);
   const payload = {
@@ -125,10 +241,15 @@ async function runAnalysis() {
       w.removeEventListener('message', onMsg);
       setProcessing(false);
       if (e.data.type === 'error') {
-        alert(e.data.message || 'تحلیل انجام نشد. فایل را از نظر ستون‌های OHLC و حداقل ۳۰ کندل بررسی کنید.');
+        setDataStatus(e.data.message || 'داده نامعتبر است.', 'err');
+        alert(e.data.message || 'تحلیل انجام نشد. ستون‌های OHLC و حداقل ۳۰ کندل را بررسی کنید.');
         return;
       }
-      showResult(e.data.result, sym);
+      const r = e.data.result;
+      if (r && r.candleCount != null) {
+        setDataStatus(`${r.candleCount.toLocaleString('fa-IR')} کندل معتبر · تحلیل انجام شد.`, 'ok');
+      }
+      showResult(r, sym);
     };
     w.addEventListener('message', onMsg);
     w.postMessage(payload);
@@ -136,11 +257,17 @@ async function runAnalysis() {
     try {
       const { parseOHLCV, analyze } = await import('./logic/analysis.js');
       await new Promise(r => setTimeout(r, 0));
-      const { candles, error } = parseOHLCV(text);
+      const { candles, error, rejected } = parseOHLCV(text);
       if (error || !candles.length) {
         setProcessing(false);
+        setDataStatus(error || 'کندل معتبری یافت نشد.', 'err');
         alert(error || 'کندل معتبری یافت نشد.');
         return;
+      }
+      if (rejected) {
+        setDataStatus(`${candles.length.toLocaleString('fa-IR')} معتبر · ${rejected.toLocaleString('fa-IR')} ردیف رد شد.`, 'warn');
+      } else {
+        setDataStatus(`${candles.length.toLocaleString('fa-IR')} کندل معتبر.`, 'ok');
       }
       await new Promise(r => setTimeout(r, 0));
       const result = analyze(candles, {
@@ -153,6 +280,7 @@ async function runAnalysis() {
       showResult(result, sym);
     } catch (err) {
       setProcessing(false);
+      setDataStatus(err.message || 'خطا', 'err');
       alert(err.message || 'خطا در تحلیل. لطفاً دوباره تلاش کنید.');
     }
   }
@@ -160,14 +288,10 @@ async function runAnalysis() {
 
 const SIGNAL_FA = { BUY: 'خرید', HOLD: 'نگهداری', SELL: 'فروش' };
 const TREND_FA = {
-  'Strong Bullish': 'قوی صعودی',
-  Bullish: 'صعودی',
-  Neutral: 'خنثی',
-  Bearish: 'نزولی',
-  'Strong Bearish': 'قوی نزولی'
+  'Strong Bullish': 'قوی صعودی', Bullish: 'صعودی', Neutral: 'خنثی',
+  Bearish: 'نزولی', 'Strong Bearish': 'قوی نزولی'
 };
 const RISK_FA = { High: 'بالا', Medium: 'متوسط', Low: 'پایین' };
-
 const SIGNAL_ICONS = {
   BUY: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`,
   SELL: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>`,
@@ -179,7 +303,6 @@ function showResult(r, symbolId) {
     alert(r?.error || 'تحلیل ناموفق بود. حداقل ۳۰ کندل معتبر OHLC لازم است.');
     return;
   }
-
   const sig = r.signal;
   const panel = $('signalPanel');
   panel.className = 'signal-panel ' + sig;
@@ -191,8 +314,7 @@ function showResult(r, symbolId) {
 
   const meta = getSymbol(symbolId);
   const symLabel = meta ? meta.symbol : symbolId || 'دارایی';
-  const tf = $('tf').value;
-  $('scoreContext').textContent = `${symLabel} · ${tf}`;
+  $('scoreContext').textContent = `${symLabel} · ${$('tf').value}`;
   $('score').textContent = `امتیاز ${r.score.toLocaleString('fa-IR')} از ۱۰۰`;
   $('bar').style.width = r.score + '%';
   const barWrap = $('scoreBar');
@@ -229,9 +351,7 @@ function showResult(r, symbolId) {
   $('report').textContent = reportExtra;
   $('suggestionText').textContent = r.suggestion || 'شرایط برای پیشنهاد مشخص کافی نیست.';
 
-  const { full } = formatNow();
-  $('resultClock').textContent = full;
-
+  $('resultClock').textContent = formatNow().full;
   $('result').classList.add('show');
   $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -245,8 +365,13 @@ function clearAll() {
   $('result').classList.remove('show');
   const csv = $('csv');
   if (csv) csv.value = '';
-  $('pasteArea').classList.remove('show');
-  $('pasteToggle').setAttribute('aria-expanded', 'false');
+  const body = $('manualBody');
+  if (body) {
+    body.innerHTML = '';
+    for (let i = 0; i < 5; i++) addTableRow();
+  }
+  setDataStatus('');
+  switchTab('paste');
 }
 
 function getTheme() {
@@ -268,42 +393,41 @@ function init() {
   $('themeBtn').addEventListener('click', () => {
     applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
   });
-
   tickClock();
   setInterval(tickClock, 1000);
-
   $('symbol').addEventListener('change', onSymbolChange);
 
-  $('pasteToggle').addEventListener('click', () => {
-    const area = $('pasteArea');
-    const open = area.classList.toggle('show');
-    $('pasteToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+  // tabs
+  document.querySelectorAll('.input-tab').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
+  // table
+  for (let i = 0; i < 5; i++) addTableRow();
+  $('addRowBtn')?.addEventListener('click', () => addTableRow());
+  $('pasteRowsBtn')?.addEventListener('click', pasteIntoTable);
+
+  // file drop
   const drop = $('drop');
   const csvInput = $('csv');
-  drop.addEventListener('click', () => csvInput.click());
-  drop.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
+  if (drop && csvInput) {
+    drop.addEventListener('click', () => csvInput.click());
+    drop.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); csvInput.click(); }
+    });
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', async (e) => {
       e.preventDefault();
-      csvInput.click();
-    }
-  });
-  drop.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    drop.classList.add('dragover');
-  });
-  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
-  drop.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    drop.classList.remove('dragover');
-    const f = e.dataTransfer.files[0];
-    if (f) await handleFile(f);
-  });
-  csvInput.addEventListener('change', async (e) => {
-    const f = e.target.files[0];
-    if (f) await handleFile(f);
-  });
+      drop.classList.remove('dragover');
+      const f = e.dataTransfer.files[0];
+      if (f) await handleFile(f);
+    });
+    csvInput.addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (f) await handleFile(f);
+    });
+  }
 
   async function handleFile(file) {
     showFileInfo(file.name, (file.size / 1024).toFixed(1));
@@ -311,6 +435,8 @@ function init() {
     try {
       const text = await readFileAsText(file);
       $('data').value = text;
+      switchTab('paste');
+      setDataStatus(`فایل «${file.name}» خوانده شد و در چسباندن قرار گرفت.`, 'ok');
       setProcessing(false);
     } catch (err) {
       setProcessing(false);

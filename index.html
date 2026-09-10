@@ -100,45 +100,80 @@
 
     
 <section class="card" aria-labelledby="import-title">
-      <h2 class="card-title" id="import-title">داده بازار</h2>
-      <p class="card-desc">فایل CSV را از پلتفرم نموداری خود بگیرید. ستون‌ها به‌صورت خودکار تشخیص داده می‌شوند (Date, Open, High, Low, Close, Volume).</p>
+      <h2 class="card-title" id="import-title">ورود داده بازار</h2>
+      <p class="card-desc">داده را بچسبانید یا در جدول وارد کنید. ستون‌ها خودکار تشخیص داده می‌شوند. بدون سرور و بدون API.</p>
 
-      <div id="drop" class="drop" role="button" tabindex="0" aria-label="رها کردن فایل CSV یا انتخاب فایل">
-        <div class="drop-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-        </div>
-        <p class="drop-title">فایل CSV را اینجا رها کنید یا انتخاب کنید</p>
-        <p class="drop-hint">فرمت .csv · پردازش با Web Worker</p>
-        <input id="csv" type="file" accept=".csv,text/csv,text/plain" aria-hidden="true" tabindex="-1">
+      <div class="input-tabs" role="tablist" aria-label="روش ورود داده">
+        <button type="button" class="input-tab active" role="tab" id="tabPaste" aria-selected="true" data-tab="paste">چسباندن سریع</button>
+        <button type="button" class="input-tab" role="tab" id="tabTable" aria-selected="false" data-tab="table">جدول دستی</button>
+        <button type="button" class="input-tab" role="tab" id="tabFile" aria-selected="false" data-tab="file">فایل CSV</button>
       </div>
 
-      <div id="fileName" class="file-info" aria-live="polite">
-        <div class="file-info-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-          </svg>
-        </div>
-        <div class="file-info-body">
-          <div class="file-info-name" id="fileNameText">فایلی انتخاب نشده</div>
-          <div class="file-info-meta" id="fileMeta"></div>
-        </div>
-      </div>
-
-      <button type="button" class="paste-toggle" id="pasteToggle" aria-expanded="false">یا داده را بچسبانید</button>
-      <div class="paste-area" id="pasteArea">
-        <label class="field-label" for="data">چسباندن داده OHLCV</label>
-        <textarea id="data" class="textarea" placeholder="Date,Open,High,Low,Close,Volume
+      <div id="panelPaste" class="input-panel active" role="tabpanel">
+        <label class="field-label" for="data">داده را از هر منبع کپی و اینجا بچسبانید</label>
+        <textarea id="data" class="textarea textarea-lg" placeholder="Date,Open,High,Low,Close,Volume
 2024-01-02,185.64,186.95,183.89,185.64,82488700
-2024-01-03,184.22,185.88,183.43,184.25,58414500" aria-label="محل چسباندن داده"></textarea>
+2024-01-03,184.22,185.88,183.43,184.25,58414500
+
+یا با Tab / فاصله / بدون عنوان…" aria-label="محل چسباندن سریع داده"></textarea>
+        <p class="field-hint">پشتیبانی: کاما، تب، نقطه‌ویرگول، فاصله · با یا بدون ردیف عنوان</p>
       </div>
+
+      <div id="panelTable" class="input-panel" role="tabpanel" hidden>
+        <div class="table-toolbar">
+          <button type="button" class="btn btn-secondary btn-sm" id="addRowBtn">+ ردیف</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="pasteRowsBtn">چسباندن چند ردیف</button>
+          <span class="field-hint" id="tableHint">حداقل ۳۰ ردیف معتبر برای تحلیل</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="manualTable" aria-label="جدول ورود دستی OHLCV">
+            <thead>
+              <tr>
+                <th scope="col">تاریخ</th>
+                <th scope="col">Open</th>
+                <th scope="col">High</th>
+                <th scope="col">Low</th>
+                <th scope="col">Close</th>
+                <th scope="col">Volume</th>
+                <th scope="col" class="col-act"></th>
+              </tr>
+            </thead>
+            <tbody id="manualBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="panelFile" class="input-panel" role="tabpanel" hidden>
+        <div id="drop" class="drop" role="button" tabindex="0" aria-label="رها کردن فایل CSV یا انتخاب فایل">
+          <div class="drop-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <p class="drop-title">فایل CSV را اینجا رها کنید یا انتخاب کنید</p>
+          <p class="drop-hint">فرمت .csv یا .txt</p>
+          <input id="csv" type="file" accept=".csv,text/csv,text/plain" aria-hidden="true" tabindex="-1">
+        </div>
+        <div id="fileName" class="file-info" aria-live="polite">
+          <div class="file-info-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+          </div>
+          <div class="file-info-body">
+            <div class="file-info-name" id="fileNameText">فایلی انتخاب نشده</div>
+            <div class="file-info-meta" id="fileMeta"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="dataStatus" class="data-status" role="status" aria-live="polite"></div>
     </section>
 
     <section class="card">
       <div class="actions">
-        <button type="button" id="analyzeBtn" class="btn btn-primary">اجرای تحلیل</button>
-        <button type="button" id="clearBtn" class="btn btn-secondary">پاک کردن</button>
+        <button type="button" id="analyzeBtn" class="btn btn-primary">ثبت داده و تحلیل</button>
+        <button type="button" id="clearBtn" class="btn btn-secondary">پاک کردن داده‌ها</button>
       </div>
       <div id="processing" class="processing" role="status" aria-live="polite"></div>
     </section>
