@@ -1,18 +1,10 @@
 /**
- * Data Provider interface — analysis never depends on a specific API.
+ * Data Provider — فقط منبع دستی (CSV/چسباندن). کاملاً آفلاین.
  */
-import { createBrentApiNinjasProvider } from './marketData.js';
-
 export const ProviderType = Object.freeze({
-  MANUAL: 'manual',
-  HISTORICAL: 'historical',
-  BRENT_API_NINJAS: 'brent_api_ninjas',
-  FUTURE_LIVE: 'future_live'
+  MANUAL: 'manual'
 });
 
-/**
- * Validate candle array quality metadata
- */
 export function validateCandles(candles) {
   const issues = [];
   if (!candles || !candles.length) {
@@ -44,7 +36,6 @@ export function validateCandles(candles) {
   };
 }
 
-/** Manual provider: data comes only from user CSV/paste */
 export function createManualProvider(text, parseFn) {
   return {
     type: ProviderType.MANUAL,
@@ -56,15 +47,3 @@ export function createManualProvider(text, parseFn) {
     }
   };
 }
-
-/** Live Brent quote via backend proxy (API key never in browser) */
-export function getBrentProvider() {
-  return createBrentApiNinjasProvider();
-}
-
-/**
- * Registry for future providers (MetaTrader, etc.)
- */
-export const MarketDataProviders = {
-  BRENT: getBrentProvider
-};
