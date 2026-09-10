@@ -148,7 +148,7 @@ export function parseOHLCV(text) {
     }
   }
 
-  const candles = unique.map(({ o, h, l, c, v }) => ({ o, h, l, c, v }));
+  const candles = unique.map(({ o, h, l, c, v, ts }) => ({ o, h, l, c, v, ts }));
   return { candles, error: null, rejected };
 }
 
