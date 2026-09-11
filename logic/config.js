@@ -25,8 +25,10 @@ export const CONFIG = Object.freeze({
   volumeAvgPeriod: 20,
 
   // Decision thresholds (score 0–100)
-  buyThreshold: 62,
-  sellThreshold: 38,
+  // Calibrated from score distribution on sample_10k (mean≈52, p90≈59):
+  // previous 62/38 produced almost only HOLD → no testable directional signals.
+  buyThreshold: 57,
+  sellThreshold: 43,
 
   // Technical component weights (sum ≈ 100 for normalization reference)
   techWeights: Object.freeze({
