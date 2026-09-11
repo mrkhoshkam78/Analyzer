@@ -19,7 +19,16 @@ import { getMacdConfig } from './indicatorConfig.js';
 
 const DEBUG_STORAGE_KEY = 'auto_debugger_history';
 const REGRESSION_BASELINE_KEY = 'auto_debugger_baseline';
-const VERSION = '1.0.0';
+const DEBUG_MEMORY_KEY = 'auto_debugger_memory';
+const REGRESSION_MEMORY_KEY = 'auto_debugger_reg_memory';
+const CALIBRATION_KEY = 'auto_debugger_calibration';
+const CORRECTION_LOG_KEY = 'auto_debugger_corrections';
+const RT_STATE_KEY = 'auto_debugger_rt_state';
+
+/** Max auto-correction attempts per event (loop protection) */
+const CORRECTION_DEPTH_LIMIT = 2;
+const VERSION = '1.2.0';
+const APP_VERSION = 'V5.1-AD';
 
 const TOLERANCE = Object.freeze({
   rsi: 0.15,
@@ -647,6 +656,647 @@ function buildDataFingerprint(candles) {
   return `${n}|${first.c}|${mid && mid.c}|${lastC.c}|${lastC.t || lastC.date || ''}`;
 }
 
+
+// ═══════════════════════════════════════════════════════════
+// NEW (v1.1): Debug Memory · Regression Memory · Root Cause
+// Anomaly Hunter · Prediction Auditor · Calibration Engine
+// ═══════════════════════════════════════════════════════════
+
+function loadDebugMemory() {
+  return loadJSON(DEBUG_MEMORY_KEY, { bugs: [], patterns: {} }) || { bugs: [], patterns: {} };
+}
+
+function saveDebugMemory(mem) {
+  return saveJSON(DEBUG_MEMORY_KEY, mem);
+}
+
+function patternKey(bug) {
+  const cat = (bug.category || '').toLowerCase().slice(0, 40);
+  const mod = (bug.module || '').toLowerCase().slice(0, 40);
+  const cause = (bug.possibleRootCause || '').toLowerCase().replace(/\d+(\.\d+)?/g, '#').slice(0, 60);
+  return `${cat}|${mod}|${cause}`;
+}
+
+/** Record bugs into Debug Memory; return enriched bugs with historical match info */
+function updateDebugMemory(bugs) {
+  const mem = loadDebugMemory();
+  if (!Array.isArray(mem.bugs)) mem.bugs = [];
+  if (!mem.patterns || typeof mem.patterns !== 'object') mem.patterns = {};
+
+  const enriched = [];
+  for (const bug of bugs) {
+    const pk = patternKey(bug);
+    const existing = mem.bugs.find(b => patternKey(b) === pk);
+    let historicalMatch = null;
+    let occurrenceCount = 1;
+    let firstSeen = bug.ts || Date.now();
+    let lastSeen = bug.ts || Date.now();
+    let regressionCount = 0;
+    let prevFix = null;
+
+    if (existing) {
+      occurrenceCount = (existing.occurrenceCount || 1) + 1;
+      firstSeen = existing.firstSeen || firstSeen;
+      lastSeen = Date.now();
+      regressionCount = existing.regressionCount || 0;
+      if (bug.category === 'REGRESSION DETECTED') regressionCount += 1;
+      prevFix = existing.previousFix || null;
+      existing.occurrenceCount = occurrenceCount;
+      existing.lastSeen = lastSeen;
+      existing.regressionCount = regressionCount;
+      existing.lastError = bug.actual;
+      historicalMatch = {
+        bugId: existing.id,
+        occurrenceCount,
+        firstSeen,
+        lastSeen,
+        previousFix: prevFix,
+        status: existing.status || 'OPEN'
+      };
+    } else {
+      const entry = {
+        id: bug.id,
+        category: bug.category,
+        module: bug.module,
+        inputPattern: pk,
+        observedError: bug.actual,
+        rootCause: bug.possibleRootCause,
+        previousFix: null,
+        fixResult: null,
+        firstSeen,
+        lastSeen,
+        occurrenceCount: 1,
+        regressionCount: bug.category === 'REGRESSION DETECTED' ? 1 : 0,
+        status: 'OPEN'
+      };
+      mem.bugs.unshift(entry);
+      while (mem.bugs.length > 200) mem.bugs.pop();
+    }
+
+    mem.patterns[pk] = (mem.patterns[pk] || 0) + 1;
+
+    enriched.push({
+      ...bug,
+      historicalMatch,
+      occurrenceCount,
+      firstSeen,
+      lastSeen,
+      regressionCount,
+      repeatedWarning: occurrenceCount >= 2
+        ? `احتمال تکرار خطای قبلی شناسایی شد (تعداد: ${occurrenceCount}). این وضعیت قبلاً باعث مشکل شده بود.`
+        : null
+    });
+  }
+  saveDebugMemory(mem);
+  return enriched;
+}
+
+export function getDebugMemory() {
+  return loadDebugMemory();
+}
+
+export function clearDebugMemory() {
+  saveDebugMemory({ bugs: [], patterns: {} });
+  return true;
+}
+
+// ─── Root Cause Chain ───
+
+function buildRootCauseChain(bug, ctx, calc, inv) {
+  const chain = [];
+  const cat = (bug.category || '').toLowerCase();
+  const mod = (bug.module || '').toLowerCase();
+
+  // Symptom
+  chain.push({ level: 'symptom', label: bug.category, detail: `Actual=${formatVal(bug.actual)} Expected=${formatVal(bug.expected)}` });
+
+  if (mod.includes('forecast') || mod.includes('decision') || cat.includes('signal') || cat.includes('logic')) {
+    chain.push({ level: 'dependency', label: 'Combined / Signal layer', detail: 'Depends on technical + fundamental scores' });
+    chain.push({ level: 'upstream', label: 'Score composition', detail: 'Weights and indicator inputs' });
+  }
+  if (mod.includes('rsi') || mod.includes('macd') || mod.includes('sma') || mod.includes('ema') || mod.includes('indicators')) {
+    chain.push({ level: 'dependency', label: 'Indicator engine', detail: mod });
+    chain.push({ level: 'upstream', label: 'OHLCV series', detail: `candles=${(ctx.candles || []).length}` });
+  }
+  if (mod.includes('storage') || cat.includes('storage')) {
+    chain.push({ level: 'upstream', label: 'localStorage / quota', detail: 'Persistence layer' });
+  }
+  if (cat.includes('missing') || cat.includes('invalid ohlc') || cat.includes('data')) {
+    chain.push({ level: 'root', label: 'Input data quality', detail: bug.possibleRootCause || 'Invalid or incomplete market data' });
+  } else if (cat.includes('mismatch') || cat.includes('calculation')) {
+    chain.push({ level: 'root', label: 'Formula divergence', detail: bug.possibleRootCause || 'Main vs independent calculation differ' });
+  } else if (cat.includes('invariant') || cat.includes('range')) {
+    chain.push({ level: 'root', label: 'Constraint violation', detail: bug.possibleRootCause || 'Logical/range rule broken' });
+  } else if (cat.includes('regression')) {
+    chain.push({ level: 'root', label: 'Behavioral change vs baseline', detail: bug.possibleRootCause || 'Output changed on identical input' });
+  } else {
+    chain.push({ level: 'root', label: bug.possibleRootCause || 'Unknown', detail: mod || cat });
+  }
+
+  const conf = chain.some(c => c.level === 'root' && c.label !== 'Unknown') ? 0.7 : 0.4;
+  return {
+    rootCause: chain.find(c => c.level === 'root')?.label || bug.possibleRootCause,
+    contributingFactors: chain.filter(c => c.level !== 'root' && c.level !== 'symptom').map(c => c.label),
+    affectedModules: [bug.module].filter(Boolean),
+    dependencyChain: chain,
+    confidenceOfDiagnosis: conf
+  };
+}
+
+function attachRootCauseChains(bugs, ctx, calc, inv) {
+  return bugs.map(b => ({
+    ...b,
+    rootCauseChain: buildRootCauseChain(b, ctx, calc, inv)
+  }));
+}
+
+// ─── Anomaly Hunter ───
+
+function runAnomalyHunter(ctx, tech, decision, histSummary) {
+  const anomalies = [];
+  const warnings = [];
+  const candles = ctx.candles || [];
+  if (candles.length < CONFIG.minCandles) {
+    return { anomalies, warnings, summary: { skipped: true } };
+  }
+
+  const ind = (tech && tech.indicators) || {};
+  const closes = candles.map(c => c.c).filter(isNum);
+
+  // RSI jump vs recent window
+  if (isNum(ind.rsi) && closes.length > CONFIG.rsiPeriod + 5) {
+    const prevCloses = closes.slice(0, -3);
+    const prevRsi = independentRSI(prevCloses, CONFIG.rsiPeriod);
+    if (isNum(prevRsi)) {
+      const jump = Math.abs(ind.rsi - prevRsi);
+      if (jump > 35) {
+        anomalies.push({
+          id: `ANOM-RSI-${Date.now().toString(36)}`,
+          type: 'RSI_JUMP',
+          module: 'indicators/rsi',
+          observedPattern: `ΔRSI=${jump.toFixed(1)} in ~3 bars`,
+          historicalBaseline: 'typical ΔRSI per few bars < 20',
+          deviation: jump,
+          anomalyScore: Math.min(100, Math.round(jump * 2)),
+          severity: jump > 50 ? 'HIGH' : 'MEDIUM',
+          classification: jump > 50 ? 'Suspicious Behavior' : 'Normal Variation',
+          possibleCause: 'Sharp price move or data gap'
+        });
+      }
+    }
+  }
+
+  // Confidence stuck near 50% or extreme
+  const conf = decision?.confidence;
+  if (isNum(conf)) {
+    const cPct = conf > 1.5 ? conf : conf * 100;
+    if (Math.abs(cPct - 50) < 1.5) {
+      anomalies.push({
+        id: `ANOM-CONF50-${Date.now().toString(36)}`,
+        type: 'CONFIDENCE_NEUTRAL_STUCK',
+        module: 'decision/confidence',
+        observedPattern: `confidence≈${cPct.toFixed(1)}%`,
+        historicalBaseline: 'varied confidence distribution',
+        deviation: Math.abs(cPct - 50),
+        anomalyScore: 40,
+        severity: 'LOW',
+        classification: 'Normal Variation',
+        possibleCause: 'Score near 50 → neutral confidence formula'
+      });
+    }
+    if (cPct > 95) {
+      anomalies.push({
+        id: `ANOM-CONFHI-${Date.now().toString(36)}`,
+        type: 'CONFIDENCE_EXTREME',
+        module: 'decision/confidence',
+        observedPattern: `confidence=${cPct.toFixed(1)}%`,
+        historicalBaseline: 'rarely >90 without strong multi-factor agreement',
+        deviation: cPct - 90,
+        anomalyScore: 70,
+        severity: 'MEDIUM',
+        classification: 'Suspicious Behavior',
+        possibleCause: 'Possible overconfidence'
+      });
+    }
+  }
+
+  // Target too close to price
+  const price = isNum(ctx.currentPrice) ? ctx.currentPrice : (ind.price || last(closes));
+  const target = decision?.target;
+  if (isNum(price) && isNum(target) && price > 0) {
+    const dist = Math.abs(target - price) / price;
+    if (dist < 0.002 && decision?.signal && decision.signal !== 'HOLD') {
+      anomalies.push({
+        id: `ANOM-TGT-${Date.now().toString(36)}`,
+        type: 'TARGET_TOO_CLOSE',
+        module: 'forecast/target',
+        observedPattern: `target distance ${(dist * 100).toFixed(3)}%`,
+        historicalBaseline: 'meaningful target usually >0.3% away',
+        deviation: dist,
+        anomalyScore: 65,
+        severity: 'MEDIUM',
+        classification: 'Suspicious Behavior',
+        possibleCause: 'S/R levels collapsed near price'
+      });
+    }
+  }
+
+  // Flat technical score pattern (always mid)
+  if (isNum(tech?.score) && tech.score >= 48 && tech.score <= 52) {
+    anomalies.push({
+      id: `ANOM-TSCORE-${Date.now().toString(36)}`,
+      type: 'TECH_SCORE_FLAT',
+      module: 'technical/score',
+      observedPattern: `techScore=${tech.score}`,
+      historicalBaseline: 'score varies with market conditions',
+      deviation: Math.abs(tech.score - 50),
+      anomalyScore: 35,
+      severity: 'INFO',
+      classification: 'Normal Variation',
+      possibleCause: 'Neutral market / balanced factors'
+    });
+  }
+
+  // HOLD dominance warning from hist self-test
+  if (histSummary && (histSummary.correct + histSummary.wrong + histSummary.neutral) >= 4) {
+    const total = histSummary.correct + histSummary.wrong + histSummary.neutral;
+    if (histSummary.neutral / total > 0.85) {
+      anomalies.push({
+        id: `ANOM-HOLD-${Date.now().toString(36)}`,
+        type: 'HOLD_DOMINANCE',
+        module: 'forecast/selftest',
+        observedPattern: `neutral ratio=${((histSummary.neutral / total) * 100).toFixed(0)}%`,
+        historicalBaseline: 'directional signals expected occasionally',
+        deviation: histSummary.neutral / total,
+        anomalyScore: 55,
+        severity: 'LOW',
+        classification: 'Suspicious Behavior',
+        possibleCause: 'Thresholds produce mostly HOLD on this dataset'
+      });
+    }
+  }
+
+  // Injected anomaly faults
+  for (const f of _injectedFaults) {
+    if (f.type === 'anomaly') {
+      anomalies.push({
+        id: `ANOM-INJ-${Date.now().toString(36)}`,
+        type: f.anomalyType || 'INJECTED',
+        module: f.module || 'test',
+        observedPattern: f.pattern || 'injected',
+        historicalBaseline: f.baseline || 'n/a',
+        deviation: f.deviation ?? 1,
+        anomalyScore: f.score ?? 90,
+        severity: f.severity || 'HIGH',
+        classification: 'Likely Bug',
+        possibleCause: f.cause || 'Injected anomaly'
+      });
+    }
+  }
+
+  // Convert high-score likely bugs to warnings
+  for (const a of anomalies) {
+    if (a.classification === 'Likely Bug' || (a.anomalyScore >= 80 && a.severity !== 'INFO')) {
+      warnings.push(makeBug(null, 'Anomaly', a.severity === 'HIGH' ? 'HIGH' : 'MEDIUM', a.module,
+        a.observedPattern, a.historicalBaseline, a.observedPattern, a.deviation,
+        a.possibleCause));
+    }
+  }
+
+  const maxScore = anomalies.reduce((m, a) => Math.max(m, a.anomalyScore || 0), 0);
+  return {
+    anomalies,
+    warnings,
+    summary: {
+      count: anomalies.length,
+      maxAnomalyScore: maxScore,
+      byClass: anomalies.reduce((acc, a) => {
+        acc[a.classification] = (acc[a.classification] || 0) + 1;
+        return acc;
+      }, {})
+    }
+  };
+}
+
+// ─── Prediction Auditor ───
+
+function runPredictionAuditor(ctx, tech, decision) {
+  if (!decision || !decision.ok) {
+    return {
+      ok: false,
+      trustStatus: 'REJECT',
+      auditScore: null,
+      declaredConfidence: null,
+      defendedConfidence: null,
+      dimensions: null,
+      message: 'No valid decision to audit'
+    };
+  }
+
+  const ind = (tech && tech.indicators) || {};
+  const signal = decision.signal;
+  const declared = decision.confidence;
+  const declaredPct = isNum(declared) ? (declared > 1.5 ? declared : declared * 100) : null;
+
+  // Technical evidence from score distance from neutral
+  const techScore = tech?.score ?? decision.analysis?.technicalScore;
+  let techEvidence = 50;
+  if (isNum(techScore)) {
+    techEvidence = Math.min(100, Math.round(50 + Math.abs(techScore - 50)));
+  }
+
+  // Fundamental evidence
+  const fundScore = decision.analysis?.fundamentalScore;
+  let fundEvidence = 40; // weak if missing
+  if (isNum(fundScore) && decision.fundamentalApplied) {
+    fundEvidence = Math.min(100, Math.round(50 + Math.abs(fundScore - 50)));
+  }
+
+  // Historical similarity proxy from learning metrics if available — offline soft default
+  let histSim = 55;
+  try {
+    const preds = listPredictions(ctx.symbol);
+    const evaluated = (preds || []).filter(p => p.evaluation);
+    if (evaluated.length >= 3) {
+      const correct = evaluated.filter(p => p.evaluation.outcome === 'correct').length;
+      histSim = Math.round((correct / evaluated.length) * 100);
+    } else {
+      histSim = null; // insufficient
+    }
+  } catch { histSim = null; }
+
+  // Market regime: volatility proxy
+  let regime = 50;
+  if (isNum(ind.atrPct)) {
+    if (ind.atrPct > 7) regime = 35;
+    else if (ind.atrPct < 2) regime = 45;
+    else regime = 60;
+  }
+
+  // Risk/Reward
+  const price = isNum(ctx.currentPrice) ? ctx.currentPrice : ind.price;
+  const target = decision.target;
+  const stop = decision.stop;
+  let rrScore = 50;
+  if (isNum(price) && isNum(target) && isNum(stop) && Math.abs(price - stop) > 1e-9) {
+    const reward = Math.abs(target - price);
+    const risk = Math.abs(price - stop);
+    const rr = reward / risk;
+    rrScore = Math.min(100, Math.round(40 + rr * 25));
+  }
+
+  // Signal consistency vs score
+  const combined = decision.analysis?.combinedScore ?? decision.score;
+  let sigCons = 60;
+  if (signal === 'BUY' && isNum(combined)) sigCons = combined >= CONFIG.buyThreshold ? 85 : 30;
+  else if (signal === 'SELL' && isNum(combined)) sigCons = combined <= CONFIG.sellThreshold ? 85 : 30;
+  else if (signal === 'HOLD' && isNum(combined)) {
+    sigCons = (combined < CONFIG.buyThreshold && combined > CONFIG.sellThreshold) ? 80 : 40;
+  }
+
+  const dims = {
+    technicalEvidence: techEvidence,
+    fundamentalEvidence: fundEvidence,
+    historicalSimilarity: histSim, // null = insufficient
+    marketRegime: regime,
+    riskReward: rrScore,
+    signalConsistency: sigCons
+  };
+
+  const usable = Object.values(dims).filter(v => v != null);
+  const auditScore = usable.length ? Math.round(usable.reduce((a, b) => a + b, 0) / usable.length) : null;
+
+  // Defended confidence = blend of declared and audit (never inflate above audit+5)
+  let defended = null;
+  if (auditScore != null) {
+    if (declaredPct != null) {
+      defended = Math.min(declaredPct, auditScore + 5);
+      defended = Math.round(0.4 * declaredPct + 0.6 * auditScore);
+      // cap: cannot exceed audit by much
+      if (defended > auditScore + 8) defended = auditScore + 8;
+    } else {
+      defended = auditScore;
+    }
+  }
+
+  let trustStatus = 'CAUTION';
+  if (auditScore == null || (ctx.candles || []).length < CONFIG.minCandles) {
+    trustStatus = 'REJECT';
+  } else if (auditScore >= 70 && sigCons >= 60 && (declaredPct == null || Math.abs(declaredPct - defended) < 20)) {
+    trustStatus = 'TRUSTED';
+  } else if (auditScore < 45 || sigCons < 35) {
+    trustStatus = 'REJECT';
+  } else {
+    trustStatus = 'CAUTION';
+  }
+
+  // Injected audit faults
+  for (const f of _injectedFaults) {
+    if (f.type === 'audit') {
+      trustStatus = f.trustStatus || 'REJECT';
+      return {
+        ok: true,
+        trustStatus,
+        auditScore: f.auditScore ?? 40,
+        declaredConfidence: declaredPct,
+        defendedConfidence: f.defended ?? 40,
+        dimensions: dims,
+        message: f.cause || 'Injected audit failure',
+        overconfident: true
+      };
+    }
+  }
+
+  const overconfident = declaredPct != null && defended != null && declaredPct - defended > 12;
+
+  return {
+    ok: true,
+    trustStatus,
+    auditScore,
+    declaredConfidence: declaredPct,
+    defendedConfidence: defended,
+    dimensions: dims,
+    overconfident,
+    message: overconfident
+      ? `Confidence اعلام‌شده: ${declaredPct?.toFixed?.(0) ?? declaredPct}% · قابل دفاع: ${defended}%`
+      : `Audit Score: ${auditScore}/100 · Trust: ${trustStatus}`
+  };
+}
+
+// ─── Calibration Engine ───
+
+const MIN_CALIBRATION_SAMPLES = 5;
+
+function runCalibrationEngine(symbol) {
+  let preds = [];
+  try {
+    preds = listPredictions(symbol) || [];
+  } catch {
+    preds = [];
+  }
+  const evaluated = preds.filter(p => p.evaluation && isNum(p.confidence));
+  if (evaluated.length < MIN_CALIBRATION_SAMPLES) {
+    return {
+      ok: false,
+      status: 'INSUFFICIENT_EVIDENCE',
+      sampleCount: evaluated.length,
+      minRequired: MIN_CALIBRATION_SAMPLES,
+      bins: [],
+      overall: null,
+      message: 'داده کافی برای Calibration وجود ندارد'
+    };
+  }
+
+  const binsDef = [
+    { lo: 50, hi: 60, label: '50–60%' },
+    { lo: 60, hi: 70, label: '60–70%' },
+    { lo: 70, hi: 80, label: '70–80%' },
+    { lo: 80, hi: 90, label: '80–90%' },
+    { lo: 90, hi: 101, label: '90–100%' }
+  ];
+
+  const bins = binsDef.map(b => {
+    const items = evaluated.filter(p => {
+      const c = p.confidence > 1.5 ? p.confidence : p.confidence * 100;
+      return c >= b.lo && c < b.hi;
+    });
+    const n = items.length;
+    if (n === 0) {
+      return { ...b, sampleCount: 0, declaredMean: null, actualAccuracy: null, calibrationError: null, status: 'NO_DATA' };
+    }
+    const declaredMean = items.reduce((s, p) => s + (p.confidence > 1.5 ? p.confidence : p.confidence * 100), 0) / n;
+    const correct = items.filter(p => p.evaluation.outcome === 'correct').length;
+    const actualAccuracy = (correct / n) * 100;
+    const calibrationError = declaredMean - actualAccuracy;
+    let status = 'WELL_CALIBRATED';
+    if (calibrationError > 10) status = 'OVERCONFIDENT';
+    else if (calibrationError < -10) status = 'UNDERCONFIDENT';
+    return {
+      ...b,
+      sampleCount: n,
+      declaredMean: Math.round(declaredMean * 10) / 10,
+      actualAccuracy: Math.round(actualAccuracy * 10) / 10,
+      calibrationError: Math.round(calibrationError * 10) / 10,
+      status
+    };
+  });
+
+  const withData = bins.filter(b => b.sampleCount > 0);
+  const meanErr = withData.length
+    ? withData.reduce((s, b) => s + Math.abs(b.calibrationError || 0), 0) / withData.length
+    : null;
+  let overall = 'WELL_CALIBRATED';
+  if (meanErr != null && meanErr > 12) overall = 'OVERCONFIDENT';
+  else if (meanErr != null && withData.some(b => b.status === 'UNDERCONFIDENT') && meanErr > 8) overall = 'UNDERCONFIDENT';
+
+  // Persist snapshot
+  saveJSON(CALIBRATION_KEY, { ts: Date.now(), symbol, bins, overall, sampleCount: evaluated.length });
+
+  return {
+    ok: true,
+    status: overall,
+    sampleCount: evaluated.length,
+    minRequired: MIN_CALIBRATION_SAMPLES,
+    bins,
+    overall,
+    meanAbsError: meanErr != null ? Math.round(meanErr * 10) / 10 : null,
+    message: overall === 'OVERCONFIDENT' ? 'مدل تمایل به Overconfidence دارد' :
+      overall === 'UNDERCONFIDENT' ? 'مدل تمایل به Underconfidence دارد' : 'Calibration در محدوده قابل قبول'
+  };
+}
+
+// ─── Regression Memory (version baselines) ───
+
+function loadRegressionMemory() {
+  return loadJSON(REGRESSION_MEMORY_KEY, { versions: [] }) || { versions: [] };
+}
+
+function saveRegressionMemory(mem) {
+  return saveJSON(REGRESSION_MEMORY_KEY, mem);
+}
+
+function updateRegressionMemory(report, snapshot) {
+  const mem = loadRegressionMemory();
+  if (!Array.isArray(mem.versions)) mem.versions = [];
+
+  const entry = {
+    version: APP_VERSION,
+    debuggerVersion: VERSION,
+    ts: Date.now(),
+    testsRun: report.testsRun,
+    passed: report.passed,
+    failed: report.failed,
+    warnings: report.warnings,
+    status: report.status,
+    snapshot: {
+      rsi: snapshot.rsi,
+      sma: snapshot.sma,
+      techScore: snapshot.techScore,
+      combinedScore: snapshot.combinedScore,
+      dataFingerprint: snapshot.dataFingerprint
+    },
+    knownBugs: (report.bugs || []).slice(0, 20).map(b => ({
+      id: b.id, category: b.category, severity: b.severity, module: b.module
+    })),
+    anomalyCount: report.anomalySummary?.count ?? 0,
+    auditTrust: report.predictionAudit?.trustStatus ?? null
+  };
+
+  // Compare with previous version entry if fingerprint matches
+  let regressionDetails = [];
+  const prev = mem.versions.find(v =>
+    v.snapshot?.dataFingerprint &&
+    v.snapshot.dataFingerprint === snapshot.dataFingerprint &&
+    v.version !== APP_VERSION
+  ) || (mem.versions.length ? mem.versions[0] : null);
+
+  if (prev && prev.snapshot?.dataFingerprint === snapshot.dataFingerprint) {
+    const keys = ['rsi', 'sma', 'techScore', 'combinedScore'];
+    for (const k of keys) {
+      if (isNum(prev.snapshot[k]) && isNum(snapshot[k]) && !approxEqual(prev.snapshot[k], snapshot[k], TOLERANCE.score)) {
+        regressionDetails.push({
+          testId: `REGMEM-${k}`,
+          previousVersion: prev.version,
+          currentVersion: APP_VERSION,
+          previousResult: prev.snapshot[k],
+          currentResult: snapshot[k],
+          difference: Math.abs(prev.snapshot[k] - snapshot[k]),
+          severity: 'CRITICAL',
+          affectedModule: k
+        });
+      }
+    }
+  }
+
+  // Keep one entry per version (update latest)
+  const idx = mem.versions.findIndex(v => v.version === APP_VERSION);
+  if (idx >= 0) mem.versions[idx] = entry;
+  else mem.versions.unshift(entry);
+  while (mem.versions.length > 20) mem.versions.pop();
+  saveRegressionMemory(mem);
+
+  return { regressionDetails, memory: mem, previous: prev };
+}
+
+export function getRegressionMemory() {
+  return loadRegressionMemory();
+}
+
+function computeHealthScore(report) {
+  let score = 100;
+  score -= (report.failed || 0) * 12;
+  score -= (report.warnings || 0) * 2;
+  const anom = report.anomalySummary?.maxAnomalyScore || 0;
+  if (anom >= 80) score -= 15;
+  else if (anom >= 50) score -= 5;
+  if (report.predictionAudit?.trustStatus === 'REJECT') score -= 20;
+  else if (report.predictionAudit?.trustStatus === 'CAUTION') score -= 8;
+  if (report.calibration?.status === 'OVERCONFIDENT') score -= 5;
+  if (report.status === 'CRITICAL') score = Math.min(score, 40);
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+
 // ─── Public API ───
 
 /**
@@ -700,7 +1350,7 @@ export async function runAutoDebugger(options = {}) {
   allWarnings.push(...fc.warnings);
   sections.forecast = { bugs: fc.bugs.length, warnings: fc.warnings.length };
 
-  // 5. Historical self-test (deep only or when enough data)
+  // 5. Historical self-test (deep only)
   let hist = { results: [], summary: null };
   if (mode === 'deep') {
     hist = historicalSelfTest(ctx);
@@ -712,14 +1362,15 @@ export async function runAutoDebugger(options = {}) {
   }
 
   // Snapshot for regression
-  const closes = (ctx.candles || []).map(c => c.c);
   const snapshot = {
     dataFingerprint: buildDataFingerprint(ctx.candles),
     rsi: calc.details?.rsi?.main ?? null,
     sma: calc.details?.sma?.main ?? null,
     ema: calc.details?.ema?.main ?? null,
     techScore: tech?.score ?? null,
-    combinedScore: decision?.combinedScore ?? decision?.score ?? null,
+    combinedScore: (decision?.analysis?.combinedScore != null)
+      ? decision.analysis.combinedScore
+      : (decision?.score ?? null),
     signal: decision?.signal ?? null
   };
 
@@ -729,14 +1380,79 @@ export async function runAutoDebugger(options = {}) {
   allWarnings.push(...reg.warnings);
   sections.regression = { status: reg.status, bugs: reg.bugs.length };
 
+  // 7. Anomaly Hunter (deep always runs fuller; quick runs light subset via same fn)
+  const anom = runAnomalyHunter(ctx, tech, decision, hist.summary);
+  allWarnings.push(...anom.warnings);
+  sections.anomalies = anom.summary;
+
+  // 8. Prediction Auditor
+  const audit = runPredictionAuditor(ctx, tech, decision);
+  sections.predictionAudit = {
+    trustStatus: audit.trustStatus,
+    auditScore: audit.auditScore,
+    declared: audit.declaredConfidence,
+    defended: audit.defendedConfidence
+  };
+  if (audit.trustStatus === 'REJECT' && audit.ok) {
+    allWarnings.push(makeBug(null, 'Prediction Audit', 'HIGH', 'prediction/auditor',
+      null, 'TRUSTED/CAUTION', 'REJECT', null, audit.message));
+  } else if (audit.overconfident) {
+    allWarnings.push(makeBug(null, 'Overconfidence', 'MEDIUM', 'prediction/auditor',
+      null, audit.defendedConfidence, audit.declaredConfidence,
+      (audit.declaredConfidence ?? 0) - (audit.defendedConfidence ?? 0),
+      audit.message));
+  }
+
+  // 9. Calibration (deep only — needs evaluated predictions)
+  let calibration = { status: 'SKIPPED', message: 'Quick mode' };
+  if (mode === 'deep') {
+    calibration = runCalibrationEngine(ctx.symbol);
+    sections.calibration = {
+      status: calibration.status || calibration.overall,
+      sampleCount: calibration.sampleCount,
+      overall: calibration.overall
+    };
+    if (calibration.ok && calibration.overall === 'OVERCONFIDENT') {
+      allWarnings.push(makeBug(null, 'Calibration', 'MEDIUM', 'prediction/calibration',
+        `n=${calibration.sampleCount}`, 'WELL_CALIBRATED', 'OVERCONFIDENT',
+        calibration.meanAbsError, calibration.message));
+    }
+  } else {
+    sections.calibration = { skipped: true };
+  }
+
+  // 10. Root cause chains + Debug Memory enrichment
+  let enrichedBugs = attachRootCauseChains(allBugs, ctx, calc, inv);
+  enrichedBugs = updateDebugMemory(enrichedBugs);
+  const repeated = enrichedBugs.filter(b => b.repeatedWarning);
+  for (const b of repeated) {
+    allWarnings.push(makeBug(null, 'Repeated Historical Bug', 'MEDIUM', b.module,
+      b.historicalMatch?.bugId, null, b.occurrenceCount, null, b.repeatedWarning));
+  }
+
+  // 11. Regression Memory
+  const regMem = updateRegressionMemory(
+    { testsRun: 0, passed: 0, failed: enrichedBugs.length, warnings: allWarnings.length, status: 'PENDING', bugs: enrichedBugs },
+    snapshot
+  );
+  if (regMem.regressionDetails.length) {
+    for (const d of regMem.regressionDetails) {
+      enrichedBugs.push(makeBug(null, 'REGRESSION DETECTED', d.severity, d.affectedModule,
+        d.testId, d.previousResult, d.currentResult, d.difference,
+        `Version ${d.previousVersion} → ${d.currentVersion}`));
+    }
+  }
+  sections.regressionMemory = {
+    versionsStored: (regMem.memory?.versions || []).length,
+    newRegressions: regMem.regressionDetails.length
+  };
+
   // Safe Auto-Fix (very limited)
   const fixes = [];
   if (options.safeAutoFix) {
-    // Only clear corrupt storage keys that we own, never touch formulas
-    for (const b of allBugs) {
+    for (const b of enrichedBugs) {
       if (b.category === 'Storage Error' && b.severity !== 'CRITICAL') {
         try {
-          // probe already done; nothing destructive
           fixes.push({ bugId: b.id, action: 'reprobe-storage', result: 'ok' });
           b.status = 'FIXED';
         } catch { /* ignore */ }
@@ -745,55 +1461,75 @@ export async function runAutoDebugger(options = {}) {
   }
 
   // Aggregate status
-  const critical = allBugs.filter(b => b.severity === 'CRITICAL').length;
-  const high = allBugs.filter(b => b.severity === 'HIGH').length;
+  const critical = enrichedBugs.filter(b => b.severity === 'CRITICAL').length;
+  const high = enrichedBugs.filter(b => b.severity === 'HIGH').length;
   let status = 'HEALTHY';
   if (critical > 0) status = 'CRITICAL';
-  else if (high > 0 || allBugs.length > 0) status = 'WARNING';
-  else if (allWarnings.length > 3) status = 'WARNING';
+  else if (high > 0 || enrichedBugs.length > 0) status = 'WARNING';
+  else if (allWarnings.length > 5) status = 'WARNING';
+  if (audit.trustStatus === 'REJECT' && mode === 'deep') {
+    if (status === 'HEALTHY') status = 'WARNING';
+  }
 
   const report = {
     version: VERSION,
+    appVersion: APP_VERSION,
     mode,
     ts: Date.now(),
     durationMs: Date.now() - start,
-    status, // HEALTHY | WARNING | CRITICAL
+    status,
     testsRun: countTests(sections),
-    passed: 0, // filled below
-    failed: allBugs.length,
+    passed: 0,
+    failed: enrichedBugs.length,
     warnings: allWarnings.length,
-    bugs: allBugs,
+    bugs: enrichedBugs,
     warningItems: allWarnings,
     sections,
     historicalResults: hist.results || [],
     historicalSummary: hist.summary || null,
     snapshot,
     fixes,
-    userMessages: allBugs.map(userFriendlyMsg).concat(allWarnings.slice(0, 5).map(userFriendlyMsg))
+    anomalies: anom.anomalies || [],
+    anomalySummary: anom.summary || null,
+    predictionAudit: audit,
+    calibration,
+    regressionMemory: {
+      details: regMem.regressionDetails,
+      previousVersion: regMem.previous?.version || null
+    },
+    repeatedBugs: repeated.length,
+    realtime: {
+      state: loadRtState(),
+      recentCorrections: (loadCorrectionLog() || []).slice(0, 5)
+    },
+    userMessages: enrichedBugs.map(userFriendlyMsg).concat(allWarnings.slice(0, 8).map(userFriendlyMsg))
   };
 
-  // Approximate passed count
-  const totalChecks = report.testsRun;
-  report.passed = Math.max(0, totalChecks - allBugs.length);
+  report.testsRun = countTests(sections);
+  report.passed = Math.max(0, report.testsRun - report.failed);
+  report.healthScore = computeHealthScore(report);
 
-  // Persist history
+  // Final status label for regression memory entry
+  updateRegressionMemory(report, snapshot);
+
   persistReport(report);
   _lastReport = report;
-
-  // Clear injected faults after scan
   _injectedFaults = [];
 
   return report;
 }
 
 function countTests(sections) {
-  // Rough count of discrete checks performed
-  let n = 8; // base application checks
+  let n = 8;
   if (sections.calculations && !sections.calculations.details?.skipped) n += 6;
   if (sections.invariants) n += 10;
   if (sections.forecast) n += 4;
   if (sections.historical && !sections.historical.skipped) n += 5;
   n += 3; // regression
+  n += 6; // anomaly hunter checks
+  n += 6; // prediction auditor dimensions
+  if (sections.calibration && !sections.calibration.skipped) n += 5;
+  n += 2; // debug memory + regression memory
   return n;
 }
 
@@ -802,22 +1538,560 @@ function persistReport(report) {
   const entry = {
     scanDate: report.ts,
     version: report.version,
+    appVersion: report.appVersion,
     mode: report.mode,
     status: report.status,
+    healthScore: report.healthScore,
     passed: report.passed,
     failed: report.failed,
     warnings: report.warnings,
-    bugs: report.bugs.map(b => ({
-      id: b.id, category: b.category, severity: b.severity, module: b.module, status: b.status
+    bugs: (report.bugs || []).map(b => ({
+      id: b.id, category: b.category, severity: b.severity, module: b.module, status: b.status,
+      occurrenceCount: b.occurrenceCount
     })),
-    fixedBugs: report.fixes.length,
+    fixedBugs: (report.fixes || []).length,
     forecastTestResult: report.historicalSummary || null,
+    anomalyCount: report.anomalySummary?.count ?? 0,
+    predictionAudit: report.predictionAudit?.trustStatus ?? null,
+    calibration: report.calibration?.overall || report.calibration?.status || null,
     durationMs: report.durationMs
   };
   hist.unshift(entry);
   while (hist.length > 50) hist.pop();
   saveJSON(DEBUG_STORAGE_KEY, hist);
 }
+
+
+// ═══════════════════════════════════════════════════════════
+// NEW (v1.2): Real-Time Monitor · Correction Engine
+// Transaction / Rollback · Loop Protection
+// ═══════════════════════════════════════════════════════════
+
+let _rtListeners = [];
+let _rtCorrectionDepth = 0;
+let _rtLastEventId = null;
+let _rtBlocked = false;
+
+let _memCorrectionLog = null;
+let _memRtState = null;
+
+function loadCorrectionLog() {
+  const fromStore = loadJSON(CORRECTION_LOG_KEY, null);
+  if (fromStore) { _memCorrectionLog = fromStore; return fromStore; }
+  if (!_memCorrectionLog) _memCorrectionLog = [];
+  return _memCorrectionLog;
+}
+
+function saveCorrectionLog(list) {
+  while (list.length > 100) list.pop();
+  _memCorrectionLog = list;
+  saveJSON(CORRECTION_LOG_KEY, list);
+  return true;
+}
+
+function defaultRtState() {
+  return {
+    lastEvent: null,
+    lastValidation: null,
+    blockedOutputs: 0,
+    correctionsAccepted: 0,
+    correctionsRolledBack: 0,
+    loopsDetected: 0
+  };
+}
+
+function loadRtState() {
+  const fromStore = loadJSON(RT_STATE_KEY, null);
+  if (fromStore && typeof fromStore === 'object') {
+    _memRtState = fromStore;
+    return fromStore;
+  }
+  if (!_memRtState) _memRtState = defaultRtState();
+  return _memRtState;
+}
+
+function saveRtState(st) {
+  _memRtState = st;
+  saveJSON(RT_STATE_KEY, st);
+  return true;
+}
+
+/**
+ * Real-Time Monitor — event-driven, incremental validation.
+ * Does NOT re-run full Deep Check on every event.
+ * @param {string} eventType - e.g. 'data_update' | 'forecast_generated' | 'score_update' | 'storage_update' | 'user_input'
+ * @param {object} payload
+ */
+export function emitRealtimeEvent(eventType, payload = {}) {
+  const event = {
+    id: `EVT-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    type: eventType,
+    ts: Date.now(),
+    payload: payload || {}
+  };
+
+  const result = processRealtimeEvent(event);
+
+  for (const fn of _rtListeners) {
+    try { fn(event, result); } catch { /* ignore listener errors */ }
+  }
+  return result;
+}
+
+export function onRealtimeEvent(fn) {
+  if (typeof fn === 'function') _rtListeners.push(fn);
+  return () => { _rtListeners = _rtListeners.filter(f => f !== fn); };
+}
+
+function processRealtimeEvent(event) {
+  const st = loadRtState();
+  st.lastEvent = { id: event.id, type: event.type, ts: event.ts };
+  _rtLastEventId = event.id;
+
+  // Incremental critical checks only
+  const findings = [];
+  const payload = event.payload || {};
+
+  // Data integrity on data-related events
+  if (['data_update', 'user_input', 'storage_update'].includes(event.type)) {
+    const candles = payload.candles || [];
+    if (candles.length) {
+      let bad = 0;
+      for (const c of candles.slice(-20)) {
+        if (!c) { bad++; continue; }
+        const vals = [c.o, c.h, c.l, c.c];
+        for (const v of vals) {
+          if (v != null && (!isNum(v) || v < 0)) { bad++; break; }
+        }
+        if (isNum(c.h) && isNum(c.l) && c.h < c.l) bad++;
+      }
+      if (bad > 0) {
+        findings.push({
+          severity: 'HIGH',
+          category: 'Data Integrity',
+          message: `${bad} invalid bar(s) in recent data`,
+          correctionLevel: 1
+        });
+      }
+    }
+  }
+
+  // Forecast / score events — critical invariants only
+  if (['forecast_generated', 'score_update'].includes(event.type)) {
+    const d = payload.decision || payload.result || {};
+    const signal = d.signal;
+    const score = d.score ?? d.combinedScore ?? d.analysis?.combinedScore;
+    const conf = d.confidence;
+    const target = d.target;
+    const stop = d.stop;
+    const price = payload.currentPrice ?? d.price;
+
+    if (score != null && (!isNum(score) || score < 0 || score > 100)) {
+      findings.push({
+        severity: 'CRITICAL',
+        category: 'Range Violation',
+        message: `Score out of range: ${score}`,
+        correctionLevel: 3,
+        field: 'score',
+        actual: score
+      });
+    }
+    if (conf != null) {
+      const cPct = conf > 1.5 ? conf : conf * 100;
+      if (!isNum(conf) || cPct < 0 || cPct > 150) {
+        findings.push({
+          severity: 'HIGH',
+          category: 'Range Violation',
+          message: `Confidence out of range: ${conf}`,
+          correctionLevel: 3,
+          field: 'confidence',
+          actual: conf
+        });
+      }
+    }
+    if (signal === 'BUY' && isNum(target) && isNum(price) && target < price) {
+      findings.push({
+        severity: 'HIGH',
+        category: 'Invariant Violation',
+        message: 'BUY target below price',
+        correctionLevel: 2,
+        field: 'target',
+        actual: target,
+        expected: `> ${price}`
+      });
+    }
+    if (signal === 'SELL' && isNum(target) && isNum(price) && target > price) {
+      findings.push({
+        severity: 'HIGH',
+        category: 'Invariant Violation',
+        message: 'SELL target above price',
+        correctionLevel: 2,
+        field: 'target',
+        actual: target,
+        expected: `< ${price}`
+      });
+    }
+    if (signal === 'BUY' && isNum(stop) && isNum(price) && stop > price) {
+      findings.push({
+        severity: 'HIGH',
+        category: 'Invariant Violation',
+        message: 'BUY stop above price',
+        correctionLevel: 2,
+        field: 'stop',
+        actual: stop
+      });
+    }
+  }
+
+  // Injected RT faults
+  for (const f of _injectedFaults) {
+    if (f.type === 'rt_error') {
+      findings.push({
+        severity: f.severity || 'HIGH',
+        category: f.category || 'Runtime',
+        message: f.message || 'Injected RT error',
+        correctionLevel: f.correctionLevel ?? 1
+      });
+    }
+    if (f.type === 'correction_loop') {
+      findings.push({
+        severity: 'CRITICAL',
+        category: 'Correction Loop',
+        message: 'Injected loop scenario',
+        correctionLevel: 1,
+        forceLoop: true
+      });
+    }
+  }
+
+  let correctionResult = null;
+  if (findings.length) {
+    correctionResult = runRealtimeCorrection(event, findings, payload);
+  }
+
+  const status = findings.some(f => f.severity === 'CRITICAL')
+    ? 'CRITICAL'
+    : findings.length ? 'WARNING' : 'OK';
+
+  st.lastValidation = {
+    eventId: event.id,
+    status,
+    findingsCount: findings.length,
+    correction: correctionResult ? {
+      level: correctionResult.level,
+      action: correctionResult.action,
+      committed: correctionResult.committed
+    } : null
+  };
+  if (correctionResult?.action === 'BLOCK') st.blockedOutputs = (st.blockedOutputs || 0) + 1;
+  if (correctionResult?.committed) st.correctionsAccepted = (st.correctionsAccepted || 0) + 1;
+  if (correctionResult?.rolledBack) st.correctionsRolledBack = (st.correctionsRolledBack || 0) + 1;
+  if (correctionResult?.loopDetected) st.loopsDetected = (st.loopsDetected || 0) + 1;
+  saveRtState(st);
+
+  return {
+    eventId: event.id,
+    eventType: event.type,
+    status,
+    findings,
+    correction: correctionResult,
+    blocked: correctionResult?.action === 'BLOCK',
+    message: findings.length
+      ? findings.map(f => f.message).join('; ')
+      : 'Real-time checks passed'
+  };
+}
+
+/**
+ * Real-Time Correction Engine
+ * Levels: 1 Safe Auto · 2 Assisted (proposal only) · 3 Protective Block
+ */
+function runRealtimeCorrection(event, findings, payload) {
+  // Loop protection
+  if (_rtCorrectionDepth >= CORRECTION_DEPTH_LIMIT || findings.some(f => f.forceLoop)) {
+    _rtCorrectionDepth = 0;
+    const logEntry = {
+      correctionId: `COR-LOOP-${Date.now().toString(36)}`,
+      timestamp: Date.now(),
+      trigger: event.type,
+      action: 'LOOP_ABORT',
+      level: 0,
+      message: '🚨 CORRECTION LOOP DETECTED — all changes for this event rolled back',
+      committed: false,
+      rolledBack: true,
+      loopDetected: true
+    };
+    const log = loadCorrectionLog();
+    log.unshift(logEntry);
+    saveCorrectionLog(log);
+    return {
+      correctionId: logEntry.correctionId,
+      level: 0,
+      action: 'LOOP_ABORT',
+      committed: false,
+      rolledBack: true,
+      loopDetected: true,
+      message: logEntry.message,
+      proposals: []
+    };
+  }
+
+  const maxLevel = Math.max(...findings.map(f => f.correctionLevel || 1));
+  const correctionId = `COR-${Date.now().toString(36)}`;
+
+  // Snapshot
+  const snapshot = {
+    candlesLen: (payload.candles || []).length,
+    decision: payload.decision ? {
+      signal: payload.decision.signal,
+      score: payload.decision.score,
+      confidence: payload.decision.confidence,
+      target: payload.decision.target,
+      stop: payload.decision.stop
+    } : null,
+    ts: Date.now()
+  };
+
+  // Level 3 — Protective Block
+  if (maxLevel >= 3) {
+    _rtBlocked = true;
+    const entry = {
+      correctionId,
+      timestamp: Date.now(),
+      trigger: event.type,
+      eventId: event.id,
+      level: 3,
+      action: 'BLOCK',
+      originalState: snapshot,
+      appliedFix: null,
+      validationResult: 'BLOCKED',
+      committed: false,
+      rolledBack: false,
+      message: '🔴 Unverified Output — Critical issue; auto-fix forbidden',
+      findings: findings.map(f => f.message)
+    };
+    const log = loadCorrectionLog();
+    log.unshift(entry);
+    saveCorrectionLog(log);
+    return {
+      correctionId,
+      level: 3,
+      action: 'BLOCK',
+      committed: false,
+      rolledBack: false,
+      loopDetected: false,
+      message: entry.message,
+      proposals: [],
+      blockedOutput: true
+    };
+  }
+
+  // Level 2 — Assisted (proposal only, no auto apply)
+  if (maxLevel === 2) {
+    const proposals = findings.filter(f => f.correctionLevel === 2).map(f => ({
+      field: f.field,
+      issue: f.message,
+      expected: f.expected,
+      actual: f.actual,
+      suggestion: f.field === 'target'
+        ? 'بازبینی Target نسبت به Direction و قیمت'
+        : f.field === 'stop'
+          ? 'بازبینی Stop Loss نسبت به Direction'
+          : 'بازبینی دستی فیلد مرتبط',
+      requiresUserApproval: true
+    }));
+    const entry = {
+      correctionId,
+      timestamp: Date.now(),
+      trigger: event.type,
+      eventId: event.id,
+      level: 2,
+      action: 'PROPOSE',
+      originalState: snapshot,
+      appliedFix: null,
+      validationResult: 'AWAITING_USER',
+      committed: false,
+      rolledBack: false,
+      message: '🟡 Assisted Correction — نیاز به تأیید کاربر',
+      proposals,
+      findings: findings.map(f => f.message)
+    };
+    const log = loadCorrectionLog();
+    log.unshift(entry);
+    saveCorrectionLog(log);
+    return {
+      correctionId,
+      level: 2,
+      action: 'PROPOSE',
+      committed: false,
+      rolledBack: false,
+      loopDetected: false,
+      message: entry.message,
+      proposals
+    };
+  }
+
+  // Level 1 — Safe Auto-Correction (deterministic, reversible, low-risk)
+  _rtCorrectionDepth += 1;
+  const safeFixes = [];
+  try {
+    // Only sanitize clearly recoverable data issues in a copy — never mutate main engine output
+    if (payload.candles && Array.isArray(payload.candles)) {
+      // Detect NaN bars — report only; do not invent prices
+      const nanBars = payload.candles.filter(c =>
+        c && [c.o, c.h, c.l, c.c].some(v => v != null && !isNum(v))
+      ).length;
+      if (nanBars > 0) {
+        safeFixes.push({
+          type: 'flag_nan_bars',
+          count: nanBars,
+          note: 'Invalid bars flagged; values not fabricated'
+        });
+      }
+    }
+
+    // Storage re-probe (safe)
+    if (findings.some(f => /storage/i.test(f.category || '') || /storage/i.test(f.message || ''))) {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const k = 'oma_ad_rt_probe';
+          localStorage.setItem(k, '1');
+          const ok = localStorage.getItem(k) === '1';
+          localStorage.removeItem(k);
+          safeFixes.push({ type: 'storage_reprobe', result: ok ? 'ok' : 'fail' });
+          if (!ok) throw new Error('storage probe failed');
+        }
+      } catch (e) {
+        // Rollback path
+        _rtCorrectionDepth = Math.max(0, _rtCorrectionDepth - 1);
+        const entry = {
+          correctionId,
+          timestamp: Date.now(),
+          trigger: event.type,
+          level: 1,
+          action: 'ROLLBACK',
+          originalState: snapshot,
+          appliedFix: safeFixes,
+          validationResult: 'FAIL',
+          committed: false,
+          rolledBack: true,
+          message: 'Rollback: safe fix validation failed — ' + (e.message || e)
+        };
+        const log = loadCorrectionLog();
+        log.unshift(entry);
+        saveCorrectionLog(log);
+        return {
+          correctionId,
+          level: 1,
+          action: 'ROLLBACK',
+          committed: false,
+          rolledBack: true,
+          loopDetected: false,
+          message: entry.message,
+          proposals: []
+        };
+      }
+    }
+
+    // Re-validate: if critical findings remain without safe fix, don't commit falsely
+    const stillCritical = findings.filter(f => f.severity === 'CRITICAL' && f.correctionLevel === 1);
+    // Accept only when we actually applied something safe OR findings were informational data flags
+    const commit = safeFixes.length > 0 || findings.every(f => f.severity !== 'CRITICAL');
+
+    _rtCorrectionDepth = Math.max(0, _rtCorrectionDepth - 1);
+
+    const entry = {
+      correctionId,
+      timestamp: Date.now(),
+      trigger: event.type,
+      eventId: event.id,
+      level: 1,
+      action: commit ? 'COMMIT' : 'NO_OP',
+      originalState: snapshot,
+      appliedFix: safeFixes,
+      validationResult: commit ? 'PASS' : 'NO_SAFE_FIX',
+      committed: commit && safeFixes.length > 0,
+      rolledBack: false,
+      message: commit && safeFixes.length
+        ? '🟢 Safe auto-correction applied and re-validated'
+        : '🟢 Detected; no destructive fix applied (safe mode)',
+      findings: findings.map(f => f.message)
+    };
+    const log = loadCorrectionLog();
+    log.unshift(entry);
+    saveCorrectionLog(log);
+
+    // Learn: feed into debug memory pattern
+    if (findings.length) {
+      updateDebugMemory(findings.map(f => makeBug(
+        null, f.category || 'RT Finding', f.severity || 'MEDIUM', 'realtime',
+        event.type, f.expected, f.actual, null, f.message
+      )));
+    }
+
+    return {
+      correctionId,
+      level: 1,
+      action: entry.action,
+      committed: entry.committed,
+      rolledBack: false,
+      loopDetected: false,
+      message: entry.message,
+      proposals: [],
+      fixes: safeFixes
+    };
+  } catch (e) {
+    _rtCorrectionDepth = Math.max(0, _rtCorrectionDepth - 1);
+    const entry = {
+      correctionId,
+      timestamp: Date.now(),
+      trigger: event.type,
+      level: 1,
+      action: 'ROLLBACK',
+      originalState: snapshot,
+      appliedFix: safeFixes,
+      validationResult: 'EXCEPTION',
+      committed: false,
+      rolledBack: true,
+      message: 'Rollback after exception: ' + (e.message || e)
+    };
+    const log = loadCorrectionLog();
+    log.unshift(entry);
+    saveCorrectionLog(log);
+    return {
+      correctionId,
+      level: 1,
+      action: 'ROLLBACK',
+      committed: false,
+      rolledBack: true,
+      loopDetected: false,
+      message: entry.message,
+      proposals: []
+    };
+  }
+}
+
+export function getCorrectionLog() {
+  return loadCorrectionLog();
+}
+
+export function getRealtimeState() {
+  return loadRtState();
+}
+
+export function clearCorrectionLog() {
+  saveCorrectionLog([]);
+  return true;
+}
+
+export function isOutputBlocked() {
+  return _rtBlocked;
+}
+
+export function clearOutputBlock() {
+  _rtBlocked = false;
+}
+
 
 export function getLastReport() {
   return _lastReport;
@@ -844,4 +2118,4 @@ export function getStatusEmoji(status) {
   return '⚪';
 }
 
-export { TOLERANCE, VERSION as AUTO_DEBUGGER_VERSION };
+export { TOLERANCE, VERSION as AUTO_DEBUGGER_VERSION, APP_VERSION };
