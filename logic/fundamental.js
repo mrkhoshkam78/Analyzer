@@ -309,7 +309,7 @@ export function runFundamental(symbolId, snapshot = null) {
     return {
       ok: false,
       status: 'insufficient_data',
-      message: 'داده فاندامنتال کافی نیست. مقادیر Actual / Forecast / Previous را وارد کنید.',
+      message: 'داده بنیادی کافی نیست. مقادیر واقعی / پیش‌بینی / قبلی را وارد کنید.',
       score: null,
       factors: [],
       coverage: 0,
