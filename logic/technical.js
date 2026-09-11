@@ -68,16 +68,16 @@ export function runTechnical(candles, options = {}) {
   if (e20 != null && e50 != null) {
     if (price > e20 && price > e50 && e20 > e50) {
       trendScore = 78; trendLabel = 'Strong Bullish';
-      factors.push({ key: 'trend', dir: 'bull', text: 'قیمت بالاتر از EMA20 و EMA50 با ساختار صعودی' });
+      factors.push({ key: 'trend', dir: 'bull', text: 'روند: صعودی قوی 🔺' });
     } else if (price < e20 && price < e50 && e20 < e50) {
       trendScore = 22; trendLabel = 'Strong Bearish';
-      factors.push({ key: 'trend', dir: 'bear', text: 'قیمت پایین‌تر از EMA20 و EMA50 با ساختار نزولی' });
+      factors.push({ key: 'trend', dir: 'bear', text: 'روند: نزولی قوی 🔻' });
     } else if (price > e50) {
       trendScore = 65; trendLabel = 'Bullish';
-      factors.push({ key: 'trend', dir: 'bull', text: 'قیمت بالاتر از EMA50' });
+      factors.push({ key: 'trend', dir: 'bull', text: 'روند: صعودی' });
     } else if (price < e50) {
       trendScore = 35; trendLabel = 'Bearish';
-      factors.push({ key: 'trend', dir: 'bear', text: 'قیمت پایین‌تر از EMA50' });
+      factors.push({ key: 'trend', dir: 'bear', text: 'روند: نزولی' });
     }
   }
   if (adxRes.adx != null) {
@@ -86,14 +86,14 @@ export function runTechnical(candles, options = {}) {
       if (adxRes.plusDI > adxRes.minusDI) trendScore = Math.min(100, trendScore + 6);
       else trendScore = Math.max(0, trendScore - 6);
     } else {
-      factors.push({ key: 'adx', dir: 'neutral', text: 'روند ضعیف یا خنثی (ADX پایین)' });
+      factors.push({ key: 'adx', dir: 'neutral', text: 'روند: خنثی / ضعیف' });
     }
   }
 
   // RSI
   if (r != null) {
-    if (r < 30) { rsiScore = 78; factors.push({ key: 'rsi', dir: 'bull', text: 'RSI در ناحیه اشباع فروش' }); }
-    else if (r > 70) { rsiScore = 22; factors.push({ key: 'rsi', dir: 'bear', text: 'RSI در ناحیه اشباع خرید' }); }
+    if (r < 30) { rsiScore = 78; factors.push({ key: 'rsi', dir: 'bull', text: 'RSI: اشباع فروش' }); }
+    else if (r > 70) { rsiScore = 22; factors.push({ key: 'rsi', dir: 'bear', text: 'RSI: اشباع خرید' }); }
     else if (r < 45) rsiScore = 58;
     else if (r > 55) rsiScore = 42;
   }
@@ -108,29 +108,29 @@ export function runTechnical(candles, options = {}) {
       factors.push({ key: 'macd', dir: 'bear', text: `تقاطع نزولی MACD (${macdCfg.fast}/${macdCfg.slow}/${macdCfg.signal})` });
     } else if (m.momentumDir === 'bull' || (m.macd > 0 && (m.hist == null || m.hist >= 0))) {
       macdScore = 68;
-      factors.push({ key: 'macd', dir: 'bull', text: 'MACD مثبت / مومنتوم صعودی' });
+      factors.push({ key: 'macd', dir: 'bull', text: 'مومنتوم: صعودی 🔺' });
     } else if (m.momentumDir === 'bear' || m.macd < 0) {
       macdScore = 32;
-      factors.push({ key: 'macd', dir: 'bear', text: 'MACD منفی / مومنتوم نزولی' });
+      factors.push({ key: 'macd', dir: 'bear', text: 'مومنتوم: نزولی 🔻' });
     }
   }
 
   // Momentum / ROC
   if (mom != null) {
-    if (mom > 2) { momScore = 68; factors.push({ key: 'momentum', dir: 'bull', text: 'مومنتوم مثبت' }); }
-    else if (mom < -2) { momScore = 32; factors.push({ key: 'momentum', dir: 'bear', text: 'مومنتوم منفی' }); }
+    if (mom > 2) { momScore = 68; factors.push({ key: 'momentum', dir: 'bull', text: 'مومنتوم: مثبت' }); }
+    else if (mom < -2) { momScore = 32; factors.push({ key: 'momentum', dir: 'bear', text: 'مومنتوم: منفی' }); }
   }
 
   // Bollinger
   if (bb.pctB != null) {
-    if (bb.pctB < 0.1) { factors.push({ key: 'bb', dir: 'bull', text: 'قیمت نزدیک باند پایین بولینگر' }); momScore = Math.min(100, momScore + 5); }
-    else if (bb.pctB > 0.9) { factors.push({ key: 'bb', dir: 'bear', text: 'قیمت نزدیک باند بالای بولینگر' }); momScore = Math.max(0, momScore - 5); }
+    if (bb.pctB < 0.1) { factors.push({ key: 'bb', dir: 'bull', text: 'نزدیک کف نوسان' }); momScore = Math.min(100, momScore + 5); }
+    else if (bb.pctB > 0.9) { factors.push({ key: 'bb', dir: 'bear', text: 'نزدیک سقف نوسان' }); momScore = Math.max(0, momScore - 5); }
   }
 
   // Stochastic
   if (stoch.k != null) {
-    if (stoch.k < 20) { factors.push({ key: 'stoch', dir: 'bull', text: 'استوکاستیک در ناحیه اشباع فروش' }); rsiScore = Math.min(100, rsiScore + 4); }
-    else if (stoch.k > 80) { factors.push({ key: 'stoch', dir: 'bear', text: 'استوکاستیک در ناحیه اشباع خرید' }); rsiScore = Math.max(0, rsiScore - 4); }
+    if (stoch.k < 20) { factors.push({ key: 'stoch', dir: 'bull', text: 'اشباع فروش' }); rsiScore = Math.min(100, rsiScore + 4); }
+    else if (stoch.k > 80) { factors.push({ key: 'stoch', dir: 'bear', text: 'اشباع خرید' }); rsiScore = Math.max(0, rsiScore - 4); }
   }
 
   // Structure S/R + breakout
@@ -182,8 +182,8 @@ export function runTechnical(candles, options = {}) {
 
   // Volume
   if (volA.available) {
-    if (volA.spike) { volumeScore = 68; factors.push({ key: 'volume', dir: 'bull', text: 'حجم بالاتر از میانگین' }); }
-    else if (volA.weak) { volumeScore = 40; factors.push({ key: 'volume', dir: 'bear', text: 'حجم ضعیف' }); }
+    if (volA.spike) { volumeScore = 68; factors.push({ key: 'volume', dir: 'bull', text: 'حجم: بالا' }); }
+    else if (volA.weak) { volumeScore = 40; factors.push({ key: 'volume', dir: 'bear', text: 'حجم: ضعیف' }); }
   }
 
   const W = CONFIG.techWeights;
