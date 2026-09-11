@@ -336,8 +336,8 @@ const ICONS = {
 function showResult(r, symbolId) {
   if (!r?.ok) { toast(r?.error || 'تحلیل ناموفق', 'err'); return; }
   const sig = r.signal;
-  $('signalPanel').className = 'signal-box ' + sig;
-  $('signal').className = 'signal-main ' + sig;
+  $('signalPanel').className = 'signal-hero ' + sig;
+  $('signal').className = 'signal-value ' + sig;
   $('signalText').textContent = SIGNAL_FA[sig] || sig;
   $('signalIcon').innerHTML = ICONS[sig] || ICONS.HOLD;
   $('scoreContext').textContent = `${symbolId} · ${currentTf}`;
@@ -345,10 +345,10 @@ function showResult(r, symbolId) {
   $('bar').style.width = r.score + '%';
   const trendEl = $('trend');
   trendEl.textContent = TREND_FA[r.trend] || r.trend;
-  trendEl.className = 'metric-v' + (/Bull/.test(r.trend) ? ' trend-bull' : /Bear/.test(r.trend) ? ' trend-bear' : '');
+  trendEl.className = 'level-v' + (/Bull/.test(r.trend) ? ' trend-bull' : /Bear/.test(r.trend) ? ' trend-bear' : '');
   const riskEl = $('risk');
   riskEl.textContent = RISK_FA[r.riskLevel] || r.riskLevel;
-  riskEl.className = 'metric-v' + (r.riskLevel === 'High' ? ' risk-high' : r.riskLevel === 'Low' ? ' risk-low' : '');
+  riskEl.className = 'level-v' + (r.riskLevel === 'High' ? ' risk-high' : r.riskLevel === 'Low' ? ' risk-low' : '');
   const fmt = n => formatPrice(n, symbolId);
   $('support').textContent = fmt(r.support);
   $('resistance').textContent = fmt(r.resistance);
