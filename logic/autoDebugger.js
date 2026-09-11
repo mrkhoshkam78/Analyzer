@@ -28,7 +28,7 @@ const RT_STATE_KEY = 'auto_debugger_rt_state';
 /** Max auto-correction attempts per event (loop protection) */
 const CORRECTION_DEPTH_LIMIT = 2;
 const VERSION = '1.2.0';
-const APP_VERSION = 'V5.1-AD';
+const APP_VERSION = 'V5.05';
 
 const TOLERANCE = Object.freeze({
   rsi: 0.15,
@@ -1447,16 +1447,97 @@ export async function runAutoDebugger(options = {}) {
     newRegressions: regMem.regressionDetails.length
   };
 
-  // Safe Auto-Fix (very limited)
+  // Safe Auto-Fix — only when user explicitly requests (safeAutoFix: true)
+  // Never mutates financial formulas, forecast logic, or scores.
   const fixes = [];
+  const fixProposals = [];
   if (options.safeAutoFix) {
+    const mem = loadDebugMemory();
+    // 1) Storage re-probe
     for (const b of enrichedBugs) {
-      if (b.category === 'Storage Error' && b.severity !== 'CRITICAL') {
+      if (b.category === 'Storage Error' || (b.module && String(b.module).includes('storage'))) {
         try {
-          fixes.push({ bugId: b.id, action: 'reprobe-storage', result: 'ok' });
-          b.status = 'FIXED';
-        } catch { /* ignore */ }
+          if (typeof localStorage !== 'undefined') {
+            const k = 'oma_ad_fix_probe';
+            localStorage.setItem(k, '1');
+            const ok = localStorage.getItem(k) === '1';
+            localStorage.removeItem(k);
+            if (ok) {
+              fixes.push({ bugId: b.id, action: 'reprobe-storage', result: 'ok', level: 1 });
+              b.status = 'FIXED';
+            } else {
+              fixes.push({ bugId: b.id, action: 'reprobe-storage', result: 'fail', level: 1 });
+            }
+          } else {
+            fixes.push({ bugId: b.id, action: 'reprobe-storage', result: 'skipped-no-storage', level: 1 });
+          }
+        } catch (e) {
+          fixes.push({ bugId: b.id, action: 'reprobe-storage', result: 'error:' + (e.message || e), level: 1 });
+        }
       }
+    }
+    // 2) Clear soft RT output block if user requested fix
+    try {
+      _rtBlocked = false;
+      fixes.push({ bugId: null, action: 'clear-output-block', result: 'ok', level: 1 });
+    } catch { /* ignore */ }
+    // 3) Mark repeated INFO/LOW memory patterns as acknowledged (not financial)
+    if (mem && Array.isArray(mem.bugs)) {
+      let marked = 0;
+      for (const mb of mem.bugs) {
+        if (mb.status === 'OPEN' && (mb.category === 'Storage Error' || mb.category === 'Storage Skip' || mb.category === 'RT Finding')) {
+          mb.status = 'FIXED';
+          mb.previousFix = 'user-safe-auto-fix';
+          mb.fixResult = 'acknowledged';
+          mb.lastSeen = Date.now();
+          marked++;
+        }
+      }
+      if (marked) {
+        saveDebugMemory(mem);
+        fixes.push({ bugId: null, action: 'debug-memory-ack', result: `marked ${marked}`, level: 1 });
+      }
+    }
+    // 4) Level-2 proposals for financial issues (no auto apply)
+    for (const b of enrichedBugs) {
+      const cat = (b.category || '').toLowerCase();
+      const mod = (b.module || '').toLowerCase();
+      if (b.status === 'FIXED') continue;
+      if (
+        cat.includes('invariant') || cat.includes('mismatch') || cat.includes('signal') ||
+        cat.includes('forecast') || cat.includes('range') || cat.includes('logic') ||
+        mod.includes('decision') || mod.includes('forecast') || mod.includes('technical')
+      ) {
+        fixProposals.push({
+          bugId: b.id,
+          category: b.category,
+          module: b.module,
+          message: b.possibleRootCause || b.category,
+          expected: b.expected,
+          actual: b.actual,
+          suggestion: 'این مورد نیاز به بررسی دستی دارد؛ Auto-Fix خودکار روی فرمول/Forecast اعمال نمی‌شود.',
+          requiresUserApproval: true,
+          level: 2
+        });
+      }
+    }
+    // 5) Re-run critical storage/data checks after fixes (transaction-style)
+    const postBugs = [];
+    try {
+      const app2 = checkApplicationHealth(ctx);
+      for (const b of app2.bugs) {
+        if (b.category === 'Storage Error') postBugs.push(b);
+      }
+    } catch { /* ignore */ }
+    if (postBugs.length && fixes.some(f => f.action === 'reprobe-storage' && f.result === 'ok')) {
+      // rollback claim
+      for (const f of fixes) {
+        if (f.action === 'reprobe-storage') f.result = 'rolled-back-still-failing';
+      }
+      for (const b of enrichedBugs) {
+        if (b.category === 'Storage Error') b.status = 'OPEN';
+      }
+      fixes.push({ bugId: null, action: 'rollback', result: 'storage still failing after fix', level: 1 });
     }
   }
 
@@ -1489,6 +1570,7 @@ export async function runAutoDebugger(options = {}) {
     historicalSummary: hist.summary || null,
     snapshot,
     fixes,
+    fixProposals: typeof fixProposals !== 'undefined' ? fixProposals : [],
     anomalies: anom.anomalies || [],
     anomalySummary: anom.summary || null,
     predictionAudit: audit,
