@@ -15,7 +15,8 @@ import {
 } from './logic/fundamental.js';
 import {
   runAutoDebugger, getLastReport, getDebugHistory, getStatusEmoji,
-  injectTestFaults, AUTO_DEBUGGER_VERSION
+  injectTestFaults, AUTO_DEBUGGER_VERSION, getDebugMemory, getRegressionMemory,
+  emitRealtimeEvent, getCorrectionLog, getRealtimeState, onRealtimeEvent
 } from './logic/autoDebugger.js';
 
 const $ = (id) => document.getElementById(id);
@@ -337,6 +338,20 @@ async function runAnalysis(silent = false) {
       'ok'
     );
     showResult(result, sym);
+    // Real-Time Monitor: forecast generated
+    try {
+      const rt = emitRealtimeEvent('forecast_generated', {
+        candles: series.candles,
+        decision: result,
+        currentPrice,
+        symbol: sym
+      });
+      if (rt.blocked) {
+        toast('🔴 خروجی تاییدنشده — Auto Debugger مسدود کرد', 'err');
+      } else if (rt.status === 'WARNING' && rt.correction?.action === 'PROPOSE') {
+        toast('🟡 پیشنهاد اصلاح: ' + (rt.correction.message || rt.message), 'err');
+      }
+    } catch (e) { console.warn('RT monitor', e); }
     // Non-blocking quick Auto Debugger after successful analysis
     quickDebuggerAfterAnalysis(series.candles, sym, currentPrice);
   } catch (err) {
@@ -782,13 +797,51 @@ function applyDebuggerReport(report) {
   if (rep) {
     rep.hidden = false;
     const items = [];
+    if (report.healthScore != null) {
+      items.push(`<div class="ad-bug is-INFO">🩺 System Health Score: <strong>${report.healthScore}/100</strong></div>`);
+    }
+    if (report.predictionAudit && report.predictionAudit.ok !== false) {
+      const a = report.predictionAudit;
+      const trustIcon = { TRUSTED: '🟢', CAUTION: '🟡', REJECT: '🔴' }[a.trustStatus] || '⚪';
+      items.push(`<div class="ad-bug is-INFO">${trustIcon} Prediction Audit · Trust: <strong>${a.trustStatus || '—'}</strong>` +
+        (a.auditScore != null ? ` · Audit Score: ${a.auditScore}/100` : '') +
+        (a.declaredConfidence != null ? `\nConfidence اعلام‌شده: ${Math.round(a.declaredConfidence)}%` : '') +
+        (a.defendedConfidence != null ? ` · قابل دفاع: ${Math.round(a.defendedConfidence)}%` : '') +
+        `</div>`);
+    }
+    if (report.calibration && report.calibration.status !== 'SKIPPED' && !report.calibration.skipped) {
+      const c = report.calibration;
+      items.push(`<div class="ad-bug is-INFO">📐 Calibration: <strong>${c.overall || c.status}</strong>` +
+        (c.sampleCount != null ? ` · نمونه‌ها: ${c.sampleCount}` : '') +
+        (c.message ? `\n${c.message}` : '') + `</div>`);
+    }
+    if (report.realtime) {
+      const rt = report.realtime;
+      const st = rt.state || {};
+      items.push(`<div class="ad-bug is-INFO">⚡ Real-Time · Corrections: ${st.correctionsAccepted || 0} · Rollbacks: ${st.correctionsRolledBack || 0} · Blocked: ${st.blockedOutputs || 0} · Loops: ${st.loopsDetected || 0}</div>`);
+      for (const c of (rt.recentCorrections || []).slice(0, 3)) {
+        items.push(`<div class="ad-bug is-INFO">⚡ ${c.action || c.level} · ${c.message || c.correctionId || ''}</div>`);
+      }
+    }
+    if (report.anomalySummary && report.anomalySummary.count > 0) {
+      items.push(`<div class="ad-bug is-MEDIUM">🕵️ Anomalies: ${report.anomalySummary.count} · max score ${report.anomalySummary.maxAnomalyScore || '—'}/100</div>`);
+      for (const an of (report.anomalies || []).slice(0, 5)) {
+        items.push(`<div class="ad-bug is-${an.severity || 'LOW'}">🕵️ ${an.type} · ${an.classification || ''} · score ${an.anomalyScore}\n${an.observedPattern || ''} — ${an.possibleCause || ''}</div>`);
+      }
+    }
+    if (report.repeatedBugs > 0) {
+      items.push(`<div class="ad-bug is-MEDIUM">🧠 Debug Memory: ${report.repeatedBugs} الگوی تکراری از خطاهای قبلی</div>`);
+    }
     for (const b of (report.bugs || [])) {
-      items.push(`<div class="ad-bug is-${b.severity}">${escapeHtml(userMsgFromBug(b))}</div>`);
+      let extra = '';
+      if (b.rootCauseChain?.rootCause) extra += `\nRoot Cause: ${b.rootCauseChain.rootCause}`;
+      if (b.occurrenceCount > 1) extra += `\nتکرار: ${b.occurrenceCount} بار`;
+      items.push(`<div class="ad-bug is-${b.severity}">${escapeHtml(userMsgFromBug(b) + extra)}</div>`);
     }
     for (const w of (report.warningItems || []).slice(0, 8)) {
       items.push(`<div class="ad-bug is-${w.severity || 'INFO'}">${escapeHtml(userMsgFromBug(w))}</div>`);
     }
-    if (!items.length) {
+    if (!(report.bugs || []).length && !(report.warningItems || []).length) {
       items.push(`<div class="ad-bug is-INFO">🟢 هیچ خطایی یافت نشد. محاسبات و اینورینت‌ها در محدوده مجاز هستند.</div>`);
     }
     if (report.historicalSummary) {
@@ -804,10 +857,19 @@ function applyDebuggerReport(report) {
     adv.hidden = false;
     const slim = {
       version: report.version,
+      appVersion: report.appVersion,
       status: report.status,
+      healthScore: report.healthScore,
       sections: report.sections,
       snapshot: report.snapshot,
-      bugs: (report.bugs || []).map(b => ({ id: b.id, cat: b.category, sev: b.severity, mod: b.module, exp: b.expected, act: b.actual })),
+      predictionAudit: report.predictionAudit,
+      calibration: report.calibration,
+      anomalySummary: report.anomalySummary,
+      bugs: (report.bugs || []).map(b => ({
+        id: b.id, cat: b.category, sev: b.severity, mod: b.module,
+        exp: b.expected, act: b.actual, occ: b.occurrenceCount,
+        root: b.rootCauseChain?.rootCause
+      })),
       durationMs: report.durationMs
     };
     body.textContent = JSON.stringify(slim, null, 2);

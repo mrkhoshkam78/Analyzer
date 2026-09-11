@@ -22,3 +22,22 @@ Auto Debugger (V5.1+)
 - بررسی عمیق: دکمه «بررسی عمیق» (اینورینت + خودآزمایی تاریخی)
 - کاملاً آفلاین، بدون تغییر خروجی تحلیل اصلی
 - تاریخچه اسکن‌ها در localStorage
+
+Auto Debugger v1.1 (افزونه‌های جدید)
+------------------------------------
+- 🧠 Debug Memory: یادگیری از باگ‌های قبلی + تشخیص تکرار الگو
+- 📦 Regression Memory: Baseline نسخه‌ها و مقایسه بین نسخه‌ای
+- 🔗 Root Cause Chain: Symptom → Dependency → Root
+- 🕵️ Anomaly Hunter: رفتار مشکوک (نه فقط Error)
+- ⚖️ Prediction Auditor: اعتماد مستقل + TRUSTED/CAUTION/REJECT
+- 📐 Calibration: Declared Confidence در برابر Actual Accuracy
+- 🩺 System Health Score
+
+Auto Debugger v1.2 — Real-Time
+------------------------------
+- ⚡ Real-Time Monitor: event-driven (data/forecast/score/storage)
+- 🟢 Level 1 Safe Auto-Correction (deterministic, reversible)
+- 🟡 Level 2 Assisted Correction (proposal + user approval)
+- 🔴 Level 3 Protective Block (Unverified Output)
+- Transaction: Snapshot → Fix → Validate → Commit/Rollback
+- Correction Loop Protection (depth limit)
