@@ -820,3 +820,138 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (max-width: 420px) {
   .form-grid, .metrics-grid { grid-template-columns: 1fr; }
 }
+
+/* Smart Data Calendar — performance-friendly pulse */
+.field-calendar { position: relative; }
+.cal-wrap { display: flex; gap: 8px; align-items: center; }
+.cal-wrap .input { flex: 1; }
+.cal-toggle { white-space: nowrap; flex-shrink: 0; }
+
+.smart-cal {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: var(--r);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.smart-cal[hidden] { display: none !important; }
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+.cal-month {
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+.cal-nav-btn {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: border-color 0.15s;
+}
+.cal-nav-btn:hover { border-color: rgba(99, 102, 241, 0.4); }
+
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.cal-day {
+  position: relative;
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  border-radius: 8px;
+  min-height: 36px;
+  padding: 4px 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.cal-day:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--text);
+}
+.cal-day:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.cal-day.is-other { opacity: 0.35; }
+.cal-day.is-today {
+  border-color: rgba(34, 211, 238, 0.45);
+  color: var(--accent);
+}
+.cal-day.is-selected {
+  background: var(--grad);
+  color: #fff;
+  border-color: transparent;
+}
+.cal-day.is-selected.is-today { box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.5); }
+
+/* Data pulse dot under day number */
+.cal-day .cal-pulse {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.9;
+  transform: scale(1);
+  animation: calPulse 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.cal-day.is-selected .cal-pulse {
+  background: #fff;
+}
+@keyframes calPulse {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.75); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-day .cal-pulse { animation: none; opacity: 1; }
+}
+
+.cal-legend {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cal-legend .cal-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+}

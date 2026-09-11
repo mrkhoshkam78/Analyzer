@@ -128,9 +128,24 @@
           </div>
         </div>
         <form id="priceForm" class="form-grid" autocomplete="off">
-          <div class="field">
+          <div class="field field-calendar">
             <label class="label" for="priceDate">تاریخ</label>
-            <input id="priceDate" class="input" type="date" required>
+            <div class="cal-wrap">
+              <input id="priceDate" class="input" type="date" required>
+              <button type="button" class="btn btn-ghost btn-sm cal-toggle" id="calToggle" aria-expanded="false" aria-controls="smartCal">تقویم داده</button>
+            </div>
+            <div id="smartCal" class="smart-cal" hidden>
+              <div class="cal-nav">
+                <button type="button" class="cal-nav-btn" id="calPrev" aria-label="ماه قبل">‹</button>
+                <span class="cal-month" id="calMonthLabel">—</span>
+                <button type="button" class="cal-nav-btn" id="calNext" aria-label="ماه بعد">›</button>
+              </div>
+              <div class="cal-weekdays" aria-hidden="true">
+                <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span>
+              </div>
+              <div class="cal-grid" id="calGrid" role="grid"></div>
+              <p class="cal-legend"><span class="cal-dot"></span> روز دارای داده</p>
+            </div>
           </div>
           <div class="field" id="fieldHour" hidden>
             <label class="label" for="priceHour">ساعت</label>

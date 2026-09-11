@@ -5,7 +5,8 @@ import { getSymbol, formatPrice, getAllSymbols, registerCustomAsset } from './lo
 import {
   loadHistorical, loadManual, setHistorical, upsertManualPrices,
   buildAnalysisSeries, getAssetSummary, dayKeyOffset, dayKey,
-  getCachedSymbols, dropSessionCache, TIMEFRAMES, getTfMeta, timeBucketKey
+  getCachedSymbols, dropSessionCache, TIMEFRAMES, getTfMeta, timeBucketKey,
+  getDataDayIndex
 } from './logic/datasets.js';
 
 const $ = (id) => document.getElementById(id);
@@ -158,6 +159,8 @@ function refreshAssetPanel(symbol) {
   currentTf = $('tf').value || '1D';
   loadHistorical(symbol, currentTf);
   loadManual(symbol, currentTf);
+  refreshDayIndex();
+  if ($('smartCal') && !$('smartCal').hidden) renderSmartCal();
   if (card) card.hidden = false;
   updateSmartDateTimeUI();
   const sum = getAssetSummary(symbol, currentTf);
@@ -230,6 +233,8 @@ function saveDailyPrice(e) {
     ts: dt.getTime()
   }], currentTf);
   refreshAssetPanel(sym);
+  refreshDayIndex();
+  if ($('smartCal') && !$('smartCal').hidden) renderSmartCal();
   toast(`ثبت شد: ${sym} ${timeBucketKey(dt, currentTf)}`, 'ok');
   setDataStatus(`دستی ${sym}/${currentTf}: ${res.total} رکورد · وارد Analysis Series می‌شود`, 'ok');
   // Optional auto-refresh analysis if enough data
@@ -392,6 +397,83 @@ function applyTheme(theme) {
   }
 }
 
+
+/* —— Smart Data Calendar —— */
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth(); // 0-11
+let dayIndexCache = null; // { day: count } for current asset+tf
+
+function refreshDayIndex() {
+  if (!currentSymbol) {
+    dayIndexCache = Object.create(null);
+    return dayIndexCache;
+  }
+  dayIndexCache = getDataDayIndex(currentSymbol, currentTf || '1D') || Object.create(null);
+  return dayIndexCache;
+}
+
+function renderSmartCal() {
+  const grid = $('calGrid');
+  const label = $('calMonthLabel');
+  if (!grid || !label) return;
+  const idx = dayIndexCache || Object.create(null);
+  const first = new Date(calYear, calMonth, 1);
+  const startPad = (first.getDay() + 6) % 7; // Monday=0 … adapt for Sat-start Persian-ish: use Sat=0
+  // Week starts Saturday for fa UI
+  const jsDay = first.getDay(); // 0 Sun
+  const pad = (jsDay + 1) % 7; // Sat=0
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const selected = ($('priceDate')?.value || '');
+  const today = dayKeyOffset(0);
+
+  const monthNames = ['ژانویه','فوریه','مارس','آوریل','مه','ژوئن','ژوئیه','اوت','سپتامبر','اکتبر','نوامبر','دسامبر'];
+  label.textContent = `${monthNames[calMonth]} ${calYear}`;
+
+  const parts = [];
+  for (let i = 0; i < pad; i++) {
+    parts.push('<button type="button" class="cal-day is-other" disabled></button>');
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const count = idx[key] || 0;
+    const classes = ['cal-day'];
+    if (key === today) classes.push('is-today');
+    if (key === selected) classes.push('is-selected');
+    if (count > 0) classes.push('has-data');
+    const title = count > 0 ? `داده موجود (${count})` : 'بدون داده';
+    const pulse = count > 0 ? '<span class="cal-pulse" aria-hidden="true"></span>' : '';
+    parts.push(
+      `<button type="button" class="${classes.join(' ')}" data-day="${key}" title="${title}" aria-label="${key}${count ? ' — داده موجود' : ''}">${d}${pulse}</button>`
+    );
+  }
+  grid.innerHTML = parts.join('');
+  grid.querySelectorAll('.cal-day[data-day]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const day = btn.getAttribute('data-day');
+      if ($('priceDate')) $('priceDate').value = day;
+      renderSmartCal();
+    });
+  });
+}
+
+function openSmartCal(force) {
+  const panel = $('smartCal');
+  const toggle = $('calToggle');
+  if (!panel || !toggle) return;
+  const open = force === true ? true : force === false ? false : panel.hidden;
+  panel.hidden = !open;
+  toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) {
+    refreshDayIndex();
+    const sel = $('priceDate')?.value;
+    if (sel && /^\d{4}-\d{2}-\d{2}$/.test(sel)) {
+      calYear = +sel.slice(0, 4);
+      calMonth = +sel.slice(5, 7) - 1;
+    }
+    renderSmartCal();
+  }
+}
+
 function init() {
   applyTheme(getTheme());
   $('themeBtn').onclick = () => applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
@@ -472,7 +554,7 @@ function init() {
     toast(`دارایی ${res.asset.symbol} افزوده شد`, 'ok');
   };
 
-  window.__OMA_V5__ = { getCachedSymbols, buildAnalysisSeries, loadManual, loadHistorical };
+  window.__OMA_V5__ = { getCachedSymbols, buildAnalysisSeries, loadManual, loadHistorical, getDataDayIndex };
 }
 
 init();
