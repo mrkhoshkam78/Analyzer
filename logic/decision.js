@@ -186,7 +186,7 @@ function buildReport(signal, tech, fund, score, riskLevel) {
   }[tech.trend] || tech.trend;
   const sigFa = { BUY: 'خرید', HOLD: 'نگهداری', SELL: 'فروش' }[signal];
   let fundLine = fund.ok
-    ? `امتیاز فاندامنتال: ${fund.score}.`
+    ? `امتیاز فاندامنتال: ${fund.score} (${fund.outlook || 'neutral'}).`
     : 'داده فاندامنتال کافی نیست و در ترکیب لحاظ نشد.';
   return `سیگنال ${sigFa} با امتیاز ترکیبی ${score}. روند: ${trendFa}. ریسک: ${riskLevel === 'High' ? 'بالا' : riskLevel === 'Low' ? 'پایین' : 'متوسط'}. ${fundLine}`;
 }
