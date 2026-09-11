@@ -177,7 +177,7 @@ function refreshAssetPanel(symbol) {
   setHeaderData(`${symbol}/${currentTf}`);
   renderManualList(symbol);
   if ($('dailyDesc')) {
-    $('dailyDesc').textContent = `Open+Close برای ${meta.nameFa} · TF ${currentTf}`;
+    $('dailyDesc').textContent = `قیمت باز و بسته برای ${meta.nameFa} · بازه ${currentTf}`;
   }
   if ($('priceOpen')) $('priceOpen').value = '';
   if ($('priceClose')) $('priceClose').value = '';
@@ -188,10 +188,10 @@ function renderManualList(symbol) {
   if (!box) return;
   const manual = loadManual(symbol, currentTf).slice().reverse().slice(0, 20);
   if (!manual.length) {
-    box.innerHTML = '<p class="card-desc">هنوز رکورد دستی برای این TF نیست.</p>';
+    box.innerHTML = '<p class="card-desc">هنوز رکورد دستی برای این بازه نیست.</p>';
     return;
   }
-  box.innerHTML = '<div class="manual-list-title">رکوردهای دستی (Open/Close)</div>' +
+  box.innerHTML = '<div class="manual-list-title">رکوردهای دستی (باز / بسته)</div>' +
     manual.map(m => `<div class="manual-item"><span>${m.bucket}</span><strong>${formatPrice(m.open, symbol)} → ${formatPrice(m.close, symbol)}</strong></div>`).join('');
 }
 
@@ -224,7 +224,7 @@ function saveDailyPrice(e) {
   const open = Number($('priceOpen').value);
   const close = Number($('priceClose').value);
   if (!Number.isFinite(open) || open <= 0 || !Number.isFinite(close) || close <= 0) {
-    toast('Open و Close باید عدد معتبر > ۰ باشند', 'err');
+    toast('قیمت باز و بسته باید عدد معتبر بزرگ‌تر از صفر باشند', 'err');
     return;
   }
   const dt = buildDateTimeFromForm();
@@ -242,7 +242,7 @@ function saveDailyPrice(e) {
   refreshDayIndex();
   if ($('smartCal') && !$('smartCal').hidden) renderSmartCal();
   toast(`ثبت شد: ${sym} ${timeBucketKey(dt, currentTf)}`, 'ok');
-  setDataStatus(`دستی ${sym}/${currentTf}: ${res.total} رکورد · وارد Analysis Series می‌شود`, 'ok');
+  setDataStatus(`دستی ${sym}/${currentTf}: ${res.total} رکورد · وارد Analysis سری می‌شود`, 'ok');
   // Optional auto-refresh analysis if enough data
   const series = buildAnalysisSeries(sym, currentTf);
   if (series.candles.length >= 30) {
@@ -329,7 +329,7 @@ async function runAnalysis(silent = false) {
     setProcessing(false);
     setHeaderData(`${sym}/${currentTf} · ${series.mergedCount} کندل`);
     setDataStatus(
-      `Series ${series.mergedCount} · hist ${series.histCount} · manual ${series.manualCount} · O/C در موتور تحلیل`,
+      `سری ${series.mergedCount} · تاریخچه ${series.histCount} · دستی ${series.manualCount} · قیمت باز/بسته در موتور تحلیل`,
       'ok'
     );
     showResult(result, sym);
