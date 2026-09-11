@@ -13,6 +13,10 @@ import {
   upsertFundamentalVar, clearFundamentalVar, buildSnapshotFromStore,
   fundamentalSummaryFa
 } from './logic/fundamental.js';
+import {
+  runAutoDebugger, getLastReport, getDebugHistory, getStatusEmoji,
+  injectTestFaults, AUTO_DEBUGGER_VERSION
+} from './logic/autoDebugger.js';
 
 const $ = (id) => document.getElementById(id);
 let activeTab = 'paste';
@@ -333,6 +337,8 @@ async function runAnalysis(silent = false) {
       'ok'
     );
     showResult(result, sym);
+    // Non-blocking quick Auto Debugger after successful analysis
+    quickDebuggerAfterAnalysis(series.candles, sym, currentPrice);
   } catch (err) {
     setProcessing(false);
     toast(err.message || 'خطا', 'err');
@@ -603,7 +609,7 @@ function renderFundPanel(symbolId) {
 
 function switchView(view) {
   // Dedicated panels that replace main flow content
-  const dedicated = ['fundamental', 'backtest'];
+  const dedicated = ['fundamental', 'backtest', 'debugger'];
   document.querySelectorAll('.view-panel').forEach(p => { p.hidden = true; });
   document.querySelectorAll('.side-link').forEach(a => a.classList.remove('active'));
 
@@ -625,6 +631,9 @@ function switchView(view) {
         ? `نماد فعال: ${currentSymbol} — داده قیمت را قبلاً وارد کرده باشید.`
         : 'ابتدا نماد و داده قیمت را انتخاب/وارد کنید.';
     }
+    if (view === 'debugger') {
+      renderDebuggerPanel();
+    }
   } else {
     // Restore main cards
     mainCards.forEach(c => {
@@ -635,8 +644,13 @@ function switchView(view) {
     // dedicated stay hidden
   }
   // close mobile sidebar
-  $('sidebar')?.classList.remove('is-open');
-  document.body.classList.remove('sidebar-open');
+  if (typeof window.__closeSidebar === 'function') window.__closeSidebar();
+  else {
+    $('sidebar')?.classList.remove('is-open');
+    document.body.classList.remove('sidebar-open');
+    const ov = $('sidebarOverlay');
+    if (ov) { ov.hidden = true; ov.classList.remove('is-visible'); }
+  }
 }
 
 
@@ -730,6 +744,184 @@ async function runBacktestUI() {
   }
 }
 
+
+
+/* ── Auto Debugger UI ── */
+function renderDebuggerPanel() {
+  const last = getLastReport();
+  if (last) applyDebuggerReport(last);
+  else {
+    if ($('adStatusIcon')) $('adStatusIcon').textContent = '⚪';
+    if ($('adStatusText')) $('adStatusText').textContent = 'هنوز اسکنی اجرا نشده — بررسی سریع یا عمیق را بزنید';
+    if ($('adStatusPill')) $('adStatusPill').textContent = 'آماده';
+    if ($('adMetrics')) $('adMetrics').hidden = true;
+    if ($('adReport')) { $('adReport').hidden = true; $('adReport').innerHTML = ''; }
+  }
+}
+
+function applyDebuggerReport(report) {
+  if (!report) return;
+  const emoji = getStatusEmoji(report.status);
+  if ($('adStatusIcon')) $('adStatusIcon').textContent = emoji;
+  const statusFa = { HEALTHY: 'سیستم سالم', WARNING: 'هشدارها یافت شد', CRITICAL: 'خطای بحرانی' }[report.status] || report.status;
+  if ($('adStatusText')) $('adStatusText').textContent = statusFa;
+  if ($('adStatusPill')) {
+    $('adStatusPill').textContent = statusFa;
+    $('adStatusPill').className = 'status-pill is-' + (report.status === 'HEALTHY' ? 'ok' : report.status === 'CRITICAL' ? 'err' : 'warn');
+  }
+  if ($('adMetrics')) {
+    $('adMetrics').hidden = false;
+    if ($('adTests')) $('adTests').textContent = report.testsRun;
+    if ($('adPassed')) $('adPassed').textContent = report.passed;
+    if ($('adFailed')) $('adFailed').textContent = report.failed;
+    if ($('adWarnings')) $('adWarnings').textContent = report.warnings;
+    if ($('adDuration')) $('adDuration').textContent = report.durationMs + ' ms';
+    if ($('adMode')) $('adMode').textContent = report.mode === 'deep' ? 'عمیق' : 'سریع';
+  }
+  const rep = $('adReport');
+  if (rep) {
+    rep.hidden = false;
+    const items = [];
+    for (const b of (report.bugs || [])) {
+      items.push(`<div class="ad-bug is-${b.severity}">${escapeHtml(userMsgFromBug(b))}</div>`);
+    }
+    for (const w of (report.warningItems || []).slice(0, 8)) {
+      items.push(`<div class="ad-bug is-${w.severity || 'INFO'}">${escapeHtml(userMsgFromBug(w))}</div>`);
+    }
+    if (!items.length) {
+      items.push(`<div class="ad-bug is-INFO">🟢 هیچ خطایی یافت نشد. محاسبات و اینورینت‌ها در محدوده مجاز هستند.</div>`);
+    }
+    if (report.historicalSummary) {
+      const s = report.historicalSummary;
+      items.push(`<div class="ad-bug is-INFO">تست تاریخی: صحیح ${s.correct} · غلط ${s.wrong} · خنثی ${s.neutral}` +
+        (s.dirAcc != null ? ` · دقت جهتی ${s.dirAcc.toFixed(1)}%` : '') + `</div>`);
+    }
+    rep.innerHTML = items.join('');
+  }
+  const adv = $('adAdvanced');
+  const body = $('adAdvancedBody');
+  if (adv && body) {
+    adv.hidden = false;
+    const slim = {
+      version: report.version,
+      status: report.status,
+      sections: report.sections,
+      snapshot: report.snapshot,
+      bugs: (report.bugs || []).map(b => ({ id: b.id, cat: b.category, sev: b.severity, mod: b.module, exp: b.expected, act: b.actual })),
+      durationMs: report.durationMs
+    };
+    body.textContent = JSON.stringify(slim, null, 2);
+  }
+}
+
+function userMsgFromBug(b) {
+  const sevIcon = { CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡', LOW: '🔵', INFO: 'ℹ️' }[b.severity] || '⚠️';
+  let msg = `${sevIcon} ${b.category}`;
+  if (b.module) msg += ` · ${b.module}`;
+  if (b.expected != null && b.actual != null) {
+    msg += `\nمقدار مورد انتظار: ${b.expected}\nمقدار سیستم: ${b.actual}`;
+    if (b.difference != null) msg += `\nاختلاف: ${b.difference}`;
+  }
+  if (b.possibleRootCause) msg += `\nعلت احتمالی: ${b.possibleRootCause}`;
+  return msg;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function getCandlesForDebugger() {
+  if (!currentSymbol) return [];
+  try {
+    const series = buildAnalysisSeries(currentSymbol, currentTf);
+    return series?.candles || series?.ohlcv || [];
+  } catch {
+    return [];
+  }
+}
+
+async function runDebuggerUI(mode) {
+  const btnQ = $('adQuickBtn');
+  const btnD = $('adDeepBtn');
+  if (btnQ) btnQ.disabled = true;
+  if (btnD) btnD.disabled = true;
+  if ($('adStatusText')) $('adStatusText').textContent = mode === 'deep' ? 'در حال بررسی عمیق…' : 'در حال بررسی سریع…';
+  if ($('adStatusIcon')) $('adStatusIcon').textContent = '⏳';
+  try {
+    const candles = await getCandlesForDebugger();
+    let currentPrice = null;
+    const el = $('current');
+    if (el && el.value) {
+      const v = Number(el.value);
+      if (Number.isFinite(v) && v > 0) currentPrice = v;
+    }
+    let fundSnap = null;
+    try {
+      if (currentSymbol) fundSnap = buildSnapshotFromStore(currentSymbol);
+    } catch { /* optional */ }
+
+    const report = await runAutoDebugger({
+      mode,
+      candles,
+      symbol: currentSymbol,
+      currentPrice,
+      fundamentalSnapshot: fundSnap,
+      timeframe: currentTf
+    });
+    applyDebuggerReport(report);
+    const emoji = getStatusEmoji(report.status);
+    toast(`${emoji} Auto Debugger: ${report.status} · ${report.failed} خطا · ${report.warnings} هشدار`, report.status === 'HEALTHY' ? 'ok' : 'err');
+  } catch (e) {
+    console.error(e);
+    toast('خطا در اجرای Auto Debugger: ' + (e.message || e), 'err');
+    if ($('adStatusText')) $('adStatusText').textContent = 'خطای اجرا';
+    if ($('adStatusIcon')) $('adStatusIcon').textContent = '🔴';
+  } finally {
+    if (btnQ) btnQ.disabled = false;
+    if (btnD) btnD.disabled = false;
+  }
+}
+
+function showDebuggerHistory() {
+  const panel = $('adHistoryPanel');
+  if (!panel) return;
+  const hist = getDebugHistory();
+  panel.hidden = false;
+  if (!hist.length) {
+    panel.innerHTML = '<div class="ad-hist-row muted">تاریخچه‌ای ثبت نشده است.</div>';
+    return;
+  }
+  panel.innerHTML = hist.slice(0, 15).map(h => {
+    const d = new Date(h.scanDate);
+    const ds = d.toLocaleString('fa-IR');
+    const em = getStatusEmoji(h.status);
+    return `<div class="ad-hist-row">${em} <span class="mono">${ds}</span> · ${h.mode} · موفق ${h.passed} · خطا ${h.failed} · هشدار ${h.warnings}</div>`;
+  }).join('');
+}
+
+/** Quick background check after successful analysis (non-blocking) */
+async function quickDebuggerAfterAnalysis(candles, symbol, currentPrice) {
+  try {
+    const report = await runAutoDebugger({
+      mode: 'quick',
+      candles: candles || [],
+      symbol,
+      currentPrice,
+      timeframe: currentTf
+    });
+    if (report.status === 'CRITICAL') {
+      toast('🔴 Auto Debugger: خطای بحرانی در محاسبات تشخیص داده شد — بخش Auto Debugger را ببینید', 'err');
+    } else if (report.status === 'WARNING' && report.failed > 0) {
+      toast('🟡 Auto Debugger: هشدار در صحت محاسبات', 'err');
+    }
+  } catch (e) {
+    console.warn('Auto Debugger quick scan failed', e);
+  }
+}
 
 function init() {
   applyTheme(getTheme());
@@ -829,27 +1021,73 @@ function init() {
     toast(`دارایی ${res.asset.symbol} افزوده شد`, 'ok');
   };
 
-  // Sidebar navigation
+  
+  // Auto Debugger buttons
+  if ($('adQuickBtn')) $('adQuickBtn').onclick = () => runDebuggerUI('quick');
+  if ($('adDeepBtn')) $('adDeepBtn').onclick = () => runDebuggerUI('deep');
+  if ($('adHistoryBtn')) $('adHistoryBtn').onclick = () => showDebuggerHistory();
+
+// Sidebar open / close (mobile drawer)
+  function openSidebar() {
+    const sb = $('sidebar');
+    const ov = $('sidebarOverlay');
+    if (sb) sb.classList.add('is-open');
+    document.body.classList.add('sidebar-open');
+    if (ov) {
+      ov.hidden = false;
+      ov.classList.add('is-visible');
+      ov.setAttribute('aria-hidden', 'false');
+    }
+  }
+  function closeSidebar() {
+    const sb = $('sidebar');
+    const ov = $('sidebarOverlay');
+    if (sb) sb.classList.remove('is-open');
+    document.body.classList.remove('sidebar-open');
+    if (ov) {
+      ov.classList.remove('is-visible');
+      ov.hidden = true;
+      ov.setAttribute('aria-hidden', 'true');
+    }
+  }
+  window.__closeSidebar = closeSidebar;
+  window.__openSidebar = openSidebar;
+
   document.querySelectorAll('.side-link').forEach(a => {
     a.addEventListener('click', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       switchView(a.dataset.view || 'dashboard');
+      closeSidebar();
     });
   });
   const sbToggle = $('sidebarToggle');
   if (sbToggle) {
-    sbToggle.onclick = () => {
-      $('sidebar')?.classList.remove('is-open');
-      document.body.classList.remove('sidebar-open');
-    };
+    sbToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSidebar();
+    });
   }
   const menuOpen = $('menuOpenBtn');
   if (menuOpen) {
-    menuOpen.onclick = () => {
-      $('sidebar')?.classList.add('is-open');
-      document.body.classList.add('sidebar-open');
-    };
+    menuOpen.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openSidebar();
+    });
   }
+  const overlay = $('sidebarOverlay');
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeSidebar();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeSidebar();
+  });
+
   // Backtest run
   $('btRunBtn')?.addEventListener('click', runBacktestUI);
 
