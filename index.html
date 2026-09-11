@@ -29,16 +29,21 @@
 
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar" aria-label="منوی اصلی">
-      <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="باز/بسته منو">☰</button>
+      <div class="sidebar-brand">
+        <span class="sidebar-logo">◈</span>
+        <span class="sidebar-title">OMA V5.1</span>
+      </div>
       <nav class="side-nav">
-        <a href="#" class="side-link active" data-view="dashboard">داشبورد</a>
-        <a href="#" class="side-link" data-view="analysis">تحلیل بازار</a>
-        <a href="#" class="side-link" data-view="technical">تکنیکال</a>
-        <a href="#" class="side-link" data-view="fundamental">فاندامنتال</a>
-        <a href="#" class="side-link" data-view="forecast">پیش‌بینی</a>
-        <a href="#" class="side-link" data-view="history">تاریخچه</a>
-        <a href="#" class="side-link" data-view="settings">تنظیمات</a>
+        <a href="#" class="side-link active" data-view="dashboard"><span class="side-ico">▣</span> داشبورد</a>
+        <a href="#" class="side-link" data-view="analysis"><span class="side-ico">◎</span> تحلیل بازار</a>
+        <a href="#" class="side-link" data-view="technical"><span class="side-ico">↗</span> تکنیکال</a>
+        <a href="#" class="side-link" data-view="fundamental"><span class="side-ico">Σ</span> فاندامنتال</a>
+        <a href="#" class="side-link" data-view="forecast"><span class="side-ico">◉</span> پیش‌بینی</a>
+        <a href="#" class="side-link" data-view="backtest"><span class="side-ico">▤</span> بک‌تست</a>
+        <a href="#" class="side-link" data-view="history"><span class="side-ico">◷</span> تاریخچه</a>
+        <a href="#" class="side-link" data-view="settings"><span class="side-ico">⚙</span> تنظیمات</a>
       </nav>
+      <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="بستن منو">✕</button>
     </aside>
 
     <!-- ===== HEADER V5.1 — redesigned from scratch ===== -->
@@ -61,6 +66,8 @@
         </div>
 
         <div class="header-actions">
+          <button type="button" class="icon-btn sidebar-open-btn" id="menuOpenBtn" aria-label="منو" title="منو">☰</button>
+
           <button type="button" class="icon-btn" id="themeBtn" aria-label="تغییر تم" title="تم">
             <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
             <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z"/></svg>
@@ -308,6 +315,51 @@
         <div class="score-chip">اطمینان <strong id="confVal">—</strong></div>
       </div>
       <div id="fundFactorsBox" class="fund-factors-box" hidden></div>
+
+
+      <!-- Backtest Dashboard -->
+      <section class="card view-panel" id="view-backtest" hidden aria-labelledby="bt-title">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">Historical Validation</p>
+            <h2 class="card-title" id="bt-title">بک‌تست و Walk-Forward</h2>
+            <p class="card-desc">پیش‌بینی روی داده گذشته و مقایسه با قیمت واقعی آینده · بدون Look-Ahead</p>
+          </div>
+        </div>
+        <div class="bt-controls form-grid">
+          <div class="field">
+            <label class="label" for="btHorizon">افق (کندل)</label>
+            <select id="btHorizon" class="input">
+              <option value="3">کوتاه · 3</option>
+              <option value="5" selected>متوسط · 5</option>
+              <option value="10">بلند · 10</option>
+              <option value="20">خیلی بلند · 20</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="btMode">مدل</label>
+            <select id="btMode" class="input">
+              <option value="tech">Technical Only</option>
+              <option value="fund">Fundamental Only</option>
+              <option value="combined" selected>Technical + Fundamental</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="btStep">گام نمونه‌برداری</label>
+            <select id="btStep" class="input">
+              <option value="1">هر کندل</option>
+              <option value="5" selected>هر ۵ کندل</option>
+              <option value="10">هر ۱۰ کندل</option>
+            </select>
+          </div>
+          <div class="field field-action">
+            <button type="button" class="btn btn-primary" id="btRunBtn">اجرای بک‌تست</button>
+          </div>
+        </div>
+        <div id="btStatus" class="status-line"></div>
+        <div id="btMetrics" class="bt-metrics" hidden></div>
+        <div id="btSamples" class="bt-samples" hidden></div>
+      </section>
 
     </main>
 

@@ -602,14 +602,133 @@ function renderFundPanel(symbolId) {
 }
 
 function switchView(view) {
-  document.querySelectorAll('.view-panel').forEach(p => p.hidden = true);
+  // Dedicated panels that replace main flow content
+  const dedicated = ['fundamental', 'backtest'];
+  document.querySelectorAll('.view-panel').forEach(p => { p.hidden = true; });
   document.querySelectorAll('.side-link').forEach(a => a.classList.remove('active'));
-  const panel = document.getElementById('view-' + view);
-  if (panel) panel.hidden = false;
+
   const link = document.querySelector(`.side-link[data-view="${view}"]`);
   if (link) link.classList.add('active');
-  if (view === 'fundamental' && currentSymbol) renderFundPanel(currentSymbol);
+
+  // Hide/show main analysis cards (everything in main that is not a view-panel)
+  const mainCards = document.querySelectorAll('.main > .card:not(.view-panel), .main > section:not(.view-panel)');
+  if (dedicated.includes(view)) {
+    mainCards.forEach(c => { c.dataset._prevHidden = c.hidden ? '1' : '0'; c.hidden = true; });
+    if ($('result')) $('result').hidden = true;
+    if ($('scoreLayers')) $('scoreLayers').hidden = true;
+    const panel = document.getElementById('view-' + view);
+    if (panel) panel.hidden = false;
+    if (view === 'fundamental' && currentSymbol) renderFundPanel(currentSymbol);
+    if (view === 'backtest') {
+      // keep status clear
+      if ($('btStatus')) $('btStatus').textContent = currentSymbol
+        ? `نماد فعال: ${currentSymbol} — داده قیمت را قبلاً وارد کرده باشید.`
+        : 'ابتدا نماد و داده قیمت را انتخاب/وارد کنید.';
+    }
+  } else {
+    // Restore main cards
+    mainCards.forEach(c => {
+      if (c.id === 'result' || c.id === 'dailyCard') return; // managed elsewhere
+      c.hidden = false;
+    });
+    if (currentSymbol && $('dailyCard')) $('dailyCard').hidden = false;
+    // dedicated stay hidden
+  }
+  // close mobile sidebar
+  $('sidebar')?.classList.remove('is-open');
 }
+
+
+async function runBacktestUI() {
+  const status = $('btStatus');
+  const metrics = $('btMetrics');
+  const samples = $('btSamples');
+  if (!currentSymbol) {
+    toast('ابتدا نماد را انتخاب کنید', 'err');
+    return;
+  }
+  if (status) status.textContent = 'در حال اجرای بک‌تست…';
+  if (metrics) { metrics.hidden = true; metrics.innerHTML = ''; }
+  if (samples) { samples.hidden = true; samples.innerHTML = ''; }
+
+  try {
+    const series = buildAnalysisSeries(currentSymbol, currentTf);
+    if (!series || !series.candles || series.candles.length < 40) {
+      const msg = `داده کافی نیست (${series?.candles?.length || 0} کندل). حداقل ~40 لازم است.`;
+      if (status) status.textContent = msg;
+      toast(msg, 'err');
+      return;
+    }
+    const { runBacktest } = await import('./logic/backtest.js');
+    const horizon = Number($('btHorizon')?.value || 5);
+    const step = Number($('btStep')?.value || 5);
+    const mode = $('btMode')?.value || 'combined';
+    const result = runBacktest(series.candles, {
+      symbol: currentSymbol,
+      horizon,
+      step,
+      mode,
+      timeframe: currentTf
+    });
+    if (!result.ok) {
+      if (status) status.textContent = result.error || 'بک‌تست ناموفق';
+      toast(result.error || 'خطا', 'err');
+      return;
+    }
+    if (status) {
+      status.textContent = `بک‌تست کامل · ${result.n} پیش‌بینی · افق ${result.horizon} · مدل ${result.mode}` +
+        (result.fundUsed ? ' · فاندامنتال اعمال شد' : ' · فقط تکنیکال');
+    }
+    if (metrics) {
+      const aCls = result.accuracy >= 55 ? 'good' : result.accuracy < 45 ? 'bad' : '';
+      metrics.innerHTML = `
+        <div class="bt-metric"><div class="k">Accuracy</div><div class="v ${aCls}">${result.accuracy}%</div></div>
+        <div class="bt-metric"><div class="k">Directional Acc.</div><div class="v">${result.directionalAccuracy}%</div></div>
+        <div class="bt-metric"><div class="k">Precision</div><div class="v">${result.precision}%</div></div>
+        <div class="bt-metric"><div class="k">Recall</div><div class="v">${result.recall}%</div></div>
+        <div class="bt-metric"><div class="k">F1</div><div class="v">${result.f1}%</div></div>
+        <div class="bt-metric"><div class="k">False Signal</div><div class="v">${result.falseSignalRate}%</div></div>
+        <div class="bt-metric"><div class="k">Win Rate</div><div class="v">${result.winRate}%</div></div>
+        <div class="bt-metric"><div class="k">Avg Error</div><div class="v">${result.avgErrorPct}%</div></div>
+        <div class="bt-metric"><div class="k">Avg R:R</div><div class="v">${result.avgRiskReward ?? '—'}</div></div>
+        <div class="bt-metric"><div class="k">Samples</div><div class="v">${result.n}</div></div>
+      `;
+      metrics.hidden = false;
+    }
+    if (samples && result.samples?.length) {
+      let rows = result.samples.map(p => {
+        const cls = p.result === 'correct' ? 'ok' : p.result === 'wrong' ? 'bad' : '';
+        return `<tr class="${cls}">
+          <td>${p.result}</td>
+          <td>${p.predictionDate}</td>
+          <td class="mono">${Number(p.entryPrice).toFixed(4)}</td>
+          <td>${p.predictedDirection}</td>
+          <td class="mono">${p.combinedScore}</td>
+          <td class="mono">${(p.confidence*100).toFixed(0)}%</td>
+          <td class="mono">${Number(p.actualFuturePrice).toFixed(4)}</td>
+          <td>${p.actualDirection}</td>
+          <td class="mono">${p.actualReturnPct}%</td>
+          <td class="mono">${p.mfe}% / ${p.mae}%</td>
+        </tr>`;
+      }).join('');
+      samples.innerHTML = `<table>
+        <thead><tr>
+          <th>نتیجه</th><th>تاریخ</th><th>ورود</th><th>جهت پیش‌بینی</th><th>Score</th><th>Conf</th>
+          <th>قیمت آینده</th><th>جهت واقعی</th><th>بازده</th><th>MFE/MAE</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="card-desc" style="margin-top:0.5rem">نمونه از ${result.n} پیش‌بینی · Accuracy واقعی: ${result.accuracy}% (بدون حذف ناموفق‌ها)</p>`;
+      samples.hidden = false;
+    }
+    toast(`بک‌تست: Accuracy ${result.accuracy}%`, result.accuracy >= 50 ? 'ok' : 'err');
+  } catch (err) {
+    console.error(err);
+    if (status) status.textContent = 'خطا: ' + (err.message || err);
+    toast('خطای بک‌تست', 'err');
+  }
+}
+
 
 function init() {
   applyTheme(getTheme());
@@ -713,22 +832,20 @@ function init() {
   document.querySelectorAll('.side-link').forEach(a => {
     a.addEventListener('click', (e) => {
       e.preventDefault();
-      const view = a.dataset.view;
-      if (view === 'fundamental') {
-        switchView('fundamental');
-      } else {
-        // show main analysis content; hide fund panel
-        const fundP = $('view-fundamental');
-        if (fundP) fundP.hidden = true;
-        document.querySelectorAll('.side-link').forEach(x => x.classList.remove('active'));
-        a.classList.add('active');
-      }
+      switchView(a.dataset.view || 'dashboard');
     });
   });
   const sbToggle = $('sidebarToggle');
   if (sbToggle) {
-    sbToggle.onclick = () => $('sidebar')?.classList.toggle('is-open');
+    sbToggle.onclick = () => $('sidebar')?.classList.remove('is-open');
   }
+  const menuOpen = $('menuOpenBtn');
+  if (menuOpen) {
+    menuOpen.onclick = () => $('sidebar')?.classList.add('is-open');
+  }
+  // Backtest run
+  $('btRunBtn')?.addEventListener('click', runBacktestUI);
+
 
   window.__OMA_V5__ = { getCachedSymbols, buildAnalysisSeries, loadManual, loadHistorical, getDataDayIndex };
 }
