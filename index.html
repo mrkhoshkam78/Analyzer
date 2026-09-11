@@ -3,18 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="تحلیل‌گر بازار آفلاین V5.1 — ترمینال مالی">
-  <title>تحلیل‌گر بازار · V5.1</title>
+  <meta name="description" content="تحلیل‌گر بازار آفلاین — ترمینال مالی فارسی">
+  <title>تحلیل‌گر بازار</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script>
     (function () {
       try {
         var t = localStorage.getItem('oma_theme');
-        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
-        else document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.setAttribute('data-theme', (t === 'light' || t === 'dark') ? t : 'dark');
       } catch (e) {
         document.documentElement.setAttribute('data-theme', 'dark');
       }
@@ -22,91 +21,100 @@
   </script>
 </head>
 <body>
-  <!-- Static ambient only (no continuous GPU animation) -->
-  <div class="bg-layer" aria-hidden="true"></div>
+  <div class="bg-layer" aria-hidden="true">
+    <svg class="bg-wave" viewBox="0 0 1440 320" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <path fill="currentColor" fill-opacity="0.04" d="M0,192L48,176C96,160,192,128,288,133.3C384,139,480,181,576,186.7C672,192,768,160,864,144C960,128,1056,128,1152,149.3C1248,171,1344,213,1392,234.7L1440,256L1440,320L0,320Z"/>
+    </svg>
+  </div>
 
   <div class="shell shell-with-sidebar">
-
-    <!-- Sidebar -->
+    <!-- سایدبار -->
     <aside class="sidebar" id="sidebar" aria-label="منوی اصلی">
       <div class="sidebar-brand">
-        <span class="sidebar-logo">◈</span>
-        <span class="sidebar-title">OMA V5.1</span>
+        <svg class="sidebar-logo-svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+          <path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-6"/>
+        </svg>
+        <span class="sidebar-title">تحلیل‌گر بازار</span>
       </div>
       <nav class="side-nav">
-        <a href="#" class="side-link active" data-view="dashboard"><span class="side-ico">▣</span> داشبورد</a>
-        <a href="#" class="side-link" data-view="analysis"><span class="side-ico">◎</span> تحلیل بازار</a>
-        <a href="#" class="side-link" data-view="technical"><span class="side-ico">↗</span> تکنیکال</a>
-        <a href="#" class="side-link" data-view="fundamental"><span class="side-ico">Σ</span> فاندامنتال</a>
-        <a href="#" class="side-link" data-view="forecast"><span class="side-ico">◉</span> پیش‌بینی</a>
-        <a href="#" class="side-link" data-view="backtest"><span class="side-ico">▤</span> بک‌تست</a>
-        <a href="#" class="side-link" data-view="history"><span class="side-ico">◷</span> تاریخچه</a>
-        <a href="#" class="side-link" data-view="settings"><span class="side-ico">⚙</span> تنظیمات</a>
+        <a href="#" class="side-link active" data-view="dashboard">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          داشبورد
+        </a>
+        <a href="#" class="side-link" data-view="analysis">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          تحلیل بازار
+        </a>
+        <a href="#" class="side-link" data-view="technical">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+          تحلیل تکنیکال
+        </a>
+        <a href="#" class="side-link" data-view="fundamental">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5"/><path d="M10 19V9"/><path d="M16 19v-6"/><path d="M22 19V3"/></svg>
+          تحلیل بنیادی
+        </a>
+        <a href="#" class="side-link" data-view="forecast">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+          پیش‌بینی
+        </a>
+        <a href="#" class="side-link" data-view="backtest">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4z"/><path d="M4 12h10v4H4z"/><path d="M4 20h7"/></svg>
+          بک‌تست
+        </a>
+        <a href="#" class="side-link" data-view="history">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          تاریخچه
+        </a>
+        <a href="#" class="side-link" data-view="settings">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          تنظیمات
+        </a>
       </nav>
-      <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="بستن منو">✕</button>
+      <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="بستن منو">بستن منو</button>
     </aside>
 
-    <!-- ===== HEADER V5.1 — redesigned from scratch ===== -->
+    <!-- هدر مینیمال -->
     <header class="site-header">
       <div class="header-main">
         <div class="brand-block">
-          <div class="logo" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-6"/>
-            </svg>
-          </div>
+          <button type="button" class="icon-btn sidebar-open-btn" id="menuOpenBtn" aria-label="باز کردن منو" title="منو">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </button>
           <div class="brand-copy">
-            <div class="brand-title-row">
-              <h1 class="site-name">تحلیل‌گر بازار</h1>
-              <span class="tag tag-ver">V5.1</span>
-              <span class="tag tag-live"><span class="dot"></span>LIVE</span>
-            </div>
+            <h1 class="site-name">تحلیل‌گر بازار</h1>
             <p class="site-tagline">ترمینال مالی آفلاین</p>
           </div>
         </div>
-
+        <div class="header-center" id="headerAssetSlot">
+          <span class="header-asset-label">نماد فعال</span>
+          <span class="header-asset-value mono" id="headerAsset">—</span>
+        </div>
         <div class="header-actions">
-          <button type="button" class="icon-btn sidebar-open-btn" id="menuOpenBtn" aria-label="منو" title="منو">☰</button>
-
+          <span class="header-status-pill" id="headerDataStatus">آماده</span>
           <button type="button" class="icon-btn" id="themeBtn" aria-label="تغییر تم" title="تم">
             <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
             <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z"/></svg>
           </button>
         </div>
       </div>
-
-      <div class="header-status" aria-label="وضعیت سیستم">
-        <div class="status-item">
-          <span class="status-label">شمسی</span>
-          <span class="status-value" id="clockJalali">—</span>
-        </div>
-        <div class="status-item">
-          <span class="status-label">میلادی</span>
-          <span class="status-value mono" id="clockGregorian">—</span>
-        </div>
-        <div class="status-item status-item-time">
-          <span class="status-label">ساعت</span>
-          <span class="status-value mono" id="clockTime">—</span>
-        </div>
-        <div class="status-item" id="dataStatusChip">
-          <span class="status-label">بازار</span>
-          <span class="status-value" id="headerDataStatus">آماده</span>
-        </div>
-        <div class="status-item status-item-asset" id="headerAssetSlot">
-          <span class="status-label">نماد</span>
-          <span class="status-value mono" id="headerAsset">—</span>
-        </div>
+      <div class="header-status" aria-label="ساعت و تاریخ">
+        <div class="status-item"><span class="status-label">شمسی</span><span class="status-value" id="clockJalali">—</span></div>
+        <div class="status-item"><span class="status-label">میلادی</span><span class="status-value mono" id="clockGregorian">—</span></div>
+        <div class="status-item status-item-time"><span class="status-label">ساعت</span><span class="status-value mono" id="clockTime">—</span></div>
       </div>
+      <svg class="header-wave" viewBox="0 0 1440 24" preserveAspectRatio="none" aria-hidden="true">
+        <path fill="currentColor" d="M0,16L80,12C160,8,320,0,480,2.7C640,5,800,19,960,21.3C1120,24,1280,16,1360,12L1440,8L1440,24L0,24Z"/>
+      </svg>
     </header>
 
     <main class="main">
-      <!-- Assets -->
-      <section class="card" aria-labelledby="asset-title">
+      <!-- انتخاب نماد -->
+      <section class="card anim-in" aria-labelledby="asset-title">
         <div class="card-head">
           <div>
-            <p class="eyebrow">Workspace</p>
+            <p class="eyebrow">شروع کار</p>
             <h2 class="card-title" id="asset-title">انتخاب نماد</h2>
-            <p class="card-desc">هر نماد Dataset مستقل دارد</p>
+            <p class="card-desc">هر نماد دادهٔ مستقل دارد</p>
           </div>
           <button type="button" class="btn btn-outline" id="addAssetBtn">+ افزودن نماد</button>
         </div>
@@ -115,21 +123,21 @@
 
         <div class="controls-row">
           <div class="field">
-            <label class="label" for="tf">تایم‌فریم</label>
+            <label class="label" for="tf">بازه زمانی</label>
             <select id="tf" class="input">
-              <option value="1m">1m</option>
-              <option value="5m">5m</option>
-              <option value="15m">15m</option>
-              <option value="30m">30m</option>
-              <option value="1H">1H</option>
-              <option value="4H">4H</option>
-              <option value="1D" selected>1D</option>
-              <option value="1W">1W</option>
+              <option value="1m">۱ دقیقه</option>
+              <option value="5m">۵ دقیقه</option>
+              <option value="15m">۱۵ دقیقه</option>
+              <option value="30m">۳۰ دقیقه</option>
+              <option value="1H">۱ ساعت</option>
+              <option value="4H">۴ ساعت</option>
+              <option value="1D" selected>روزانه</option>
+              <option value="1W">هفتگی</option>
             </select>
           </div>
           <div class="field">
             <label class="label" for="current">قیمت تصمیم <span class="opt">اختیاری</span></label>
-            <input id="current" class="input mono" type="number" step="any" placeholder="خالی = آخرین Close">
+            <input id="current" class="input mono" type="number" step="any" placeholder="خالی = آخرین قیمت بسته">
           </div>
         </div>
 
@@ -138,15 +146,16 @@
           <span class="ctx-name" id="chipName">—</span>
           <span class="ctx-meta" id="chipMeta">—</span>
         </div>
+        <p id="assetDataHint" class="card-desc" hidden></p>
       </section>
 
-      <!-- Manual price -->
-      <section class="card card-focus" id="dailyCard" hidden aria-labelledby="price-title">
+      <!-- ثبت قیمت -->
+      <section class="card card-focus anim-in" id="dailyCard" hidden aria-labelledby="price-title">
         <div class="card-head">
           <div>
-            <p class="eyebrow">Manual Entry</p>
+            <p class="eyebrow">ورود دستی</p>
             <h2 class="card-title" id="price-title">ثبت قیمت</h2>
-            <p class="card-desc" id="dailyDesc">Open و Close واقعی · بدون داده جعلی</p>
+            <p class="card-desc" id="dailyDesc">قیمت باز و بسته واقعی · بدون داده ساختگی</p>
           </div>
         </div>
         <form id="priceForm" class="form-grid" autocomplete="off">
@@ -171,37 +180,36 @@
           </div>
           <div class="field" id="fieldHour" hidden>
             <label class="label" for="priceHour">ساعت</label>
-            <input id="priceHour" class="input" type="number" min="0" max="23" step="1" placeholder="0–23">
+            <input id="priceHour" class="input mono" type="number" min="0" max="23" step="1" placeholder="۰–۲۳">
           </div>
           <div class="field" id="fieldMinute" hidden>
             <label class="label" for="priceMinute">دقیقه</label>
-            <input id="priceMinute" class="input" type="number" min="0" max="59" step="1" placeholder="0–59">
+            <input id="priceMinute" class="input mono" type="number" min="0" max="59" step="1" placeholder="۰–۵۹">
           </div>
           <div class="field">
-            <label class="label" for="priceOpen">Open</label>
-            <input id="priceOpen" class="input mono input-lg" type="number" step="any" min="0" inputmode="decimal" required placeholder="0.00">
+            <label class="label" for="priceOpen">قیمت باز</label>
+            <input id="priceOpen" class="input mono" type="number" step="any" required>
           </div>
           <div class="field">
-            <label class="label" for="priceClose">Close</label>
-            <input id="priceClose" class="input mono input-lg" type="number" step="any" min="0" inputmode="decimal" required placeholder="0.00">
+            <label class="label" for="priceClose">قیمت بسته</label>
+            <input id="priceClose" class="input mono" type="number" step="any" required>
           </div>
           <div class="field field-action">
-            <button type="submit" class="btn btn-primary" id="saveDailyBtn">ثبت قیمت</button>
+            <button type="submit" class="btn btn-primary">ذخیره قیمت</button>
           </div>
         </form>
-        <p class="hint" id="assetDataHint">—</p>
-        <div id="manualList" class="record-list" aria-live="polite"></div>
+        <div id="manualList" class="manual-list"></div>
       </section>
 
-      <!-- OHLCV collapsed -->
-      <section class="card">
-        <button type="button" class="collapse-trigger" id="ohlcvToggle" aria-expanded="false" aria-controls="ohlcvBody">
+      <!-- داده تاریخی -->
+      <section class="card anim-in" aria-labelledby="ohlcv-title">
+        <button type="button" class="collapse-toggle" id="ohlcvToggle" aria-expanded="false" aria-controls="ohlcvBody">
           <div>
-            <p class="eyebrow">History</p>
-            <h2 class="card-title" id="ohlcv-title">تاریخچه OHLCV</h2>
-            <p class="card-desc">اختیاری · حداقل ۳۰ کندل</p>
+            <p class="eyebrow">داده بازار</p>
+            <h2 class="card-title" id="ohlcv-title">بارگذاری قیمت‌ها</h2>
+            <p class="card-desc">چسباندن، جدول یا فایل CSV</p>
           </div>
-          <span class="collapse-icon" aria-hidden="true"></span>
+          <span class="collapse-chevron" aria-hidden="true">▼</span>
         </button>
         <div id="ohlcvBody" class="collapse-body" hidden>
           <div class="tabs" role="tablist">
@@ -210,8 +218,8 @@
             <button type="button" class="tab" data-tab="file" role="tab" aria-selected="false">فایل</button>
           </div>
           <div id="panelPaste" class="tab-panel active" role="tabpanel">
-            <label class="label" for="data">داده OHLCV</label>
-            <textarea id="data" class="input input-area mono" placeholder="Date,Open,High,Low,Close,Volume" aria-label="داده OHLCV"></textarea>
+            <label class="label" for="data">متن داده (تاریخ، باز، سقف، کف، بسته، حجم)</label>
+            <textarea id="data" class="input input-area mono" placeholder="Date,Open,High,Low,Close,Volume" aria-label="داده قیمت"></textarea>
           </div>
           <div id="panelTable" class="tab-panel" role="tabpanel" hidden>
             <div class="row-actions">
@@ -220,15 +228,15 @@
             </div>
             <div class="table-scroll">
               <table class="data-table">
-                <thead><tr><th>تاریخ</th><th>O</th><th>H</th><th>L</th><th>C</th><th>V</th><th></th></tr></thead>
+                <thead><tr><th>تاریخ</th><th>باز</th><th>سقف</th><th>کف</th><th>بسته</th><th>حجم</th><th></th></tr></thead>
                 <tbody id="manualBody"></tbody>
               </table>
             </div>
           </div>
           <div id="panelFile" class="tab-panel" role="tabpanel" hidden>
             <div id="drop" class="dropzone" role="button" tabindex="0">
-              <strong>انتخاب یا رها کردن CSV</strong>
-              <span>فرمت متنی OHLCV</span>
+              <strong>انتخاب یا رها کردن فایل</strong>
+              <span>فرمت CSV قیمت‌ها</span>
               <input id="csv" type="file" accept=".csv,text/csv,text/plain" tabindex="-1" aria-hidden="true">
             </div>
             <div id="fileName" class="file-chip" hidden>
@@ -240,8 +248,8 @@
         </div>
       </section>
 
-      <!-- Actions -->
-      <section class="card card-actions">
+      <!-- اقدامات -->
+      <section class="card card-actions anim-in">
         <div class="action-bar">
           <button type="button" id="analyzeBtn" class="btn btn-primary btn-lg">اجرای تحلیل</button>
           <button type="button" id="clearBtn" class="btn btn-ghost btn-lg">پاک‌سازی</button>
@@ -249,12 +257,12 @@
         <div id="processing" class="loading-line" role="status" aria-live="polite" hidden></div>
       </section>
 
-      <!-- Result -->
-      <section id="result" class="card result-card" hidden aria-labelledby="result-title">
+      <!-- نتیجه -->
+      <section id="result" class="card result-card anim-in" hidden aria-labelledby="result-title">
         <div class="card-head">
           <div>
-            <p class="eyebrow">Decision</p>
-            <h2 class="card-title" id="result-title">نتیجه تحلیل</h2>
+            <p class="eyebrow">نتیجه</p>
+            <h2 class="card-title" id="result-title">پیش‌بینی و سیگنال</h2>
           </div>
           <span class="mono muted" id="resultClock">—</span>
         </div>
@@ -276,6 +284,13 @@
           </div>
         </div>
 
+        <div class="score-layers" id="scoreLayers" hidden>
+          <div class="score-chip">تکنیکال <strong id="techScoreVal">—</strong></div>
+          <div class="score-chip">بنیادی <strong id="fundScoreVal">—</strong></div>
+          <div class="score-chip">ترکیبی <strong id="combScoreVal">—</strong></div>
+          <div class="score-chip">اطمینان <strong id="confVal">—</strong></div>
+        </div>
+
         <div class="metrics-grid">
           <div class="metric"><span class="metric-k">روند</span><span class="metric-v" id="trend">—</span></div>
           <div class="metric"><span class="metric-k">ریسک</span><span class="metric-v" id="risk">—</span></div>
@@ -285,67 +300,63 @@
           <div class="metric metric-sl"><span class="metric-k">حد ضرر</span><span class="metric-v mono" id="stop">—</span></div>
         </div>
 
-        <div id="report" class="report-box"></div>
+        <div id="fundFactorsBox" class="fund-factors-box" hidden></div>
+
+        <details class="details-box">
+          <summary>جزئیات و دلایل</summary>
+          <div id="report" class="report-box"></div>
+        </details>
+
         <div class="advice-box">
-          <div class="advice-k">پیشنهاد</div>
+          <div class="advice-k">برداشت پیشنهادی</div>
           <p id="suggestionText" class="advice-v">—</p>
         </div>
-        <p class="disclaimer">خروجی مدل محلی است و توصیه سرمایه‌گذاری نیست.</p>
+        <p class="disclaimer">این خروجی یک مدل محلی است و توصیه سرمایه‌گذاری نیست.</p>
       </section>
-    
-      <!-- Fundamental Analysis -->
-      <section class="card view-panel" id="view-fundamental" hidden aria-labelledby="fund-title">
+
+      <!-- تحلیل بنیادی -->
+      <section class="card view-panel anim-in" id="view-fundamental" hidden aria-labelledby="fund-title">
         <div class="card-head">
           <div>
-            <p class="eyebrow">Macro · Offline</p>
-            <h2 class="card-title" id="fund-title">تحلیل فاندامنتال</h2>
-            <p class="card-desc">پنج متغیر اصلی آمریکا · ورود دستی · بدون API</p>
+            <p class="eyebrow">کلان · آفلاین</p>
+            <h2 class="card-title" id="fund-title">تحلیل بنیادی</h2>
+            <p class="card-desc">پنج شاخص اصلی آمریکا · ورود دستی · بدون اتصال اینترنت</p>
           </div>
         </div>
         <div id="fundFormBox" class="fund-form-box">
-          <p class="card-desc">ابتدا نماد را انتخاب کنید.</p>
+          <p class="card-desc">ابتدا یک نماد انتخاب کنید.</p>
         </div>
       </section>
 
-      <!-- Score layers (shown with result) -->
-      <div class="score-layers" id="scoreLayers" hidden>
-        <div class="score-chip">تکنیکال <strong id="techScoreVal">—</strong></div>
-        <div class="score-chip">فاندامنتال <strong id="fundScoreVal">—</strong></div>
-        <div class="score-chip">ترکیبی <strong id="combScoreVal">—</strong></div>
-        <div class="score-chip">اطمینان <strong id="confVal">—</strong></div>
-      </div>
-      <div id="fundFactorsBox" class="fund-factors-box" hidden></div>
-
-
-      <!-- Backtest Dashboard -->
-      <section class="card view-panel" id="view-backtest" hidden aria-labelledby="bt-title">
+      <!-- بک‌تست -->
+      <section class="card view-panel anim-in" id="view-backtest" hidden aria-labelledby="bt-title">
         <div class="card-head">
           <div>
-            <p class="eyebrow">Historical Validation</p>
-            <h2 class="card-title" id="bt-title">بک‌تست و Walk-Forward</h2>
-            <p class="card-desc">پیش‌بینی روی داده گذشته و مقایسه با قیمت واقعی آینده · بدون Look-Ahead</p>
+            <p class="eyebrow">اعتبارسنجی تاریخی</p>
+            <h2 class="card-title" id="bt-title">بک‌تست</h2>
+            <p class="card-desc">پیش‌بینی روی داده گذشته و مقایسه با قیمت واقعی آینده</p>
           </div>
         </div>
         <div class="bt-controls form-grid">
           <div class="field">
-            <label class="label" for="btHorizon">افق (کندل)</label>
+            <label class="label" for="btHorizon">افق پیش‌بینی</label>
             <select id="btHorizon" class="input">
-              <option value="3">کوتاه · 3</option>
-              <option value="5" selected>متوسط · 5</option>
-              <option value="10">بلند · 10</option>
-              <option value="20">خیلی بلند · 20</option>
+              <option value="3">کوتاه · ۳ کندل</option>
+              <option value="5" selected>متوسط · ۵ کندل</option>
+              <option value="10">بلند · ۱۰ کندل</option>
+              <option value="20">خیلی بلند · ۲۰ کندل</option>
             </select>
           </div>
           <div class="field">
-            <label class="label" for="btMode">مدل</label>
+            <label class="label" for="btMode">نوع مدل</label>
             <select id="btMode" class="input">
-              <option value="tech">Technical Only</option>
-              <option value="fund">Fundamental Only</option>
-              <option value="combined" selected>Technical + Fundamental</option>
+              <option value="tech">فقط تکنیکال</option>
+              <option value="fund">فقط بنیادی</option>
+              <option value="combined" selected>تکنیکال + بنیادی</option>
             </select>
           </div>
           <div class="field">
-            <label class="label" for="btStep">گام نمونه‌برداری</label>
+            <label class="label" for="btStep">فاصله نمونه‌ها</label>
             <select id="btStep" class="input">
               <option value="1">هر کندل</option>
               <option value="5" selected>هر ۵ کندل</option>
@@ -360,12 +371,11 @@
         <div id="btMetrics" class="bt-metrics" hidden></div>
         <div id="btSamples" class="bt-samples" hidden></div>
       </section>
-
     </main>
 
     <footer class="site-footer">
-      <span>V5.1 · Offline Terminal</span>
-      <span class="muted">بدون سرور · داده مستقل</span>
+      <span>نسخه ۵.۱ · آفلاین</span>
+      <span class="muted">بدون سرور · داده محلی</span>
     </footer>
   </div>
 
@@ -373,22 +383,22 @@
 
   <dialog id="addAssetDialog" class="modal">
     <form method="dialog" id="addAssetForm" class="modal-body">
-      <p class="eyebrow">New Asset</p>
+      <p class="eyebrow">نماد جدید</p>
       <h3 class="card-title">افزودن نماد</h3>
       <div class="field">
         <label class="label" for="newSym">نماد (لاتین)</label>
-        <input id="newSym" class="input mono" required pattern="[A-Za-z0-9._-]{2,16}" placeholder="AAPL">
+        <input id="newSym" class="input mono" required pattern="[A-Za-z0-9._-]{2,16}" placeholder="مثال: AAPL">
       </div>
       <div class="field">
         <label class="label" for="newName">نام نمایشی</label>
-        <input id="newName" class="input" placeholder="اپل">
+        <input id="newName" class="input" placeholder="مثال: اپل">
       </div>
       <div class="field">
         <label class="label" for="newCat">دسته</label>
         <select id="newCat" class="input">
           <option value="stocks">بورس</option>
           <option value="metals">فلزات</option>
-          <option value="forex">فارکس</option>
+          <option value="forex">ارز</option>
           <option value="commodity">کالا</option>
         </select>
       </div>

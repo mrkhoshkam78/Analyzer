@@ -356,7 +356,7 @@ function showResult(r, symbolId) {
   $('signalText').textContent = SIGNAL_FA[sig] || sig;
   $('signalIcon').innerHTML = ICONS[sig] || ICONS.HOLD;
   $('scoreContext').textContent = `${symbolId} · ${currentTf}`;
-  $('score').textContent = `امتیاز ${r.score.toLocaleString('fa-IR')} از ۱۰۰`;
+  $('score').textContent = `امتیاز ${r.score.toLocaleString('fa-IR')}`;
   $('bar').style.width = r.score + '%';
   const trendEl = $('trend');
   trendEl.textContent = TREND_FA[r.trend] || r.trend;
@@ -547,13 +547,13 @@ function renderFundPanel(symbolId) {
       <div class="fund-var-card" data-var="${v.id}">
         <div class="fund-var-title">${v.nameFa} <span class="muted">(${v.nameEn})</span></div>
         <div class="fund-var-grid">
-          <label>Actual <input type="number" step="any" class="input mono fund-in" data-f="actual" value="${rec.actual ?? ''}"></label>
-          <label>Forecast <input type="number" step="any" class="input mono fund-in" data-f="forecast" value="${rec.forecast ?? ''}"></label>
-          <label>Previous <input type="number" step="any" class="input mono fund-in" data-f="previous" value="${rec.previous ?? ''}"></label>
-          <label>Date <input type="date" class="input fund-in" data-f="date" value="${rec.date ?? ''}"></label>
+          <label>واقعی <input type="number" step="any" class="input mono fund-in" data-f="actual" value="${rec.actual ?? ''}"></label>
+          <label>پیش‌بینی <input type="number" step="any" class="input mono fund-in" data-f="forecast" value="${rec.forecast ?? ''}"></label>
+          <label>قبلی <input type="number" step="any" class="input mono fund-in" data-f="previous" value="${rec.previous ?? ''}"></label>
+          <label>تاریخ <input type="date" class="input fund-in" data-f="date" value="${rec.date ?? ''}"></label>
         </div>
         <div class="fund-meta mono">
-          Change: ${rec.change != null ? rec.change : '—'} · Surprise: ${rec.surprise != null ? rec.surprise : '—'}
+          تغییر: ${rec.change != null ? rec.change : '—'} · غافلگیری: ${rec.surprise != null ? rec.surprise : '—'}
         </div>
         <div class="fund-var-actions">
           <button type="button" class="btn btn-sm btn-primary fund-save" data-var="${v.id}">ذخیره</button>
@@ -563,7 +563,7 @@ function renderFundPanel(symbolId) {
   }
   html += '</div>';
   if (fund.ok) {
-    html += `<div class="fund-score-box">امتیاز فاندامنتال: <strong>${fund.score}</strong> · پوشش: ${Math.round(fund.coverage*100)}٪ · ${fund.outlook}</div>`;
+    html += `<div class="fund-score-box">امتیاز بنیادی: <strong>${fund.score}</strong> · پوشش: ${Math.round(fund.coverage*100)}٪ · ${fund.outlook}</div>`;
     html += '<div class="fund-factors-live">';
     for (const f of fund.factors) {
       const cls = f.dir === 'bull' ? 'bull' : f.dir === 'bear' ? 'bear' : 'neu';
@@ -636,6 +636,7 @@ function switchView(view) {
   }
   // close mobile sidebar
   $('sidebar')?.classList.remove('is-open');
+  document.body.classList.remove('sidebar-open');
 }
 
 
@@ -677,21 +678,21 @@ async function runBacktestUI() {
     }
     if (status) {
       status.textContent = `بک‌تست کامل · ${result.n} پیش‌بینی · افق ${result.horizon} · مدل ${result.mode}` +
-        (result.fundUsed ? ' · فاندامنتال اعمال شد' : ' · فقط تکنیکال');
+        (result.fundUsed ? ' · بنیادی اعمال شد' : ' · فقط تکنیکال');
     }
     if (metrics) {
       const aCls = result.accuracy >= 55 ? 'good' : result.accuracy < 45 ? 'bad' : '';
       metrics.innerHTML = `
-        <div class="bt-metric"><div class="k">Accuracy</div><div class="v ${aCls}">${result.accuracy}%</div></div>
-        <div class="bt-metric"><div class="k">Directional Acc.</div><div class="v">${result.directionalAccuracy}%</div></div>
-        <div class="bt-metric"><div class="k">Precision</div><div class="v">${result.precision}%</div></div>
-        <div class="bt-metric"><div class="k">Recall</div><div class="v">${result.recall}%</div></div>
+        <div class="bt-metric"><div class="k">دقت</div><div class="v ${aCls}">${result.accuracy}%</div></div>
+        <div class="bt-metric"><div class="k">دقت جهتی</div><div class="v">${result.directionalAccuracy}%</div></div>
+        <div class="bt-metric"><div class="k">صحت</div><div class="v">${result.precision}%</div></div>
+        <div class="bt-metric"><div class="k">بازیابی</div><div class="v">${result.recall}%</div></div>
         <div class="bt-metric"><div class="k">F1</div><div class="v">${result.f1}%</div></div>
-        <div class="bt-metric"><div class="k">False Signal</div><div class="v">${result.falseSignalRate}%</div></div>
-        <div class="bt-metric"><div class="k">Win Rate</div><div class="v">${result.winRate}%</div></div>
-        <div class="bt-metric"><div class="k">Avg Error</div><div class="v">${result.avgErrorPct}%</div></div>
-        <div class="bt-metric"><div class="k">Avg R:R</div><div class="v">${result.avgRiskReward ?? '—'}</div></div>
-        <div class="bt-metric"><div class="k">Samples</div><div class="v">${result.n}</div></div>
+        <div class="bt-metric"><div class="k">سیگنال غلط</div><div class="v">${result.falseSignalRate}%</div></div>
+        <div class="bt-metric"><div class="k">نرخ برد</div><div class="v">${result.winRate}%</div></div>
+        <div class="bt-metric"><div class="k">میانگین خطا</div><div class="v">${result.avgErrorPct}%</div></div>
+        <div class="bt-metric"><div class="k">نسبت سود/زیان</div><div class="v">${result.avgRiskReward ?? '—'}</div></div>
+        <div class="bt-metric"><div class="k">تعداد نمونه</div><div class="v">${result.n}</div></div>
       `;
       metrics.hidden = false;
     }
@@ -713,15 +714,15 @@ async function runBacktestUI() {
       }).join('');
       samples.innerHTML = `<table>
         <thead><tr>
-          <th>نتیجه</th><th>تاریخ</th><th>ورود</th><th>جهت پیش‌بینی</th><th>Score</th><th>Conf</th>
-          <th>قیمت آینده</th><th>جهت واقعی</th><th>بازده</th><th>MFE/MAE</th>
+          <th>نتیجه</th><th>تاریخ</th><th>ورود</th><th>جهت پیش‌بینی</th><th>امتیاز</th><th>اطمینان</th>
+          <th>قیمت آینده</th><th>جهت واقعی</th><th>بازده</th><th>بهترین/بدترین</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="card-desc" style="margin-top:0.5rem">نمونه از ${result.n} پیش‌بینی · Accuracy واقعی: ${result.accuracy}% (بدون حذف ناموفق‌ها)</p>`;
+      <p class="card-desc" style="margin-top:0.5rem">نمونه از ${result.n} پیش‌بینی · دقت واقعی: ${result.accuracy}٪ (بدون حذف موارد ناموفق)</p>`;
       samples.hidden = false;
     }
-    toast(`بک‌تست: Accuracy ${result.accuracy}%`, result.accuracy >= 50 ? 'ok' : 'err');
+    toast(`بک‌تست: دقت ${result.accuracy}٪`, result.accuracy >= 50 ? 'ok' : 'err');
   } catch (err) {
     console.error(err);
     if (status) status.textContent = 'خطا: ' + (err.message || err);
@@ -837,11 +838,17 @@ function init() {
   });
   const sbToggle = $('sidebarToggle');
   if (sbToggle) {
-    sbToggle.onclick = () => $('sidebar')?.classList.remove('is-open');
+    sbToggle.onclick = () => {
+      $('sidebar')?.classList.remove('is-open');
+      document.body.classList.remove('sidebar-open');
+    };
   }
   const menuOpen = $('menuOpenBtn');
   if (menuOpen) {
-    menuOpen.onclick = () => $('sidebar')?.classList.add('is-open');
+    menuOpen.onclick = () => {
+      $('sidebar')?.classList.add('is-open');
+      document.body.classList.add('sidebar-open');
+    };
   }
   // Backtest run
   $('btRunBtn')?.addEventListener('click', runBacktestUI);
