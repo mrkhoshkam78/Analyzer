@@ -1,11 +1,13 @@
 /**
  * Technical Analysis Engine — scores 0–100 from indicators only
+ * Adaptive MACD + Fibonacci integrated into scoring.
  */
 import { CONFIG } from './config.js';
+import { getMacdConfig, getFibConfig } from './indicatorConfig.js';
 import {
   ema, rsi, macd, atr, momentum, roc, bollinger, stochastic, adx,
   supportResistance, volumeAnalysis, detectBreakout, maxDrawdown,
-  volatilityPct, isNum, last
+  volatilityPct, fibonacciLevels, isNum, last
 } from './indicators.js';
 
 /**
@@ -21,6 +23,11 @@ export function runTechnical(candles, options = {}) {
     };
   }
 
+  const symbol = options.symbol || null;
+  const timeframe = options.timeframe || '1D';
+  const macdCfg = getMacdConfig(symbol, timeframe);
+  const fibCfg = getFibConfig(symbol, timeframe);
+
   const closes = candles.map(c => c.c);
   const price = isNum(options.currentPrice) && options.currentPrice > 0
     ? options.currentPrice
@@ -29,7 +36,7 @@ export function runTechnical(candles, options = {}) {
   const e20 = ema(closes, CONFIG.smaFast);
   const e50 = ema(closes, CONFIG.smaSlow);
   const r = rsi(closes);
-  const m = macd(closes);
+  const m = macd(closes, macdCfg);
   const a = atr(candles);
   const mom = momentum(closes);
   const rocVal = roc(closes);
@@ -41,6 +48,11 @@ export function runTechnical(candles, options = {}) {
   const brk = detectBreakout(candles);
   const dd = maxDrawdown(closes);
   const volPct = volatilityPct(candles);
+  const fib = fibonacciLevels(candles, {
+    lookback: fibCfg.lookback,
+    nearPct: fibCfg.nearPct,
+    price
+  });
 
   const factors = [];
   let trendScore = 50;
@@ -86,12 +98,20 @@ export function runTechnical(candles, options = {}) {
     else if (r > 55) rsiScore = 42;
   }
 
-  // MACD
-  if (m.macd != null) {
-    if (m.macd > 0 && (m.hist == null || m.hist >= 0)) {
-      macdScore = 70; factors.push({ key: 'macd', dir: 'bull', text: 'MACD مثبت' });
-    } else if (m.macd < 0) {
-      macdScore = 30; factors.push({ key: 'macd', dir: 'bear', text: 'MACD منفی' });
+  // Adaptive MACD — crossover + histogram momentum
+  if (m.macd != null && !m.insufficient) {
+    if (m.crossover === 'bullish') {
+      macdScore = 78;
+      factors.push({ key: 'macd', dir: 'bull', text: `تقاطع صعودی MACD (${macdCfg.fast}/${macdCfg.slow}/${macdCfg.signal})` });
+    } else if (m.crossover === 'bearish') {
+      macdScore = 22;
+      factors.push({ key: 'macd', dir: 'bear', text: `تقاطع نزولی MACD (${macdCfg.fast}/${macdCfg.slow}/${macdCfg.signal})` });
+    } else if (m.momentumDir === 'bull' || (m.macd > 0 && (m.hist == null || m.hist >= 0))) {
+      macdScore = 68;
+      factors.push({ key: 'macd', dir: 'bull', text: 'MACD مثبت / مومنتوم صعودی' });
+    } else if (m.momentumDir === 'bear' || m.macd < 0) {
+      macdScore = 32;
+      factors.push({ key: 'macd', dir: 'bear', text: 'MACD منفی / مومنتوم نزولی' });
     }
   }
 
@@ -124,9 +144,34 @@ export function runTechnical(candles, options = {}) {
   }
   if (brk.up) { structScore += 15; factors.push({ key: 'breakout', dir: 'bull', text: 'شکست صعودی' }); }
   if (brk.down) { structScore -= 15; factors.push({ key: 'breakout', dir: 'bear', text: 'شکست نزولی' }); }
+
+  // Fibonacci proximity → structure score
+  if (fib.ok && fib.nearest && fib.nearest.near) {
+    if (fib.bias === 'bull') {
+      structScore += 10;
+      factors.push({
+        key: 'fibonacci',
+        dir: 'bull',
+        text: `نزدیک سطح فیبوناچی ${fib.nearest.level} (${fib.nearest.kind === 'ext' ? 'گسترش' : 'بازگشت'})`
+      });
+    } else if (fib.bias === 'bear') {
+      structScore -= 10;
+      factors.push({
+        key: 'fibonacci',
+        dir: 'bear',
+        text: `نزدیک سطح فیبوناچی ${fib.nearest.level} (${fib.nearest.kind === 'ext' ? 'گسترش' : 'بازگشت'})`
+      });
+    } else {
+      factors.push({
+        key: 'fibonacci',
+        dir: 'neutral',
+        text: `نزدیک سطح فیبوناچی ${fib.nearest.level}`
+      });
+    }
+  }
   structScore = Math.max(0, Math.min(100, structScore));
 
-  // Volatility → risk preference (high vol lowers score neutrality toward caution)
+  // Volatility
   if (volPct != null) {
     if (volPct > CONFIG.highVolPct) {
       volScore = 35; factors.push({ key: 'volatility', dir: 'bear', text: 'نوسان بالا' });
@@ -177,6 +222,9 @@ export function runTechnical(candles, options = {}) {
       macd: m.macd,
       macdSignal: m.signal,
       macdHist: m.hist,
+      macdCrossover: m.crossover,
+      macdMomentum: m.momentumDir,
+      macdPeriods: m.periods,
       atr: a,
       atrPct: volPct,
       momentum: mom,
@@ -188,7 +236,8 @@ export function runTechnical(candles, options = {}) {
       resistance,
       volume: volA,
       breakout: brk,
-      drawdown: dd
+      drawdown: dd,
+      fibonacci: fib
     }
   };
 }

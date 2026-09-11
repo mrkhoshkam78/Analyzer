@@ -182,6 +182,7 @@ export function analyze(candles, options = {}) {
   }
   const result = runDecision(clean, {
     symbol: options.symbol || 'UNKNOWN',
+    timeframe: options.timeframe || '1D',
     currentPrice: options.currentPrice,
     fundamentalSnapshot: options.fundamentalSnapshot || null,
     horizonBars: options.horizonBars

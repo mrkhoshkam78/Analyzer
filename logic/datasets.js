@@ -141,6 +141,7 @@ export function setHistorical(symbol, candles, tf = '1D') {
   }
   writeStore(keyHist(s, t), clean);
   cache.hist[cacheKey(s, t)] = clean;
+  if (cache.dayIndex) delete cache.dayIndex[cacheKey(s, t)];
   return clean.length;
 }
 
@@ -213,6 +214,7 @@ export function upsertManualPrices(symbol, entries, tf = '1D') {
   const next = Array.from(byBucket.values()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
   writeStore(keyManual(s, t), next);
   cache.manual[cacheKey(s, t)] = next;
+  if (cache.dayIndex) delete cache.dayIndex[cacheKey(s, t)];
   return { saved, total: next.length };
 }
 
@@ -351,4 +353,47 @@ export function addCustomAsset(meta) {
 
 export function listAssets() {
   return getAllSymbols();
+}
+
+/**
+ * Index of calendar days (YYYY-MM-DD) that have valid data for Asset×Timeframe.
+ * Merges historical + manual. Value = record count that day.
+ * Cached per session under cache.dayIndex.
+ */
+export function getDataDayIndex(symbol, tf = '1D') {
+  const s = assertSymbol(symbol);
+  const t = assertTf(tf);
+  const ck = cacheKey(s, t);
+  if (!cache.dayIndex) cache.dayIndex = Object.create(null);
+  // rebuild always from current hist/manual (cheap for typical sizes)
+  const hist = loadHistorical(s, t);
+  const manual = loadManual(s, t);
+  const map = Object.create(null);
+  for (const c of hist) {
+    const d = c.day || (c.ts != null ? dayKey(c.ts) : (c.bucket ? String(c.bucket).slice(0, 10) : null));
+    if (!d) continue;
+    map[d] = (map[d] || 0) + 1;
+  }
+  for (const m of manual) {
+    const d = m.day || (m.bucket ? String(m.bucket).slice(0, 10) : null);
+    if (!d) continue;
+    map[d] = (map[d] || 0) + 1;
+  }
+  cache.dayIndex[ck] = map;
+  return map;
+}
+
+export function invalidateDayIndex(symbol, tf) {
+  if (!cache.dayIndex) return;
+  if (!symbol) {
+    cache.dayIndex = Object.create(null);
+    return;
+  }
+  const s = String(symbol).toUpperCase();
+  if (tf) delete cache.dayIndex[cacheKey(s, tf)];
+  else {
+    for (const k of Object.keys(cache.dayIndex)) {
+      if (k.startsWith(s + '::')) delete cache.dayIndex[k];
+    }
+  }
 }

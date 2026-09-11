@@ -40,7 +40,11 @@ function buildSuggestion(signal, riskLevel, tech, confidence) {
  */
 export function runDecision(candles, options = {}) {
   const symbol = options.symbol || 'UNKNOWN';
-  const tech = runTechnical(candles, { currentPrice: options.currentPrice });
+  const tech = runTechnical(candles, {
+    currentPrice: options.currentPrice,
+    symbol: options.symbol,
+    timeframe: options.timeframe || '1D'
+  });
   if (!tech.ok) {
     return {
       ok: false,
@@ -163,6 +167,9 @@ export function runDecision(candles, options = {}) {
     price,
     rsi: ind.rsi,
     macd: ind.macd,
+    macdCrossover: ind.macdCrossover,
+    macdPeriods: ind.macdPeriods,
+    fibonacci: ind.fibonacci,
     atr: ind.atr,
     atrPct: ind.atrPct,
     report: buildReport(signal, tech, fund, combined, riskLevel),

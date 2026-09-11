@@ -78,27 +78,168 @@ export function rsi(closes, period = CONFIG.rsiPeriod) {
   return 100 - 100 / (1 + rs);
 }
 
-export function macd(closes) {
-  if (!closes || closes.length < CONFIG.emaSlow) {
-    return { macd: null, signal: null, hist: null };
-  }
-  const ef = emaSeries(closes, CONFIG.emaFast);
-  const es = emaSeries(closes, CONFIG.emaSlow);
+/**
+ * Adaptive MACD. periods = { fast, slow, signal } optional.
+ * Returns line, signal, hist, crossover, momentumDir.
+ */
+export function macd(closes, periods = null) {
+  const fast = periods?.fast ?? CONFIG.emaFast;
+  const slow = periods?.slow ?? CONFIG.emaSlow;
+  const sigP = periods?.signal ?? CONFIG.emaSignal;
+  const empty = {
+    macd: null, signal: null, hist: null,
+    crossover: null, momentumDir: 'neutral',
+    periods: { fast, slow, signal: sigP },
+    insufficient: true
+  };
+  if (!closes || closes.length < slow) return empty;
+
+  const ef = emaSeries(closes, fast);
+  const es = emaSeries(closes, slow);
   const macdLine = new Array(closes.length).fill(null);
   for (let i = 0; i < closes.length; i++) {
     if (ef[i] != null && es[i] != null) macdLine[i] = ef[i] - es[i];
   }
-  const valid = macdLine.filter(v => v != null);
-  if (valid.length < CONFIG.emaSignal) {
-    return { macd: last(valid), signal: null, hist: null };
+  // Align signal EMA on full macd series (skip nulls at start)
+  const firstValid = macdLine.findIndex(v => v != null);
+  if (firstValid < 0) return empty;
+  const validSlice = macdLine.slice(firstValid);
+  if (validSlice.length < sigP) {
+    const m = last(validSlice);
+    return {
+      macd: m, signal: null, hist: null,
+      crossover: null, momentumDir: m != null && m > 0 ? 'bull' : m != null && m < 0 ? 'bear' : 'neutral',
+      periods: { fast, slow, signal: sigP },
+      insufficient: true
+    };
   }
-  const sigSeries = emaSeries(valid, CONFIG.emaSignal);
-  const signal = last(sigSeries);
-  const m = last(valid);
+  const sigOnValid = emaSeries(validSlice, sigP);
+  // map back to last values
+  const m = last(validSlice);
+  const signal = last(sigOnValid);
+  const hist = m != null && signal != null ? m - signal : null;
+
+  // previous hist for crossover
+  let crossover = null;
+  if (sigOnValid.length >= 2 && validSlice.length >= 2) {
+    const h0 = validSlice[validSlice.length - 2] - (sigOnValid[sigOnValid.length - 2] ?? validSlice[validSlice.length - 2]);
+    const h1 = hist;
+    if (isNum(h0) && isNum(h1)) {
+      if (h0 <= 0 && h1 > 0) crossover = 'bullish';
+      else if (h0 >= 0 && h1 < 0) crossover = 'bearish';
+    }
+  }
+
+  let momentumDir = 'neutral';
+  if (isNum(hist)) {
+    if (hist > 0) momentumDir = 'bull';
+    else if (hist < 0) momentumDir = 'bear';
+  } else if (isNum(m)) {
+    momentumDir = m > 0 ? 'bull' : m < 0 ? 'bear' : 'neutral';
+  }
+
   return {
     macd: m,
     signal,
-    hist: m != null && signal != null ? m - signal : null
+    hist,
+    crossover,
+    momentumDir,
+    periods: { fast, slow, signal: sigP },
+    insufficient: false
+  };
+}
+
+/**
+ * Fibonacci Retracement + Extension from swing high/low in lookback window.
+ * Uses real High/Low only — never fabricates OHLC.
+ * @returns { ok, insufficient, swingHigh, swingLow, retracement, extension, nearest, bias }
+ */
+export function fibonacciLevels(candles, options = {}) {
+  const lookback = options.lookback || 60;
+  const nearPct = options.nearPct != null ? options.nearPct : 0.004;
+  const empty = {
+    ok: false, insufficient: true,
+    swingHigh: null, swingLow: null,
+    retracement: null, extension: null,
+    nearest: null, bias: 'neutral'
+  };
+  if (!candles || candles.length < 10) return empty;
+
+  const n = candles.length;
+  const start = Math.max(0, n - lookback);
+  let hi = -Infinity, lo = Infinity, hiIdx = -1, loIdx = -1;
+  for (let i = start; i < n; i++) {
+    const c = candles[i];
+    if (!isNum(c.h) || !isNum(c.l) || c.h <= 0 || c.l <= 0) continue;
+    if (c.h > hi) { hi = c.h; hiIdx = i; }
+    if (c.l < lo) { lo = c.l; loIdx = i; }
+  }
+  if (!Number.isFinite(hi) || !Number.isFinite(lo) || hi <= lo || hiIdx < 0 || loIdx < 0) {
+    return empty;
+  }
+
+  const range = hi - lo;
+  const retLevels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+  const extLevels = [1.272, 1.618];
+
+  // Direction of swing: if low is after high → downtrend retrace from high; else uptrend
+  const upSwing = loIdx < hiIdx; // price rose from low to high
+  const retracement = {};
+  for (const r of retLevels) {
+    // standard: from high down for upswing, from low up for downswing
+    const price = upSwing ? (hi - range * r) : (lo + range * r);
+    retracement[String(r)] = price;
+  }
+  const extension = {};
+  for (const e of extLevels) {
+    const price = upSwing ? (hi + range * (e - 1)) : (lo - range * (e - 1));
+    extension[String(e)] = price;
+  }
+
+  const price = isNum(options.price) ? options.price : (isNum(candles[n - 1].c) ? candles[n - 1].c : null);
+  let nearest = null;
+  if (isNum(price) && price > 0) {
+    let bestDist = Infinity;
+    const all = [];
+    for (const [k, v] of Object.entries(retracement)) all.push({ kind: 'ret', level: k, price: v });
+    for (const [k, v] of Object.entries(extension)) all.push({ kind: 'ext', level: k, price: v });
+    for (const item of all) {
+      if (!isNum(item.price)) continue;
+      const d = Math.abs(item.price - price) / price;
+      if (d < bestDist) {
+        bestDist = d;
+        nearest = { ...item, distancePct: d * 100, near: d <= nearPct };
+      }
+    }
+  }
+
+  let bias = 'neutral';
+  if (nearest && nearest.near) {
+    // near support-like fib in upswing (higher ratios near low) → bullish bounce potential
+    const lvl = parseFloat(nearest.level);
+    if (upSwing) {
+      if (lvl >= 0.5) bias = 'bull'; // deep retrace zone
+      else if (lvl <= 0.236) bias = 'bear'; // near highs
+    } else {
+      if (lvl >= 0.5) bias = 'bear';
+      else if (lvl <= 0.236) bias = 'bull';
+    }
+  }
+
+  return {
+    ok: true,
+    insufficient: false,
+    swingHigh: hi,
+    swingLow: lo,
+    swingHighIndex: hiIdx,
+    swingLowIndex: loIdx,
+    upSwing,
+    range,
+    retracement,
+    extension,
+    nearest,
+    bias,
+    lookback
   };
 }
 
