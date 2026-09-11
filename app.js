@@ -1,5 +1,5 @@
 /**
- * UI Controller V5.01
+ * UI Controller V5.05
  */
 import { getSymbol, formatPrice, getAllSymbols, registerCustomAsset } from './logic/symbols.js';
 import {
@@ -800,6 +800,16 @@ function applyDebuggerReport(report) {
     if (report.healthScore != null) {
       items.push(`<div class="ad-bug is-INFO">🩺 System Health Score: <strong>${report.healthScore}/100</strong></div>`);
     }
+    if (report.fixes && report.fixes.length) {
+      const okN = report.fixes.filter(f => f.result === 'ok' || (typeof f.result === 'string' && String(f.result).includes('marked'))).length;
+      items.push(`<div class="ad-bug is-INFO">🔧 اصلاحات: ${report.fixes.length} اقدام · موفق ${okN}</div>`);
+      for (const f of report.fixes.slice(0, 6)) {
+        items.push(`<div class="ad-bug is-INFO">🔧 ${f.action}: ${f.result}</div>`);
+      }
+    }
+    if (report.fixProposals && report.fixProposals.length) {
+      items.push(`<div class="ad-bug is-MEDIUM">🟡 ${report.fixProposals.length} مورد نیازمند بررسی دستی (فرمول/Forecast تغییر نمی‌کند)</div>`);
+    }
     if (report.predictionAudit && report.predictionAudit.ok !== false) {
       const a = report.predictionAudit;
       const trustIcon = { TRUSTED: '🟢', CAUTION: '🟡', REJECT: '🔴' }[a.trustStatus] || '⚪';
@@ -948,6 +958,68 @@ async function runDebuggerUI(mode) {
   }
 }
 
+
+async function runDebuggerFix() {
+  const btn = $('adFixBtn');
+  if (btn) btn.disabled = true;
+  if ($('adStatusText')) $('adStatusText').textContent = 'در حال رفع امن خطاها…';
+  if ($('adStatusIcon')) $('adStatusIcon').textContent = '🔧';
+  try {
+    const candles = await getCandlesForDebugger();
+    let currentPrice = null;
+    const el = $('current');
+    if (el && el.value) {
+      const v = Number(el.value);
+      if (Number.isFinite(v) && v > 0) currentPrice = v;
+    }
+    let fundSnap = null;
+    try {
+      if (currentSymbol) fundSnap = buildSnapshotFromStore(currentSymbol);
+    } catch { /* optional */ }
+
+    // Deep scan + safe auto-fix (user-initiated)
+    const report = await runAutoDebugger({
+      mode: 'deep',
+      candles,
+      symbol: currentSymbol,
+      currentPrice,
+      fundamentalSnapshot: fundSnap,
+      timeframe: currentTf,
+      safeAutoFix: true
+    });
+    applyDebuggerReport(report);
+
+    const fixed = (report.fixes || []).filter(f => f.result === 'ok' || (typeof f.result === 'string' && f.result.startsWith('marked')));
+    const proposals = report.fixProposals || [];
+    const rolled = (report.fixes || []).filter(f => String(f.action).includes('rollback') || String(f.result).includes('roll'));
+
+    let msg = '';
+    if (fixed.length) msg += `✅ ${fixed.length} اصلاح امن اعمال شد. `;
+    if (rolled.length) msg += `↩️ ${rolled.length} مورد Rollback شد. `;
+    if (proposals.length) msg += `🟡 ${proposals.length} مورد نیاز به بررسی دستی دارد. `;
+    if (!fixed.length && !proposals.length) msg += report.failed === 0
+      ? 'خطای قابل‌رفع یافت نشد — سیستم سالم است.'
+      : 'خطاهای باقی‌مانده فقط با بررسی دستی قابل رفع هستند (فرمول/Forecast).';
+
+    toast(msg.trim(), report.failed && !fixed.length ? 'err' : 'ok');
+
+    // Show proposals in report panel
+    if (proposals.length && $('adReport')) {
+      const extra = proposals.map(pr =>
+        `<div class="ad-bug is-MEDIUM">🟡 پیشنهاد اصلاح (نیاز تأیید شما)\\n${pr.category || ''} · ${pr.module || ''}\\n${pr.suggestion || pr.message || ''}</div>`
+      ).join('');
+      $('adReport').innerHTML = ($('adReport').innerHTML || '') + extra;
+    }
+  } catch (e) {
+    console.error(e);
+    toast('خطا در رفع خودکار: ' + (e.message || e), 'err');
+    if ($('adStatusText')) $('adStatusText').textContent = 'خطای رفع';
+    if ($('adStatusIcon')) $('adStatusIcon').textContent = '🔴';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function showDebuggerHistory() {
   const panel = $('adHistoryPanel');
   if (!panel) return;
@@ -1087,6 +1159,7 @@ function init() {
   // Auto Debugger buttons
   if ($('adQuickBtn')) $('adQuickBtn').onclick = () => runDebuggerUI('quick');
   if ($('adDeepBtn')) $('adDeepBtn').onclick = () => runDebuggerUI('deep');
+  if ($('adFixBtn')) $('adFixBtn').onclick = () => runDebuggerFix();
   if ($('adHistoryBtn')) $('adHistoryBtn').onclick = () => showDebuggerHistory();
 
 // Sidebar open / close (mobile drawer)
