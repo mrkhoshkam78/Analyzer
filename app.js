@@ -363,6 +363,15 @@ function showResult(r, symbolId) {
   $('stop').textContent = fmt(r.stop);
   let report = r.report || '';
   if (r.confidence != null) report += ` اطمینان: ${Math.round(r.confidence * 100).toLocaleString('fa-IR')}٪.`;
+  // Surface adaptive MACD / Fibonacci from analysis factors or indicators
+  const factors = r.analysis?.factors || r.factors || [];
+  const macdF = factors.find(f => f.key === 'macd');
+  const fibF = factors.find(f => f.key === 'fibonacci');
+  if (macdF) report += ' ' + macdF.text + '.';
+  if (fibF) report += ' ' + fibF.text + '.';
+  if (r.macdPeriods) {
+    report += ` MACD(${r.macdPeriods.fast}/${r.macdPeriods.slow}/${r.macdPeriods.signal}).`;
+  }
   $('report').textContent = report;
   $('suggestionText').textContent = r.suggestion || '—';
   $('resultClock').textContent = formatNow().full;
@@ -460,7 +469,10 @@ function openSmartCal(force) {
   const panel = $('smartCal');
   const toggle = $('calToggle');
   if (!panel || !toggle) return;
-  const open = force === true ? true : force === false ? false : panel.hidden;
+  let open;
+  if (force === true) open = true;
+  else if (force === false) open = false;
+  else open = panel.hidden; // toggle: if currently hidden → open
   panel.hidden = !open;
   toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   if (open) {
@@ -536,6 +548,24 @@ function init() {
       ohlcvBody.hidden = open;
     });
   }
+
+    // Smart calendar
+  $('calToggle')?.addEventListener('click', () => openSmartCal());
+  $('calPrev')?.addEventListener('click', () => {
+    calMonth -= 1;
+    if (calMonth < 0) { calMonth = 11; calYear -= 1; }
+    refreshDayIndex();
+    renderSmartCal();
+  });
+  $('calNext')?.addEventListener('click', () => {
+    calMonth += 1;
+    if (calMonth > 11) { calMonth = 0; calYear += 1; }
+    refreshDayIndex();
+    renderSmartCal();
+  });
+  $('priceDate')?.addEventListener('change', () => {
+    if ($('smartCal') && !$('smartCal').hidden) renderSmartCal();
+  });
 
   $('addAssetBtn').onclick = () => $('addAssetDialog').showModal();
   $('addAssetForm').onsubmit = (e) => {
