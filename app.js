@@ -134,6 +134,7 @@ function onSymbolChange() {
     if ($('assetChip')) $('assetChip').hidden = true;
     if ($('dailyCard')) $('dailyCard').hidden = true;
     currentSymbol = null;
+    if ($('headerAsset')) $('headerAsset').textContent = '—';
     setHeaderData('آماده');
     return;
   }
@@ -143,6 +144,7 @@ function onSymbolChange() {
   $('chipName').textContent = meta.nameFa;
   $('chipMeta').textContent = `${meta.typeFa} · ${meta.unitFa} · ${currentTf}`;
   if ($('assetChip')) $('assetChip').hidden = false;
+  if ($('headerAsset')) $('headerAsset').textContent = meta.symbol;
   refreshAssetPanel(id);
 }
 
@@ -345,10 +347,10 @@ function showResult(r, symbolId) {
   $('bar').style.width = r.score + '%';
   const trendEl = $('trend');
   trendEl.textContent = TREND_FA[r.trend] || r.trend;
-  trendEl.className = 'level-v' + (/Bull/.test(r.trend) ? ' trend-bull' : /Bear/.test(r.trend) ? ' trend-bear' : '');
+  trendEl.className = 'metric-v' + (/Bull/.test(r.trend) ? ' trend-bull' : /Bear/.test(r.trend) ? ' trend-bear' : '');
   const riskEl = $('risk');
   riskEl.textContent = RISK_FA[r.riskLevel] || r.riskLevel;
-  riskEl.className = 'level-v' + (r.riskLevel === 'High' ? ' risk-high' : r.riskLevel === 'Low' ? ' risk-low' : '');
+  riskEl.className = 'metric-v' + (r.riskLevel === 'High' ? ' risk-high' : r.riskLevel === 'Low' ? ' risk-low' : '');
   const fmt = n => formatPrice(n, symbolId);
   $('support').textContent = fmt(r.support);
   $('resistance').textContent = fmt(r.resistance);
