@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="تحلیل‌گر بازار آفلاین V5.05 — ترمینال مالی">
-  <title>تحلیل‌گر بازار · V5.05</title>
+  <meta name="description" content="تحلیل‌گر بازار آفلاین V5.1 — ترمینال مالی">
+  <title>تحلیل‌گر بازار · V5.1</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -25,8 +25,23 @@
   <!-- Static ambient only (no continuous GPU animation) -->
   <div class="bg-layer" aria-hidden="true"></div>
 
-  <div class="shell">
-    <!-- ===== HEADER V5.05 — redesigned from scratch ===== -->
+  <div class="shell shell-with-sidebar">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar" aria-label="منوی اصلی">
+      <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="باز/بسته منو">☰</button>
+      <nav class="side-nav">
+        <a href="#" class="side-link active" data-view="dashboard">داشبورد</a>
+        <a href="#" class="side-link" data-view="analysis">تحلیل بازار</a>
+        <a href="#" class="side-link" data-view="technical">تکنیکال</a>
+        <a href="#" class="side-link" data-view="fundamental">فاندامنتال</a>
+        <a href="#" class="side-link" data-view="forecast">پیش‌بینی</a>
+        <a href="#" class="side-link" data-view="history">تاریخچه</a>
+        <a href="#" class="side-link" data-view="settings">تنظیمات</a>
+      </nav>
+    </aside>
+
+    <!-- ===== HEADER V5.1 — redesigned from scratch ===== -->
     <header class="site-header">
       <div class="header-main">
         <div class="brand-block">
@@ -38,7 +53,7 @@
           <div class="brand-copy">
             <div class="brand-title-row">
               <h1 class="site-name">تحلیل‌گر بازار</h1>
-              <span class="tag tag-ver">V5.05</span>
+              <span class="tag tag-ver">V5.1</span>
               <span class="tag tag-live"><span class="dot"></span>LIVE</span>
             </div>
             <p class="site-tagline">ترمینال مالی آفلاین</p>
@@ -270,10 +285,34 @@
         </div>
         <p class="disclaimer">خروجی مدل محلی است و توصیه سرمایه‌گذاری نیست.</p>
       </section>
+    
+      <!-- Fundamental Analysis -->
+      <section class="card view-panel" id="view-fundamental" hidden aria-labelledby="fund-title">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">Macro · Offline</p>
+            <h2 class="card-title" id="fund-title">تحلیل فاندامنتال</h2>
+            <p class="card-desc">پنج متغیر اصلی آمریکا · ورود دستی · بدون API</p>
+          </div>
+        </div>
+        <div id="fundFormBox" class="fund-form-box">
+          <p class="card-desc">ابتدا نماد را انتخاب کنید.</p>
+        </div>
+      </section>
+
+      <!-- Score layers (shown with result) -->
+      <div class="score-layers" id="scoreLayers" hidden>
+        <div class="score-chip">تکنیکال <strong id="techScoreVal">—</strong></div>
+        <div class="score-chip">فاندامنتال <strong id="fundScoreVal">—</strong></div>
+        <div class="score-chip">ترکیبی <strong id="combScoreVal">—</strong></div>
+        <div class="score-chip">اطمینان <strong id="confVal">—</strong></div>
+      </div>
+      <div id="fundFactorsBox" class="fund-factors-box" hidden></div>
+
     </main>
 
     <footer class="site-footer">
-      <span>V5.05 · Offline Terminal</span>
+      <span>V5.1 · Offline Terminal</span>
       <span class="muted">بدون سرور · داده مستقل</span>
     </footer>
   </div>

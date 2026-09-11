@@ -8,6 +8,11 @@ import {
   getCachedSymbols, dropSessionCache, TIMEFRAMES, getTfMeta, timeBucketKey,
   getDataDayIndex
 } from './logic/datasets.js';
+import {
+  FUND_VARS, FUND_VAR_IDS, runFundamental, getFundamentalData,
+  upsertFundamentalVar, clearFundamentalVar, buildSnapshotFromStore,
+  fundamentalSummaryFa
+} from './logic/fundamental.js';
 
 const $ = (id) => document.getElementById(id);
 let activeTab = 'paste';
@@ -162,6 +167,7 @@ function refreshAssetPanel(symbol) {
   refreshDayIndex();
   if ($('smartCal') && !$('smartCal').hidden) renderSmartCal();
   if (card) card.hidden = false;
+  if ($('fundFormBox')) renderFundPanel(symbol);
   updateSmartDateTimeUI();
   const sum = getAssetSummary(symbol, currentTf);
   if ($('assetDataHint')) {
@@ -315,8 +321,10 @@ async function runAnalysis(silent = false) {
     const uiPrice = parseFloat($('current').value);
     const currentPrice = Number.isFinite(uiPrice) && uiPrice > 0 ? uiPrice : series.currentPrice;
     const { analyze } = await import('./logic/analysis.js');
+    const fundSnap = buildSnapshotFromStore(sym);
     const result = analyze(series.candles, {
-      currentPrice, symbol: sym, timeframe: currentTf, recordPrediction: true
+      currentPrice, symbol: sym, timeframe: currentTf, recordPrediction: true,
+      fundamentalSnapshot: Object.keys(fundSnap).length ? fundSnap : null
     });
     setProcessing(false);
     setHeaderData(`${sym}/${currentTf} · ${series.mergedCount} کندل`);
@@ -372,10 +380,43 @@ function showResult(r, symbolId) {
   if (r.macdPeriods) {
     report += ` MACD(${r.macdPeriods.fast}/${r.macdPeriods.slow}/${r.macdPeriods.signal}).`;
   }
+  // Layer scores
+  const techSc = r.analysis?.technicalScore;
+  const fundSc = r.analysis?.fundamentalScore;
+  const combSc = r.analysis?.combinedScore ?? r.score;
+  if (techSc != null) report += ` تکنیکال: ${techSc}.`;
+  if (fundSc != null) report += ` فاندامنتال: ${fundSc}.`;
+  if (r.fundamentalApplied) report += ' ترکیب اعمال شد.';
+  else report += ' فاندامنتال در ترکیب لحاظ نشد.';
   $('report').textContent = report;
   $('suggestionText').textContent = r.suggestion || '—';
+
+  // Optional dedicated score rows if elements exist
+  if ($('techScoreVal')) $('techScoreVal').textContent = techSc != null ? techSc : '—';
+  if ($('fundScoreVal')) $('fundScoreVal').textContent = fundSc != null ? fundSc : '—';
+  if ($('combScoreVal')) $('combScoreVal').textContent = combSc != null ? combSc : '—';
+  if ($('confVal')) $('confVal').textContent = r.confidence != null ? Math.round(r.confidence * 100) + '%' : '—';
+
+  // Fundamental factors list
+  const fundBox = $('fundFactorsBox');
+  if (fundBox) {
+    const ff = r.analysis?.fundamentalFactors || [];
+    if (ff.length) {
+      fundBox.innerHTML = ff.map(f => {
+        const cls = f.dir === 'bull' ? 'bull' : f.dir === 'bear' ? 'bear' : 'neu';
+        return `<div class="fund-factor ${cls}"><span>${f.nameFa || f.key}</span><span class="mono">${f.contribution > 0 ? '+' : ''}${f.contribution}</span></div>`;
+      }).join('');
+      fundBox.hidden = false;
+    } else {
+      fundBox.innerHTML = '<p class="card-desc">داده فاندامنتال ثبت نشده</p>';
+      fundBox.hidden = false;
+    }
+  }
+
   $('resultClock').textContent = formatNow().full;
   $('result').hidden = false;
+  if ($('scoreLayers')) $('scoreLayers').hidden = false;
+  renderFundPanel(symbolId);
 }
 
 function clearAll() {
@@ -486,6 +527,90 @@ function openSmartCal(force) {
   }
 }
 
+
+/* —— Fundamental Analysis UI —— */
+function renderFundPanel(symbolId) {
+  const sym = symbolId || currentSymbol;
+  const box = $('fundFormBox');
+  if (!box) return;
+  if (!sym) {
+    box.innerHTML = '<p class="card-desc">ابتدا یک نماد انتخاب کنید.</p>';
+    return;
+  }
+  const data = getFundamentalData(sym);
+  const fund = runFundamental(sym);
+  let html = `<div class="fund-head"><strong>${sym}</strong> · ${fundamentalSummaryFa(fund)}</div>`;
+  html += '<div class="fund-vars">';
+  for (const v of FUND_VARS) {
+    const rec = data[v.id] || {};
+    html += `
+      <div class="fund-var-card" data-var="${v.id}">
+        <div class="fund-var-title">${v.nameFa} <span class="muted">(${v.nameEn})</span></div>
+        <div class="fund-var-grid">
+          <label>Actual <input type="number" step="any" class="input mono fund-in" data-f="actual" value="${rec.actual ?? ''}"></label>
+          <label>Forecast <input type="number" step="any" class="input mono fund-in" data-f="forecast" value="${rec.forecast ?? ''}"></label>
+          <label>Previous <input type="number" step="any" class="input mono fund-in" data-f="previous" value="${rec.previous ?? ''}"></label>
+          <label>Date <input type="date" class="input fund-in" data-f="date" value="${rec.date ?? ''}"></label>
+        </div>
+        <div class="fund-meta mono">
+          Change: ${rec.change != null ? rec.change : '—'} · Surprise: ${rec.surprise != null ? rec.surprise : '—'}
+        </div>
+        <div class="fund-var-actions">
+          <button type="button" class="btn btn-sm btn-primary fund-save" data-var="${v.id}">ذخیره</button>
+          <button type="button" class="btn btn-sm btn-ghost fund-clear" data-var="${v.id}">پاک</button>
+        </div>
+      </div>`;
+  }
+  html += '</div>';
+  if (fund.ok) {
+    html += `<div class="fund-score-box">امتیاز فاندامنتال: <strong>${fund.score}</strong> · پوشش: ${Math.round(fund.coverage*100)}٪ · ${fund.outlook}</div>`;
+    html += '<div class="fund-factors-live">';
+    for (const f of fund.factors) {
+      const cls = f.dir === 'bull' ? 'bull' : f.dir === 'bear' ? 'bear' : 'neu';
+      html += `<div class="fund-factor ${cls}"><span>${f.nameFa}</span><span>وزن ${Math.round(f.weight*100)}٪ · اثر ${f.contribution > 0 ? '+' : ''}${f.contribution}</span></div>`;
+    }
+    html += '</div>';
+  } else {
+    html += `<p class="status-line is-warn">${fund.message || 'داده ناکافی'}</p>`;
+  }
+  box.innerHTML = html;
+
+  box.querySelectorAll('.fund-save').forEach(btn => {
+    btn.onclick = () => {
+      const varId = btn.dataset.var;
+      const card = btn.closest('.fund-var-card');
+      const payload = {};
+      card.querySelectorAll('.fund-in').forEach(inp => {
+        payload[inp.dataset.f] = inp.value;
+      });
+      const res = upsertFundamentalVar(sym, varId, payload);
+      if (res.ok) {
+        toast('داده فاندامنتال ذخیره شد', 'ok');
+        renderFundPanel(sym);
+      } else {
+        toast(res.error || 'خطا', 'err');
+      }
+    };
+  });
+  box.querySelectorAll('.fund-clear').forEach(btn => {
+    btn.onclick = () => {
+      clearFundamentalVar(sym, btn.dataset.var);
+      toast('پاک شد', 'ok');
+      renderFundPanel(sym);
+    };
+  });
+}
+
+function switchView(view) {
+  document.querySelectorAll('.view-panel').forEach(p => p.hidden = true);
+  document.querySelectorAll('.side-link').forEach(a => a.classList.remove('active'));
+  const panel = document.getElementById('view-' + view);
+  if (panel) panel.hidden = false;
+  const link = document.querySelector(`.side-link[data-view="${view}"]`);
+  if (link) link.classList.add('active');
+  if (view === 'fundamental' && currentSymbol) renderFundPanel(currentSymbol);
+}
+
 function init() {
   applyTheme(getTheme());
   $('themeBtn').onclick = () => applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
@@ -583,6 +708,27 @@ function init() {
     selectAsset(res.asset.symbol);
     toast(`دارایی ${res.asset.symbol} افزوده شد`, 'ok');
   };
+
+  // Sidebar navigation
+  document.querySelectorAll('.side-link').forEach(a => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const view = a.dataset.view;
+      if (view === 'fundamental') {
+        switchView('fundamental');
+      } else {
+        // show main analysis content; hide fund panel
+        const fundP = $('view-fundamental');
+        if (fundP) fundP.hidden = true;
+        document.querySelectorAll('.side-link').forEach(x => x.classList.remove('active'));
+        a.classList.add('active');
+      }
+    });
+  });
+  const sbToggle = $('sidebarToggle');
+  if (sbToggle) {
+    sbToggle.onclick = () => $('sidebar')?.classList.toggle('is-open');
+  }
 
   window.__OMA_V5__ = { getCachedSymbols, buildAnalysisSeries, loadManual, loadHistorical, getDataDayIndex };
 }
