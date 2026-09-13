@@ -1,0 +1,10 @@
+{
+  "name": "oma-fundamental-proxy",
+  "version": "6.05.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  }
+}
