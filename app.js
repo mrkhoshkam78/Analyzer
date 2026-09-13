@@ -1,5 +1,6 @@
 /**
- * UI Controller V5.05
+ * UI Controller V6.05
+ * Fundamental is an optional input to Prediction (toggle), not a standalone view.
  */
 import { getSymbol, formatPrice, getAllSymbols, registerCustomAsset } from './logic/symbols.js';
 import {
@@ -8,11 +9,6 @@ import {
   getCachedSymbols, dropSessionCache, TIMEFRAMES, getTfMeta, timeBucketKey,
   getDataDayIndex
 } from './logic/datasets.js';
-import {
-  FUND_VARS, FUND_VAR_IDS, runFundamental, getFundamentalData,
-  upsertFundamentalVar, clearFundamentalVar, buildSnapshotFromStore,
-  fundamentalSummaryFa
-} from './logic/fundamental.js';
 import {
   runAutoDebugger, getLastReport, getDebugHistory, getStatusEmoji,
   injectTestFaults, AUTO_DEBUGGER_VERSION, getDebugMemory, getRegressionMemory,
@@ -23,6 +19,11 @@ const $ = (id) => document.getElementById(id);
 let activeTab = 'paste';
 let currentSymbol = null;
 let currentTf = '1D';
+
+/** Backend proxy base (Fundamental only). Override via window.__OMA_API_BASE__ if needed. */
+const API_BASE = (typeof window !== 'undefined' && window.__OMA_API_BASE__) || 'http://127.0.0.1:3847';
+const FUND_CACHE_KEY = 'oma_v6_fund_cache';
+const FUND_CACHE_TTL_MS = 40 * 60 * 1000;
 
 function pad(n) { return String(n).padStart(2, '0'); }
 
@@ -172,7 +173,6 @@ function refreshAssetPanel(symbol) {
   refreshDayIndex();
   if ($('smartCal') && !$('smartCal').hidden) renderSmartCal();
   if (card) card.hidden = false;
-  if ($('fundFormBox')) renderFundPanel(symbol);
   updateSmartDateTimeUI();
   const sum = getAssetSummary(symbol, currentTf);
   if ($('assetDataHint')) {
@@ -298,6 +298,94 @@ async function importHistoricalIfAny(sym, tf) {
   return { imported: setHistorical(sym, withMeta, tf) };
 }
 
+function isFundToggleOn() {
+  return Boolean($('fundToggle')?.checked);
+}
+
+function setFundHint() {
+  const hint = $('fundToggleHint');
+  if (!hint) return;
+  hint.textContent = isFundToggleOn() ? 'با تحلیل فاندامنتال' : 'بدون تحلیل فاندامنتال';
+}
+
+function setFundFetchStatus(text, cls) {
+  const el = $('fundFetchStatus');
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = '';
+    el.className = 'fund-fetch-status muted';
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+  el.className = 'fund-fetch-status ' + (cls || 'muted');
+}
+
+/**
+ * Fetch fundamental snapshot from secure backend proxy.
+ * Returns { ok, snapshot, fetchedAt, fromCache, error, code }
+ * Never invents data. When toggle OFF this is not called.
+ */
+async function fetchFundamentalSnapshot(symbol) {
+  // client-side soft cache (same TTL idea as server)
+  try {
+    const raw = sessionStorage.getItem(FUND_CACHE_KEY);
+    if (raw) {
+      const obj = JSON.parse(raw);
+      if (obj && obj.symbol === symbol && obj.ts && (Date.now() - obj.ts) < FUND_CACHE_TTL_MS && obj.snapshot) {
+        return {
+          ok: true,
+          snapshot: obj.snapshot,
+          fetchedAt: obj.fetchedAt || new Date(obj.ts).toISOString(),
+          fromCache: true,
+          coverage: obj.coverage
+        };
+      }
+    }
+  } catch { /* ignore */ }
+
+  const url = `${API_BASE}/api/fundamental?symbol=${encodeURIComponent(symbol)}`;
+  let res;
+  try {
+    res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(25000) });
+  } catch (e) {
+    return {
+      ok: false,
+      error: 'سرور فاندامنتال در دسترس نیست. Backend را با EODHD_API_TOKEN اجرا کنید.',
+      code: 'NETWORK'
+    };
+  }
+  let body = null;
+  try { body = await res.json(); } catch { body = null; }
+  if (!res.ok || !body || body.ok === false) {
+    return {
+      ok: false,
+      error: (body && body.error) || `خطای سرور فاندامنتال (${res.status})`,
+      code: (body && body.code) || 'HTTP'
+    };
+  }
+  if (!body.snapshot || typeof body.snapshot !== 'object') {
+    return { ok: false, error: 'پاسخ فاندامنتال نامعتبر یا خالی است.', code: 'EMPTY' };
+  }
+  try {
+    sessionStorage.setItem(FUND_CACHE_KEY, JSON.stringify({
+      symbol,
+      ts: Date.now(),
+      fetchedAt: body.fetchedAt,
+      snapshot: body.snapshot,
+      coverage: body.coverage
+    }));
+  } catch { /* quota */ }
+  return {
+    ok: true,
+    snapshot: body.snapshot,
+    fetchedAt: body.fetchedAt,
+    fromCache: Boolean(body._fromCache),
+    coverage: body.coverage
+  };
+}
+
 async function runAnalysis(silent = false) {
   const sym = currentSymbol || $('symbol').value;
   if (!sym || !getSymbol(sym)) {
@@ -306,6 +394,7 @@ async function runAnalysis(silent = false) {
   }
   currentTf = $('tf').value || '1D';
   setProcessing(true, 'ساخت Analysis Series…');
+  setFundFetchStatus('');
   $('result').hidden = true;
   try {
     const imp = await importHistoricalIfAny(sym, currentTf);
@@ -325,16 +414,49 @@ async function runAnalysis(silent = false) {
     }
     const uiPrice = parseFloat($('current').value);
     const currentPrice = Number.isFinite(uiPrice) && uiPrice > 0 ? uiPrice : series.currentPrice;
+
+    // Optional Fundamental (only when toggle ON — zero EODHD traffic when OFF)
+    let fundSnap = null;
+    let fundMeta = { used: false, mode: 'tech_only' };
+    if (isFundToggleOn()) {
+      setProcessing(true, 'در حال دریافت داده فاندامنتال…');
+      setFundFetchStatus('در حال دریافت داده فاندامنتال…', 'is-loading');
+      const fundRes = await fetchFundamentalSnapshot(sym);
+      if (!fundRes.ok) {
+        setProcessing(false);
+        setFundFetchStatus(fundRes.error || 'خطای فاندامنتال', 'is-err');
+        if (!silent) toast(fundRes.error || 'دریافت فاندامنتال ناموفق', 'err');
+        // Stop prediction when Fundamental is explicitly requested but unavailable
+        return;
+      }
+      fundSnap = fundRes.snapshot;
+      fundMeta = {
+        used: true,
+        mode: 'with_fundamental',
+        fromCache: fundRes.fromCache,
+        fetchedAt: fundRes.fetchedAt,
+        coverage: fundRes.coverage
+      };
+      setFundFetchStatus(
+        fundRes.fromCache
+          ? `فاندامنتال از Cache (${fundRes.fetchedAt ? new Date(fundRes.fetchedAt).toLocaleString('fa-IR') : '—'})`
+          : `فاندامنتال دریافت شد · پوشش ${fundRes.coverage || '—'}`,
+        'is-ok'
+      );
+      setProcessing(true, 'تحلیل ترکیبی…');
+    }
+
     const { analyze } = await import('./logic/analysis.js');
-    const fundSnap = buildSnapshotFromStore(sym);
     const result = analyze(series.candles, {
       currentPrice, symbol: sym, timeframe: currentTf, recordPrediction: true,
-      fundamentalSnapshot: Object.keys(fundSnap).length ? fundSnap : null
+      fundamentalSnapshot: fundSnap
     });
+    result._fundMeta = fundMeta;
     setProcessing(false);
     setHeaderData(`${sym}/${currentTf} · ${series.mergedCount} کندل`);
     setDataStatus(
-      `سری ${series.mergedCount} · تاریخچه ${series.histCount} · دستی ${series.manualCount} · قیمت باز/بسته در موتور تحلیل`,
+      `سری ${series.mergedCount} · تاریخچه ${series.histCount} · دستی ${series.manualCount}` +
+      (fundMeta.used ? ' · فاندامنتال فعال' : ' · فقط تکنیکال'),
       'ok'
     );
     showResult(result, sym);
@@ -401,43 +523,53 @@ function showResult(r, symbolId) {
   if (r.macdPeriods) {
     report += ` MACD(${r.macdPeriods.fast}/${r.macdPeriods.slow}/${r.macdPeriods.signal}).`;
   }
-  // Layer scores
+  // Layer scores + mode badge
   const techSc = r.analysis?.technicalScore;
   const fundSc = r.analysis?.fundamentalScore;
   const combSc = r.analysis?.combinedScore ?? r.score;
+  const fundMeta = r._fundMeta || {};
   if (techSc != null) report += ` تکنیکال: ${techSc}.`;
   if (fundSc != null) report += ` فاندامنتال: ${fundSc}.`;
   if (r.fundamentalApplied) report += ' ترکیب اعمال شد.';
   else report += ' فاندامنتال در ترکیب لحاظ نشد.';
+  if (fundMeta.mode === 'with_fundamental') report += ' [Prediction با Fundamental]';
+  else report += ' [Prediction بدون Fundamental]';
   $('report').textContent = report;
   $('suggestionText').textContent = r.suggestion || '—';
 
-  // Optional dedicated score rows if elements exist
   if ($('techScoreVal')) $('techScoreVal').textContent = techSc != null ? techSc : '—';
   if ($('fundScoreVal')) $('fundScoreVal').textContent = fundSc != null ? fundSc : '—';
   if ($('combScoreVal')) $('combScoreVal').textContent = combSc != null ? combSc : '—';
   if ($('confVal')) $('confVal').textContent = r.confidence != null ? Math.round(r.confidence * 100) + '%' : '—';
 
-  // Fundamental factors list
+  // Fundamental factors (only when applied)
   const fundBox = $('fundFactorsBox');
   if (fundBox) {
     const ff = r.analysis?.fundamentalFactors || [];
-    if (ff.length) {
+    if (r.fundamentalApplied && ff.length) {
       fundBox.innerHTML = ff.map(f => {
         const cls = f.dir === 'bull' ? 'bull' : f.dir === 'bear' ? 'bear' : 'neu';
         return `<div class="fund-factor ${cls}"><span>${f.nameFa || f.key}</span><span class="mono">${f.contribution > 0 ? '+' : ''}${f.contribution}</span></div>`;
       }).join('');
       fundBox.hidden = false;
     } else {
-      fundBox.innerHTML = '<p class="card-desc">داده فاندامنتال ثبت نشده</p>';
-      fundBox.hidden = false;
+      fundBox.innerHTML = '';
+      fundBox.hidden = true;
     }
+  }
+
+  // Mode badge on title
+  const titleEl = $('result-title');
+  if (titleEl) {
+    const badge = fundMeta.mode === 'with_fundamental'
+      ? '<span class="mode-badge is-fund">با فاندامنتال</span>'
+      : '<span class="mode-badge is-tech">بدون فاندامنتال</span>';
+    titleEl.innerHTML = `پیش‌بینی و سیگنال ${badge}`;
   }
 
   $('resultClock').textContent = formatNow().full;
   $('result').hidden = false;
   if ($('scoreLayers')) $('scoreLayers').hidden = false;
-  renderFundPanel(symbolId);
 }
 
 function clearAll() {
@@ -549,82 +681,9 @@ function openSmartCal(force) {
 }
 
 
-/* —— Fundamental Analysis UI —— */
-function renderFundPanel(symbolId) {
-  const sym = symbolId || currentSymbol;
-  const box = $('fundFormBox');
-  if (!box) return;
-  if (!sym) {
-    box.innerHTML = '<p class="card-desc">ابتدا یک نماد انتخاب کنید.</p>';
-    return;
-  }
-  const data = getFundamentalData(sym);
-  const fund = runFundamental(sym);
-  let html = `<div class="fund-head"><strong>${sym}</strong> · ${fundamentalSummaryFa(fund)}</div>`;
-  html += '<div class="fund-vars">';
-  for (const v of FUND_VARS) {
-    const rec = data[v.id] || {};
-    html += `
-      <div class="fund-var-card" data-var="${v.id}">
-        <div class="fund-var-title">${v.nameFa} <span class="muted">(${v.nameEn})</span></div>
-        <div class="fund-var-grid">
-          <label>واقعی <input type="number" step="any" class="input mono fund-in" data-f="actual" value="${rec.actual ?? ''}"></label>
-          <label>پیش‌بینی <input type="number" step="any" class="input mono fund-in" data-f="forecast" value="${rec.forecast ?? ''}"></label>
-          <label>قبلی <input type="number" step="any" class="input mono fund-in" data-f="previous" value="${rec.previous ?? ''}"></label>
-          <label>تاریخ <input type="date" class="input fund-in" data-f="date" value="${rec.date ?? ''}"></label>
-        </div>
-        <div class="fund-meta mono">
-          تغییر: ${rec.change != null ? rec.change : '—'} · غافلگیری: ${rec.surprise != null ? rec.surprise : '—'}
-        </div>
-        <div class="fund-var-actions">
-          <button type="button" class="btn btn-sm btn-primary fund-save" data-var="${v.id}">ذخیره</button>
-          <button type="button" class="btn btn-sm btn-ghost fund-clear" data-var="${v.id}">پاک</button>
-        </div>
-      </div>`;
-  }
-  html += '</div>';
-  if (fund.ok) {
-    html += `<div class="fund-score-box">امتیاز بنیادی: <strong>${fund.score}</strong> · پوشش: ${Math.round(fund.coverage*100)}٪ · ${fund.outlook}</div>`;
-    html += '<div class="fund-factors-live">';
-    for (const f of fund.factors) {
-      const cls = f.dir === 'bull' ? 'bull' : f.dir === 'bear' ? 'bear' : 'neu';
-      html += `<div class="fund-factor ${cls}"><span>${f.nameFa}</span><span>وزن ${Math.round(f.weight*100)}٪ · اثر ${f.contribution > 0 ? '+' : ''}${f.contribution}</span></div>`;
-    }
-    html += '</div>';
-  } else {
-    html += `<p class="status-line is-warn">${fund.message || 'داده ناکافی'}</p>`;
-  }
-  box.innerHTML = html;
-
-  box.querySelectorAll('.fund-save').forEach(btn => {
-    btn.onclick = () => {
-      const varId = btn.dataset.var;
-      const card = btn.closest('.fund-var-card');
-      const payload = {};
-      card.querySelectorAll('.fund-in').forEach(inp => {
-        payload[inp.dataset.f] = inp.value;
-      });
-      const res = upsertFundamentalVar(sym, varId, payload);
-      if (res.ok) {
-        toast('داده فاندامنتال ذخیره شد', 'ok');
-        renderFundPanel(sym);
-      } else {
-        toast(res.error || 'خطا', 'err');
-      }
-    };
-  });
-  box.querySelectorAll('.fund-clear').forEach(btn => {
-    btn.onclick = () => {
-      clearFundamentalVar(sym, btn.dataset.var);
-      toast('پاک شد', 'ok');
-      renderFundPanel(sym);
-    };
-  });
-}
-
 function switchView(view) {
   // Dedicated panels that replace main flow content
-  const dedicated = ['fundamental', 'backtest', 'debugger'];
+  const dedicated = ['backtest', 'debugger'];
   document.querySelectorAll('.view-panel').forEach(p => { p.hidden = true; });
   document.querySelectorAll('.side-link').forEach(a => a.classList.remove('active'));
 
@@ -639,9 +698,7 @@ function switchView(view) {
     if ($('scoreLayers')) $('scoreLayers').hidden = true;
     const panel = document.getElementById('view-' + view);
     if (panel) panel.hidden = false;
-    if (view === 'fundamental' && currentSymbol) renderFundPanel(currentSymbol);
     if (view === 'backtest') {
-      // keep status clear
       if ($('btStatus')) $('btStatus').textContent = currentSymbol
         ? `نماد فعال: ${currentSymbol} — داده قیمت را قبلاً وارد کرده باشید.`
         : 'ابتدا نماد و داده قیمت را انتخاب/وارد کنید.';
@@ -931,17 +988,13 @@ async function runDebuggerUI(mode) {
       const v = Number(el.value);
       if (Number.isFinite(v) && v > 0) currentPrice = v;
     }
-    let fundSnap = null;
-    try {
-      if (currentSymbol) fundSnap = buildSnapshotFromStore(currentSymbol);
-    } catch { /* optional */ }
-
+    // Debugger uses technical path only; Fundamental is optional via Prediction toggle
     const report = await runAutoDebugger({
       mode,
       candles,
       symbol: currentSymbol,
       currentPrice,
-      fundamentalSnapshot: fundSnap,
+      fundamentalSnapshot: null,
       timeframe: currentTf
     });
     applyDebuggerReport(report);
@@ -972,18 +1025,12 @@ async function runDebuggerFix() {
       const v = Number(el.value);
       if (Number.isFinite(v) && v > 0) currentPrice = v;
     }
-    let fundSnap = null;
-    try {
-      if (currentSymbol) fundSnap = buildSnapshotFromStore(currentSymbol);
-    } catch { /* optional */ }
-
-    // Deep scan + safe auto-fix (user-initiated)
     const report = await runAutoDebugger({
       mode: 'deep',
       candles,
       symbol: currentSymbol,
       currentPrice,
-      fundamentalSnapshot: fundSnap,
+      fundamentalSnapshot: null,
       timeframe: currentTf,
       safeAutoFix: true
     });
@@ -1074,6 +1121,16 @@ function init() {
   $('priceForm').addEventListener('submit', saveDailyPrice);
   $('analyzeBtn').onclick = () => runAnalysis(false);
   $('clearBtn').onclick = clearAll;
+
+  // Fundamental toggle (optional input to Prediction)
+  const fundToggle = $('fundToggle');
+  if (fundToggle) {
+    fundToggle.addEventListener('change', () => {
+      setFundHint();
+      if (!fundToggle.checked) setFundFetchStatus('');
+    });
+    setFundHint();
+  }
 
   document.querySelectorAll('.tab').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
   for (let i = 0; i < 4; i++) addTableRow();
