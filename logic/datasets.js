@@ -10,6 +10,8 @@ import {
   getAllSymbols,
   registerCustomAsset
 } from './symbols.js';
+import { XAUUSD_1D_SEED } from './xauusd_seed.js';
+import { BRENT_1D_SEED } from './brent_seed.js';
 
 const PREFIX = 'oma_v5_';
 const VERSION = 5; // keep storage version compatible
@@ -120,6 +122,23 @@ export function loadHistorical(symbol, tf = '1D') {
     data = readStore(PREFIX + 'hist_' + s, []) || [];
   }
   data = data || [];
+
+  // Auto-seed bundled 1D historical data if store is empty
+  if ((!data || data.length === 0) && t === '1D') {
+    let seed = null;
+    if (s === 'XAUUSD' && Array.isArray(XAUUSD_1D_SEED) && XAUUSD_1D_SEED.length) seed = XAUUSD_1D_SEED;
+    else if (s === 'BRENT' && Array.isArray(BRENT_1D_SEED) && BRENT_1D_SEED.length) seed = BRENT_1D_SEED;
+    if (seed) {
+      data = seed.map(c => ({
+        o: c.o, h: c.h, l: c.l, c: c.c, v: c.v ?? 0,
+        ts: c.ts,
+        day: c.day || (c.ts != null ? dayKey(c.ts) : null),
+        bucket: c.day || (c.ts != null ? timeBucketKey(c.ts, t) : null)
+      }));
+      writeStore(keyHist(s, t), data);
+    }
+  }
+
   cache.hist[ck] = data;
   return data;
 }
