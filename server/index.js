@@ -1,16 +1,45 @@
 /**
- * Offline Market Analyst V6.05 — Fundamental Proxy Backend
- * Zero external npm deps (Node 18+ native fetch + http).
+ * Offline Market Analyst V6.05 — Fundamental Proxy Backend + Static Server
+ * Zero external npm deps (Node 18+ native fetch + http + fs).
  * Token: process.env.EODHD_API_TOKEN only.
  */
 import http from 'http';
 import { URL } from 'url';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3847;
 const TOKEN = process.env.EODHD_API_TOKEN || '';
 const CACHE_TTL_MS = 45 * 60 * 1000;
 const EODHD_BASE = 'https://eodhd.com/api';
 const cache = new Map();
+
+// MIME types mapping
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.csv': 'text/csv; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf'
+};
+
+function getMimeType(filepath) {
+  const ext = path.extname(filepath).toLowerCase();
+  return MIME_TYPES[ext] || 'application/octet-stream';
+}
 
 function json(res, status, body) {
   const raw = JSON.stringify(body);
@@ -22,6 +51,22 @@ function json(res, status, body) {
     'Content-Length': Buffer.byteLength(raw)
   });
   res.end(raw);
+}
+
+function serveFile(res, filepath) {
+  try {
+    const content = fs.readFileSync(filepath);
+    const mimeType = getMimeType(filepath);
+    res.writeHead(200, {
+      'Content-Type': mimeType,
+      'Content-Length': content.length,
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.end(content);
+  } catch (err) {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('404 Not Found');
+  }
 }
 
 function cacheGet(key) {
@@ -153,8 +198,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   const u = new URL(req.url || '/', `http://127.0.0.1:${PORT}`);
+  const pathname = u.pathname;
 
-  if (req.method === 'GET' && u.pathname === '/api/health') {
+  // API Routes
+  if (req.method === 'GET' && pathname === '/api/health') {
     return json(res, 200, {
       ok: true,
       service: 'oma-fundamental-proxy',
@@ -164,7 +211,7 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  if (req.method === 'GET' && u.pathname === '/api/fundamental') {
+  if (req.method === 'GET' && pathname === '/api/fundamental') {
     const symbol = String(u.searchParams.get('symbol') || '').trim().toUpperCase();
     if (!symbol || symbol.length < 2) {
       return json(res, 400, { ok: false, error: 'پارامتر symbol الزامی است.', code: 'BAD_SYMBOL' });
@@ -192,10 +239,29 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  json(res, 404, { ok: false, error: 'Not found' });
+  // Static File Routes
+  let filepath = path.join(__dirname, pathname === '/' ? 'index.html' : pathname);
+  
+  // Security: prevent directory traversal
+  if (!filepath.startsWith(__dirname)) {
+    return json(res, 403, { ok: false, error: 'Forbidden' });
+  }
+
+  // If it's a directory or no extension, try index.html
+  if (pathname.endsWith('/') || !path.extname(filepath)) {
+    filepath = path.join(filepath, 'index.html');
+  }
+
+  // Try to serve the file
+  if (fs.existsSync(filepath) && fs.statSync(filepath).isFile()) {
+    return serveFile(res, filepath);
+  }
+
+  // 404
+  return json(res, 404, { ok: false, error: 'Not found' });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[OMA V6.05] Fundamental proxy http://0.0.0.0:${PORT}`);
+  console.log(`[OMA V6.05] Server running at http://0.0.0.0:${PORT}`);
   console.log(`[OMA V6.05] EODHD token configured: ${TOKEN ? 'yes' : 'NO — set EODHD_API_TOKEN'}`);
 });
