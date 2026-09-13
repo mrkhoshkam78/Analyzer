@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: oma-fundamental-proxy
+    runtime: node
+    plan: free
+    
+    buildCommand: yarn
+    startCommand: node index.js
+    
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
