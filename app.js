@@ -21,7 +21,7 @@ let currentSymbol = null;
 let currentTf = '1D';
 
 /** Backend proxy base (Fundamental only). Override via window.__OMA_API_BASE__ if needed. */
-const API_BASE = (typeof window !== 'undefined' && window.__OMA_API_BASE__) || 'http://127.0.0.1:3847';
+const API_BASE = (typeof window !== 'undefined' && window.__OMA_API_BASE__) || window.location.origin;
 const FUND_CACHE_KEY = 'oma_v6_fund_cache';
 const FUND_CACHE_TTL_MS = 40 * 60 * 1000;
 
