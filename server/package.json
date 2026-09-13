@@ -1,10 +1,18 @@
 {
-  "name": "oma-fundamental-proxy",
+  "name": "oma-analyzer",
   "version": "6.05.0",
+  "description": "Offline Market Analyst - Frontend + Fundamental API Server",
   "private": true,
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
-  }
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["market", "analysis", "trading"],
+  "author": "",
+  "license": "MIT"
 }
