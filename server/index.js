@@ -195,7 +195,7 @@ const server = http.createServer(async (req, res) => {
   json(res, 404, { ok: false, error: 'Not found' });
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`[OMA V6.05] Fundamental proxy http://127.0.0.1:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`[OMA V6.05] Fundamental proxy http://0.0.0.0:${PORT}`);
   console.log(`[OMA V6.05] EODHD token configured: ${TOKEN ? 'yes' : 'NO — set EODHD_API_TOKEN'}`);
 });
