@@ -2,6 +2,8 @@
  * Offline Market Analyst V6.05 — Fundamental Proxy Backend + Static Server
  * Zero external npm deps (Node 18+ native fetch + http + fs).
  * Token: process.env.EODHD_API_TOKEN only.
+ *
+ * Works both when Root Directory = repo root OR Root Directory = server/
  */
 import http from 'http';
 import { URL } from 'url';
@@ -18,7 +20,12 @@ const CACHE_TTL_MS = 45 * 60 * 1000;
 const EODHD_BASE = 'https://eodhd.com/api';
 const cache = new Map();
 
-// MIME types mapping
+// Static root: prefer parent if index.html lives there (Render Root Directory = server/)
+const parentDir = path.resolve(__dirname, '..');
+const STATIC_ROOT = fs.existsSync(path.join(__dirname, 'index.html'))
+  ? __dirname
+  : (fs.existsSync(path.join(parentDir, 'index.html')) ? parentDir : __dirname);
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -60,11 +67,12 @@ function serveFile(res, filepath) {
     res.writeHead(200, {
       'Content-Type': mimeType,
       'Content-Length': content.length,
-      'Access-Control-Allow-Origin': '*'
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': filepath.endsWith('.html') ? 'no-cache' : 'public, max-age=300'
     });
     res.end(content);
   } catch (err) {
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('404 Not Found');
   }
 }
@@ -82,14 +90,14 @@ function cacheSet(key, payload) {
   cache.set(key, { ts: Date.now(), payload });
 }
 
-async function eodhdGet(path, params = {}) {
+async function eodhdGet(apiPath, params = {}) {
   if (!TOKEN) {
     const err = new Error('EODHD_API_TOKEN is not configured on the server');
     err.code = 'NO_TOKEN';
     throw err;
   }
   const qs = new URLSearchParams({ ...params, api_token: TOKEN, fmt: 'json' });
-  const url = `${EODHD_BASE}${path}?${qs.toString()}`;
+  const url = `${EODHD_BASE}${apiPath}?${qs.toString()}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -207,7 +215,8 @@ const server = http.createServer(async (req, res) => {
       service: 'oma-fundamental-proxy',
       version: '6.05.0',
       tokenConfigured: Boolean(TOKEN),
-      cacheEntries: cache.size
+      cacheEntries: cache.size,
+      staticRoot: STATIC_ROOT
     });
   }
 
@@ -239,29 +248,43 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // Static File Routes
-  let filepath = path.join(__dirname, pathname === '/' ? 'index.html' : pathname);
-  
-  // Security: prevent directory traversal
-  if (!filepath.startsWith(__dirname)) {
+  // Static File Routes — resolve against STATIC_ROOT (parent if needed)
+  let rel = pathname === '/' ? 'index.html' : pathname.replace(/^\//, '');
+  // prevent path traversal
+  rel = path.normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');
+  let filepath = path.join(STATIC_ROOT, rel);
+
+  if (!filepath.startsWith(STATIC_ROOT)) {
     return json(res, 403, { ok: false, error: 'Forbidden' });
   }
 
-  // If it's a directory or no extension, try index.html
-  if (pathname.endsWith('/') || !path.extname(filepath)) {
-    filepath = path.join(filepath, 'index.html');
-  }
+  // directory or no extension → try index.html
+  try {
+    if (fs.existsSync(filepath) && fs.statSync(filepath).isDirectory()) {
+      filepath = path.join(filepath, 'index.html');
+    } else if (!path.extname(filepath) && !fs.existsSync(filepath)) {
+      const withIndex = path.join(filepath, 'index.html');
+      if (fs.existsSync(withIndex)) filepath = withIndex;
+    }
+  } catch { /* ignore */ }
 
-  // Try to serve the file
   if (fs.existsSync(filepath) && fs.statSync(filepath).isFile()) {
     return serveFile(res, filepath);
   }
 
-  // 404
+  // SPA fallback: unknown paths that look like pages → index.html
+  if (!path.extname(pathname) || pathname.endsWith('/')) {
+    const indexPath = path.join(STATIC_ROOT, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      return serveFile(res, indexPath);
+    }
+  }
+
   return json(res, 404, { ok: false, error: 'Not found' });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[OMA V6.05] Server running at http://0.0.0.0:${PORT}`);
+  console.log(`[OMA V6.05] Static root: ${STATIC_ROOT}`);
   console.log(`[OMA V6.05] EODHD token configured: ${TOKEN ? 'yes' : 'NO — set EODHD_API_TOKEN'}`);
 });
