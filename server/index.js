@@ -109,76 +109,188 @@ async function eodhdGet(apiPath, params = {}) {
   return res.json();
 }
 
+/** Safe wrapper — returns { data, error } instead of throwing */
+async function eodhdSafe(apiPath, params = {}) {
+  try {
+    const data = await eodhdGet(apiPath, params);
+    return { data, error: null };
+  } catch (e) {
+    return {
+      data: null,
+      error: {
+        message: e.message || String(e),
+        code: e.code || 'EODHD_ERROR',
+        status: e.status || null
+      }
+    };
+  }
+}
+
+function mapSeries(arr, key) {
+  if (!Array.isArray(arr) || !arr.length) return null;
+  const sorted = [...arr]
+    .filter(x => (x.Date || x.date) && (x.Value != null || x.value != null))
+    .sort((a, b) => String(a.Date || a.date).localeCompare(String(b.Date || b.date)));
+  if (!sorted.length) return null;
+  const last = sorted[sorted.length - 1];
+  const prev = sorted.length > 1 ? sorted[sorted.length - 2] : null;
+  const lastVal = Number(last.Value ?? last.value);
+  const prevVal = prev != null ? Number(prev.Value ?? prev.value) : null;
+  if (!Number.isFinite(lastVal)) return null;
+  return {
+    actual: lastVal,
+    previous: Number.isFinite(prevVal) ? prevVal : null,
+    forecast: null,
+    date: String(last.Date || last.date).slice(0, 10),
+    change: Number.isFinite(prevVal) ? lastVal - prevVal : null,
+    surprise: null,
+    source: 'eodhd_macro'
+  };
+}
+
+function pickEvent(events, keywords) {
+  if (!Array.isArray(events) || !events.length) return null;
+  const matches = events.filter(e => {
+    const name = String(e.type || e.event || e.Event || e.name || '').toLowerCase();
+    return keywords.some(k => name.includes(k));
+  });
+  if (!matches.length) return null;
+  matches.sort((a, b) =>
+    String(b.date || b.Date || '').localeCompare(String(a.date || a.Date || ''))
+  );
+  const m = matches[0];
+  const actual = m.actual != null ? Number(m.actual) : (m.Actual != null ? Number(m.Actual) : null);
+  const forecast = m.estimate != null ? Number(m.estimate)
+    : (m.Estimate != null ? Number(m.Estimate)
+      : (m.forecast != null ? Number(m.forecast) : null));
+  const previous = m.previous != null ? Number(m.previous) : (m.Previous != null ? Number(m.Previous) : null);
+  if (actual == null && forecast == null && previous == null) return null;
+  return {
+    actual: Number.isFinite(actual) ? actual : null,
+    forecast: Number.isFinite(forecast) ? forecast : null,
+    previous: Number.isFinite(previous) ? previous : null,
+    date: String(m.date || m.Date || '').slice(0, 10) || null,
+    change: (Number.isFinite(actual) && Number.isFinite(previous)) ? actual - previous : null,
+    surprise: (Number.isFinite(actual) && Number.isFinite(forecast)) ? actual - forecast : null,
+    source: 'eodhd_events',
+    eventType: String(m.type || m.event || '')
+  };
+}
+
 async function fetchMacroSnapshot(symbol) {
   const cacheKey = `macro:USA:${String(symbol || '').toUpperCase()}`;
   const hit = cacheGet(cacheKey);
   if (hit) return { ...hit, _fromCache: true };
 
-  const [inflation, realRate, events] = await Promise.all([
-    eodhdGet('/macro-indicator/USA', { indicator: 'inflation_consumer_prices_annual' }).catch(() => null),
-    eodhdGet('/macro-indicator/USA', { indicator: 'real_interest_rate' }).catch(() => null),
-    eodhdGet('/economic-events', {
-      from: new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10),
-      to: new Date().toISOString().slice(0, 10),
+  const from90 = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const from30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+
+  // Parallel fetches — more sources for resilience
+  const [
+    inflationRes,
+    realRateRes,
+    unempRes,
+    eventsRes,
+    yieldRes
+  ] = await Promise.all([
+    eodhdSafe('/macro-indicator/USA', { indicator: 'inflation_consumer_prices_annual' }),
+    eodhdSafe('/macro-indicator/USA', { indicator: 'real_interest_rate' }),
+    eodhdSafe('/macro-indicator/USA', { indicator: 'unemployment_total_percent' }),
+    eodhdSafe('/economic-events', {
+      from: from90,
+      to: today,
       country: 'US',
-      limit: 40
-    }).catch(() => null)
+      limit: 100
+    }),
+    // US Treasury 10Y yield (often available on more plans)
+    eodhdSafe('/ust/yield-rates', { from: from30 })
   ]);
 
   const snapshot = {};
-
-  const mapSeries = (arr, key) => {
-    if (!Array.isArray(arr) || !arr.length) return;
-    const sorted = [...arr].filter(x => x.Date && x.Value != null).sort((a, b) => String(a.Date).localeCompare(String(b.Date)));
-    if (!sorted.length) return;
-    const last = sorted[sorted.length - 1];
-    const prev = sorted.length > 1 ? sorted[sorted.length - 2] : null;
-    snapshot[key] = {
-      actual: Number(last.Value),
-      previous: prev != null ? Number(prev.Value) : null,
-      forecast: null,
-      date: String(last.Date).slice(0, 10),
-      change: prev != null ? Number(last.Value) - Number(prev.Value) : null,
-      surprise: null,
-      source: 'eodhd_macro'
-    };
+  const diagnostics = {
+    inflation: inflationRes.error || (Array.isArray(inflationRes.data) ? `ok:${inflationRes.data.length}` : 'empty'),
+    realRate: realRateRes.error || (Array.isArray(realRateRes.data) ? `ok:${realRateRes.data.length}` : 'empty'),
+    unemployment: unempRes.error || (Array.isArray(unempRes.data) ? `ok:${unempRes.data.length}` : 'empty'),
+    events: eventsRes.error || (Array.isArray(eventsRes.data) ? `ok:${eventsRes.data.length}` : 'empty'),
+    yields: yieldRes.error || (Array.isArray(yieldRes.data) ? `ok:${yieldRes.data.length}` : (yieldRes.data ? 'ok:obj' : 'empty'))
   };
 
-  mapSeries(inflation, 'cpi');
-  mapSeries(realRate, 'fed_funds');
+  const cpi = mapSeries(inflationRes.data, 'cpi');
+  if (cpi) snapshot.cpi = cpi;
 
-  if (Array.isArray(events)) {
-    const byType = (keywords) => {
-      const matches = events.filter(e => {
-        const name = String(e.event || e.type || e.Event || '').toLowerCase();
-        return keywords.some(k => name.includes(k));
-      });
-      if (!matches.length) return null;
-      matches.sort((a, b) => String(b.date || b.Date || '').localeCompare(String(a.date || a.Date || '')));
-      const m = matches[0];
-      const actual = m.actual != null ? Number(m.actual) : (m.Actual != null ? Number(m.Actual) : null);
-      const forecast = m.estimate != null ? Number(m.estimate) : (m.Estimate != null ? Number(m.Estimate) : null);
-      const previous = m.previous != null ? Number(m.previous) : (m.Previous != null ? Number(m.Previous) : null);
-      if (actual == null && forecast == null && previous == null) return null;
-      return {
-        actual: Number.isFinite(actual) ? actual : null,
-        forecast: Number.isFinite(forecast) ? forecast : null,
-        previous: Number.isFinite(previous) ? previous : null,
-        date: String(m.date || m.Date || '').slice(0, 10) || null,
-        change: (Number.isFinite(actual) && Number.isFinite(previous)) ? actual - previous : null,
-        surprise: (Number.isFinite(actual) && Number.isFinite(forecast)) ? actual - forecast : null,
-        source: 'eodhd_events'
-      };
-    };
-    const nfp = byType(['nonfarm', 'non-farm', 'payroll', 'nfp', 'employment change']);
+  const fed = mapSeries(realRateRes.data, 'fed_funds');
+  if (fed) snapshot.fed_funds = fed;
+
+  const unemp = mapSeries(unempRes.data, 'unemployment');
+  if (unemp) snapshot.unemployment = unemp;
+
+  if (Array.isArray(eventsRes.data)) {
+    const nfp = pickEvent(eventsRes.data, [
+      'nonfarm', 'non-farm', 'non farm', 'payroll', 'nfp',
+      'employment change', 'nonfarm payrolls'
+    ]);
     if (nfp) snapshot.nfp = nfp;
-    const y10 = byType(['10-year', '10 year', '10y', 'treasury yield']);
-    if (y10) snapshot.us10y = y10;
+
+    const y10evt = pickEvent(eventsRes.data, [
+      '10-year', '10 year', '10y', 'treasury yield', '10-year note'
+    ]);
+    if (y10evt) snapshot.us10y = y10evt;
+
+    const cpiEvt = pickEvent(eventsRes.data, [
+      'cpi', 'consumer price', 'inflation rate'
+    ]);
+    if (cpiEvt && !snapshot.cpi) snapshot.cpi = { ...cpiEvt, source: 'eodhd_events' };
+
+    const fedEvt = pickEvent(eventsRes.data, [
+      'fed funds', 'federal funds', 'interest rate decision', 'fed interest rate'
+    ]);
+    if (fedEvt && !snapshot.fed_funds) snapshot.fed_funds = { ...fedEvt, source: 'eodhd_events' };
+
+    const gdp = pickEvent(eventsRes.data, ['gdp growth', 'gdp annual', 'gross domestic']);
+    if (gdp) snapshot.gdp = gdp;
+
+    const pmi = pickEvent(eventsRes.data, ['ism manufacturing', 'manufacturing pmi', 'pmi']);
+    if (pmi) snapshot.pmi = pmi;
+  }
+
+  // Treasury yield rates fallback for us10y
+  if (!snapshot.us10y && yieldRes.data) {
+    const rows = Array.isArray(yieldRes.data) ? yieldRes.data : [];
+    // Common shapes: { date, yield10y } or { Date, '10Y' } etc.
+    const sorted = [...rows].filter(r => r).sort((a, b) =>
+      String(b.date || b.Date || '').localeCompare(String(a.date || a.Date || ''))
+    );
+    if (sorted.length) {
+      const last = sorted[0];
+      const val = Number(
+        last.yield10y ?? last['10Y'] ?? last['10y'] ?? last.y10 ?? last.value ?? last.Value
+      );
+      if (Number.isFinite(val)) {
+        snapshot.us10y = {
+          actual: val,
+          previous: null,
+          forecast: null,
+          date: String(last.date || last.Date || '').slice(0, 10) || null,
+          change: null,
+          surprise: null,
+          source: 'eodhd_ust_yield'
+        };
+      }
+    }
   }
 
   if (!Object.keys(snapshot).length) {
-    const err = new Error('No usable fundamental data returned from EODHD');
-    err.code = 'EMPTY_DATA';
+    // Build a helpful error so the UI/logs show the real reason
+    const forbidden = Object.values(diagnostics).some(
+      d => d && typeof d === 'object' && (d.status === 403 || d.status === 401)
+    );
+    const msg = forbidden
+      ? 'پلن EODHD شما به Macro Indicators / Economic Events دسترسی ندارد (HTTP 403). پلن را ارتقا دهید یا endpointهای پشتیبانی‌شده را فعال کنید.'
+      : `هیچ داده فاندامنتال قابل‌استفاده از EODHD برنگشت. diagnostics=${JSON.stringify(diagnostics)}`;
+    const err = new Error(msg);
+    err.code = forbidden ? 'PLAN_FORBIDDEN' : 'EMPTY_DATA';
+    err.diagnostics = diagnostics;
     throw err;
   }
 
@@ -187,8 +299,9 @@ async function fetchMacroSnapshot(symbol) {
     symbol: String(symbol || '').toUpperCase() || null,
     snapshot,
     fetchedAt: new Date().toISOString(),
-    sources: ['eodhd_macro', 'eodhd_events'],
+    sources: ['eodhd_macro', 'eodhd_events', 'eodhd_ust'],
     coverage: Object.keys(snapshot).length,
+    diagnostics,
     _fromCache: false
   };
   cacheSet(cacheKey, payload);
@@ -237,20 +350,21 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, data);
     } catch (e) {
       const status = e.code === 'NO_TOKEN' ? 503
+        : e.code === 'PLAN_FORBIDDEN' ? 403
         : e.status === 401 || e.status === 403 ? 502
         : e.code === 'EMPTY_DATA' ? 422
         : 502;
       return json(res, status, {
         ok: false,
         error: e.message || 'خطا در دریافت داده فاندامنتال',
-        code: e.code || 'EODHD_ERROR'
+        code: e.code || 'EODHD_ERROR',
+        diagnostics: e.diagnostics || undefined
       });
     }
   }
 
-  // Static File Routes — resolve against STATIC_ROOT (parent if needed)
+  // Static File Routes
   let rel = pathname === '/' ? 'index.html' : pathname.replace(/^\//, '');
-  // prevent path traversal
   rel = path.normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');
   let filepath = path.join(STATIC_ROOT, rel);
 
@@ -258,7 +372,6 @@ const server = http.createServer(async (req, res) => {
     return json(res, 403, { ok: false, error: 'Forbidden' });
   }
 
-  // directory or no extension → try index.html
   try {
     if (fs.existsSync(filepath) && fs.statSync(filepath).isDirectory()) {
       filepath = path.join(filepath, 'index.html');
@@ -272,7 +385,6 @@ const server = http.createServer(async (req, res) => {
     return serveFile(res, filepath);
   }
 
-  // SPA fallback: unknown paths that look like pages → index.html
   if (!path.extname(pathname) || pathname.endsWith('/')) {
     const indexPath = path.join(STATIC_ROOT, 'index.html');
     if (fs.existsSync(indexPath)) {
