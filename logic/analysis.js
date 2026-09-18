@@ -176,16 +176,22 @@ export function analyze(candles, options = {}) {
     if ([c.o, c.h, c.l, c.c].every(x => isNum(x) && x > 0) && c.h >= c.l) {
       clean.push({
         o: c.o, h: c.h, l: c.l, c: c.c,
-        v: (isNum(c.v) && c.v >= 0) ? c.v : NaN
+        v: (isNum(c.v) && c.v >= 0) ? c.v : NaN,
+        ts: c.ts != null ? c.ts : null,
+        date: c.date || c.day || null
       });
     }
   }
+  const asOfTs = options.asOfTs ?? (clean.length && clean[clean.length - 1].ts) ?? Date.now();
   const result = runDecision(clean, {
     symbol: options.symbol || 'UNKNOWN',
     timeframe: options.timeframe || '1D',
     currentPrice: options.currentPrice,
     fundamentalSnapshot: options.fundamentalSnapshot || null,
-    horizonBars: options.horizonBars
+    horizonBars: options.horizonBars,
+    asOfTs,
+    seriesMap: options.seriesMap || null,
+    calendarEvents: options.calendarEvents
   });
   if (result.ok && options.recordPrediction !== false && options.symbol) {
     try {

@@ -416,3 +416,170 @@ export function invalidateDayIndex(symbol, tf) {
     }
   }
 }
+
+/**
+ * Parse OHLCV CSV text → candles[].
+ * Accepts headers: timestamp/date/time, open, high, low, close, volume (case-insensitive).
+ * Does not invent volume; null if missing.
+ */
+export function parseOhlcvCsv(text, tf = '1D') {
+  const lines = String(text || '').trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return { ok: false, error: 'CSV خالی یا ناقص', candles: [] };
+
+  const header = lines[0].split(/[,;\t]/).map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''));
+  const idx = (names) => {
+    for (const n of names) {
+      const i = header.indexOf(n);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const iTs = idx(['timestamp', 'datetime', 'date', 'time', 'ts']);
+  const iO = idx(['open', 'o']);
+  const iH = idx(['high', 'h']);
+  const iL = idx(['low', 'l']);
+  const iC = idx(['close', 'c', 'price']);
+  const iV = idx(['volume', 'vol', 'v']);
+
+  if (iC < 0) return { ok: false, error: 'ستون Close یافت نشد', candles: [] };
+
+  const candles = [];
+  const errors = [];
+  for (let li = 1; li < lines.length; li++) {
+    const cols = lines[li].split(/[,;\t]/);
+    const close = Number(cols[iC]);
+    if (!Number.isFinite(close) || close <= 0) {
+      errors.push(`ردیف ${li + 1}: Close نامعتبر`);
+      continue;
+    }
+    const open = iO >= 0 ? Number(cols[iO]) : close;
+    let high = iH >= 0 ? Number(cols[iH]) : Math.max(open, close);
+    let low = iL >= 0 ? Number(cols[iL]) : Math.min(open, close);
+    if (!Number.isFinite(open) || open <= 0) continue;
+    if (!Number.isFinite(high) || !Number.isFinite(low)) {
+      high = Math.max(open, close);
+      low = Math.min(open, close);
+    }
+    if (high < low) { const t = high; high = low; low = t; }
+    const vol = iV >= 0 && cols[iV] !== '' && Number.isFinite(Number(cols[iV])) ? Number(cols[iV]) : null;
+
+    let ts = null;
+    if (iTs >= 0 && cols[iTs]) {
+      const raw = cols[iTs].trim();
+      if (/^\d{10,13}$/.test(raw)) ts = Number(raw.length === 10 ? raw * 1000 : raw);
+      else {
+        const d = Date.parse(raw);
+        if (Number.isFinite(d)) ts = d;
+      }
+    }
+    candles.push({
+      o: open, h: high, l: low, c: close, v: vol,
+      ts,
+      day: ts != null ? dayKey(ts) : null,
+      bucket: ts != null ? timeBucketKey(ts, tf) : null
+    });
+  }
+
+  // Sort + dedupe by ts or day
+  candles.sort((a, b) => {
+    const ta = a.ts ?? 0, tb = b.ts ?? 0;
+    if (ta !== tb) return ta - tb;
+    return String(a.day || '').localeCompare(String(b.day || ''));
+  });
+  const deduped = [];
+  const seen = new Set();
+  for (const c of candles) {
+    const k = c.ts != null ? `t:${c.ts}` : `d:${c.day}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    deduped.push(c);
+  }
+
+  return {
+    ok: deduped.length > 0,
+    candles: deduped,
+    error: deduped.length ? null : 'هیچ کندل معتبری parse نشد',
+    skipped: errors.length,
+    parseErrors: errors.slice(0, 10)
+  };
+}
+
+/**
+ * Merge imported candles into historical store for asset×tf.
+ * mode: 'replace' | 'skip' for overlapping timestamps.
+ */
+export function importHistoricalCsv(symbol, tf, csvText, mode = 'replace') {
+  const s = assertSymbol(symbol);
+  const t = assertTf(tf);
+  const parsed = parseOhlcvCsv(csvText, t);
+  if (!parsed.ok) return { ok: false, error: parsed.error, parseErrors: parsed.parseErrors };
+
+  const existing = loadHistorical(s, t).slice();
+  const byKey = new Map();
+  for (const c of existing) {
+    const k = c.ts != null ? `t:${c.ts}` : `d:${c.day}`;
+    byKey.set(k, c);
+  }
+
+  let added = 0, updated = 0, skipped = 0;
+  for (const c of parsed.candles) {
+    const k = c.ts != null ? `t:${c.ts}` : `d:${c.day}`;
+    if (byKey.has(k)) {
+      if (mode === 'skip') { skipped++; continue; }
+      byKey.set(k, c);
+      updated++;
+    } else {
+      byKey.set(k, c);
+      added++;
+    }
+  }
+
+  const merged = Array.from(byKey.values()).sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
+  setHistorical(s, merged, t);
+  invalidateDayIndex(s, t);
+
+  // Detect gaps (daily only simple)
+  let gaps = 0;
+  if (t === '1D' && merged.length > 2) {
+    for (let i = 1; i < merged.length; i++) {
+      if (merged[i].ts != null && merged[i - 1].ts != null) {
+        const days = (merged[i].ts - merged[i - 1].ts) / 86400000;
+        if (days > 4) gaps++;
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    added,
+    updated,
+    skipped,
+    total: merged.length,
+    gaps,
+    volumeAvailable: merged.some(c => c.v != null && c.v > 0),
+    from: merged[0]?.day || null,
+    to: merged[merged.length - 1]?.day || null
+  };
+}
+
+/**
+ * Dataset coverage report for UI.
+ */
+export function getDatasetCoverage(symbol) {
+  const s = String(symbol || '').toUpperCase();
+  const out = {};
+  for (const tf of TIMEFRAMES) {
+    try {
+      const hist = loadHistorical(s, tf.id);
+      out[tf.id] = {
+        count: hist.length,
+        from: hist[0]?.day || null,
+        to: hist[hist.length - 1]?.day || null,
+        hasVolume: hist.some(c => c.v != null && c.v > 0)
+      };
+    } catch {
+      out[tf.id] = { count: 0, from: null, to: null, hasVolume: false };
+    }
+  }
+  return out;
+}
