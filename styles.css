@@ -1562,3 +1562,89 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .mode-badge.is-fund { background: rgba(59,130,246,0.15); color: var(--accent, #3b82f6); }
 .mode-badge.is-tech { background: rgba(127,127,127,0.12); color: var(--muted, #999); }
+
+/* Ensemble / Regime panel V6.05 */
+.ensemble-box {
+  margin: 0.75rem 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+.ens-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.6rem;
+}
+.ens-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.ens-label {
+  font-size: 0.72rem;
+  color: var(--muted, #94a3b8);
+  opacity: 0.9;
+}
+.ens-val {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.ens-active {
+  font-size: 0.82rem;
+  margin: 0.4rem 0 0.6rem;
+  color: var(--muted, #94a3b8);
+}
+.strat-table {
+  overflow-x: auto;
+  margin: 0.4rem 0;
+}
+.strat-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.strat-table th,
+.strat-table td {
+  padding: 0.35rem 0.5rem;
+  text-align: right;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.06));
+}
+.strat-table th {
+  color: var(--muted, #94a3b8);
+  font-weight: 500;
+  font-size: 0.75rem;
+}
+.strat-table .bull { color: var(--ok, #22c55e); font-weight: 600; }
+.strat-table .bear { color: var(--danger, #ef4444); font-weight: 600; }
+.strat-table .neu { color: var(--muted, #94a3b8); }
+.ens-factors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.2rem;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+.ens-sup { color: var(--ok, #22c55e); }
+.ens-conf { color: var(--danger, #ef4444); }
+
+.ens-section {
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.06));
+}
+.ens-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.ens-sec-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent, #3b82f6);
+  margin-bottom: 0.45rem;
+  letter-spacing: 0.02em;
+}
+.ens-val.bull { color: var(--ok, #22c55e); }
+.ens-val.bear { color: var(--danger, #ef4444); }

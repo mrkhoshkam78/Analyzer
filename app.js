@@ -21,7 +21,7 @@ let currentSymbol = null;
 let currentTf = '1D';
 
 /** Backend proxy base (Fundamental only). Override via window.__OMA_API_BASE__ if needed. */
-const API_BASE = (typeof window !== 'undefined' && window.__OMA_API_BASE__) || window.location.origin;
+const API_BASE = (typeof window !== 'undefined' && window.__OMA_API_BASE__) || 'http://127.0.0.1:3847';
 const FUND_CACHE_KEY = 'oma_v6_fund_cache';
 const FUND_CACHE_TTL_MS = 40 * 60 * 1000;
 
@@ -446,10 +446,22 @@ async function runAnalysis(silent = false) {
       setProcessing(true, 'تحلیل ترکیبی…');
     }
 
+    // Build multi-TF seriesMap from available historical data (no fabrication)
+    const seriesMap = { [currentTf]: series.candles };
+    try {
+      const { loadHistorical, TIMEFRAMES } = await import('./logic/datasets.js');
+      for (const tf of TIMEFRAMES) {
+        if (tf.id === currentTf) continue;
+        const hist = loadHistorical(sym, tf.id);
+        if (hist && hist.length >= 20) seriesMap[tf.id] = hist;
+      }
+    } catch (_) { /* offline / missing */ }
+
     const { analyze } = await import('./logic/analysis.js');
     const result = analyze(series.candles, {
       currentPrice, symbol: sym, timeframe: currentTf, recordPrediction: true,
-      fundamentalSnapshot: fundSnap
+      fundamentalSnapshot: fundSnap,
+      seriesMap
     });
     result._fundMeta = fundMeta;
     setProcessing(false);
@@ -541,6 +553,117 @@ function showResult(r, symbolId) {
   if ($('fundScoreVal')) $('fundScoreVal').textContent = fundSc != null ? fundSc : '—';
   if ($('combScoreVal')) $('combScoreVal').textContent = combSc != null ? combSc : '—';
   if ($('confVal')) $('confVal').textContent = r.confidence != null ? Math.round(r.confidence * 100) + '%' : '—';
+
+  // Ensemble / Context / Entry / MTF panel (V7.0.1)
+  const ensBox = $('ensembleBox');
+  if (ensBox) {
+    const regime = r.regime || r.analysis?.regime || '—';
+    const regimeConf = r.regimeConfidence ?? r.analysis?.regimeConfidence;
+    const agreement = r.strategyAgreement ?? r.analysis?.strategyAgreement;
+    const agreementLabel = r.analysis?.agreementLabel || '';
+    const active = r.activeStrategies || r.analysis?.activeStrategies || [];
+    const strats = r.strategies || r.analysis?.strategies || [];
+    const supporting = r.analysis?.supportingFactors || [];
+    const conflicting = r.analysis?.conflictingFactors || [];
+    const dq = r.dataQuality ?? r.analysis?.dataQuality;
+    const histRel = r.analysis?.historicalReliability;
+    const rr = r.rr ?? r.prediction?.rr;
+    const riskSc = r.riskScore ?? r.analysis?.riskScore;
+    const ctx = r.context || {};
+    const session = ctx.session?.session || '—';
+    const eventSt = ctx.event?.state || 'UNKNOWN';
+    const eventRisk = ctx.event?.eventRisk;
+    const economies = (ctx.economy?.economies || ctx.relevantEconomies || []).join(', ') || '—';
+    const currencies = (ctx.economy?.currencies || []).join(', ') || '—';
+    const mtf = r.mtf || {};
+    const entry = r.entry || r.prediction || {};
+
+    const REGIME_FA = {
+      'Trending Bullish': 'روند صعودی', 'Trending Bearish': 'روند نزولی',
+      Range: 'رنج', 'High Volatility': 'نوسان بالا', 'Low Volatility': 'نوسان پایین',
+      Breakout: 'بریک‌اوت', Unclear: 'نامشخص'
+    };
+    const EVENT_FA = {
+      NORMAL: 'عادی', PRE_EVENT: 'قبل از رویداد', IMMINENT_EVENT: 'رویداد قریب‌الوقوع',
+      EVENT_REACTION: 'واکنش به رویداد', POST_EVENT: 'پس از رویداد', UNKNOWN: 'نامشخص'
+    };
+
+    let html = '<div class="ens-section"><div class="ens-sec-title">Context بازار</div><div class="ens-grid">';
+    html += `<div class="ens-item"><span class="ens-label">سشن</span><span class="ens-val">${session}</span></div>`;
+    html += `<div class="ens-item"><span class="ens-label">رژیم</span><span class="ens-val">${REGIME_FA[regime] || regime}</span></div>`;
+    html += `<div class="ens-item"><span class="ens-label">وضعیت رویداد</span><span class="ens-val">${EVENT_FA[eventSt] || eventSt}</span></div>`;
+    if (eventRisk != null) html += `<div class="ens-item"><span class="ens-label">ریسک رویداد</span><span class="ens-val mono">${Math.round(eventRisk * 100)}%</span></div>`;
+    html += `<div class="ens-item"><span class="ens-label">اقتصادهای مرتبط</span><span class="ens-val">${economies}</span></div>`;
+    html += `<div class="ens-item"><span class="ens-label">ارزها</span><span class="ens-val">${currencies}</span></div>`;
+    if (riskSc != null) html += `<div class="ens-item"><span class="ens-label">ریسک اسکور</span><span class="ens-val mono">${riskSc}</span></div>`;
+    if (dq != null) html += `<div class="ens-item"><span class="ens-label">کیفیت داده</span><span class="ens-val mono">${Math.round(dq * 100)}%</span></div>`;
+    html += '</div></div>';
+
+    // MTF
+    html += '<div class="ens-section"><div class="ens-sec-title">Multi-Timeframe</div>';
+    if (mtf.ok) {
+      html += `<div class="ens-grid">`;
+      html += `<div class="ens-item"><span class="ens-label">توافق MTF</span><span class="ens-val">${mtf.agreementLabel || '—'} (${mtf.agreement != null ? Math.round(mtf.agreement*100)+'%' : '—'})</span></div>`;
+      html += `<div class="ens-item"><span class="ens-label">روند بالاتر</span><span class="ens-val">${mtf.higherTrend || '—'} (${mtf.higherTf || ''})</span></div>`;
+      html += `<div class="ens-item"><span class="ens-label">تایم‌فریم‌های موجود</span><span class="ens-val">${(mtf.availableTfs||[]).join(', ') || '—'}</span></div>`;
+      if (mtf.htfLtfConflict) html += `<div class="ens-item"><span class="ens-label">تعارض HTF/LTF</span><span class="ens-val bear">بله</span></div>`;
+      html += `</div>`;
+      if (mtf.summary) html += `<div class="ens-active muted">${mtf.summary}</div>`;
+    } else {
+      html += `<div class="ens-active muted">داده چندتایم‌فریمی کافی نیست — فقط تایم‌فریم جاری</div>`;
+    }
+    html += '</div>';
+
+    // Entry
+    html += '<div class="ens-section"><div class="ens-sec-title">نقطه ورود / Entry</div>';
+    if (entry && (entry.entryType || entry.preferredEntry != null)) {
+      const wait = entry.waitForEntry;
+      html += `<div class="ens-grid">`;
+      html += `<div class="ens-item"><span class="ens-label">نوع ورود</span><span class="ens-val">${entry.entryType || '—'}</span></div>`;
+      html += `<div class="ens-item"><span class="ens-label">وضعیت</span><span class="ens-val ${wait ? 'bear' : 'bull'}">${wait ? 'Wait for Entry' : 'ورود معتبر'}</span></div>`;
+      if (entry.preferredEntry != null) html += `<div class="ens-item"><span class="ens-label">ورود پیشنهادی</span><span class="ens-val mono">${entry.preferredEntry}</span></div>`;
+      if (entry.entryZone) html += `<div class="ens-item"><span class="ens-label">ناحیه ورود</span><span class="ens-val mono">${entry.entryZone.low} – ${entry.entryZone.high}</span></div>`;
+      if (entry.stop != null) html += `<div class="ens-item"><span class="ens-label">Stop</span><span class="ens-val mono">${entry.stop}</span></div>`;
+      if (entry.target1 != null) html += `<div class="ens-item"><span class="ens-label">Target 1</span><span class="ens-val mono">${entry.target1}</span></div>`;
+      if (entry.target2 != null) html += `<div class="ens-item"><span class="ens-label">Target 2</span><span class="ens-val mono">${entry.target2}</span></div>`;
+      if (entry.rr != null) html += `<div class="ens-item"><span class="ens-label">R:R</span><span class="ens-val mono">${entry.rr}</span></div>`;
+      if (entry.invalidation != null) html += `<div class="ens-item"><span class="ens-label">Invalidation</span><span class="ens-val mono">${entry.invalidation}</span></div>`;
+      html += `</div>`;
+      if (entry.reason) html += `<div class="ens-active">${entry.reason}</div>`;
+      if (entry.confirmation?.length) html += `<div class="ens-active muted">تأیید: ${entry.confirmation.join(' · ')}</div>`;
+    } else {
+      html += `<div class="ens-active muted">Setup ورود تعریف نشده</div>`;
+    }
+    html += '</div>';
+
+    // Strategies
+    html += '<div class="ens-section"><div class="ens-sec-title">استراتژی‌ها / Ensemble</div><div class="ens-grid">';
+    if (agreement != null) html += `<div class="ens-item"><span class="ens-label">توافق استراتژی</span><span class="ens-val">${agreementLabel || ''} ${Math.round(agreement * 100)}%</span></div>`;
+    if (regimeConf != null) html += `<div class="ens-item"><span class="ens-label">اطمینان رژیم</span><span class="ens-val mono">${Math.round(regimeConf * 100)}%</span></div>`;
+    if (rr != null) html += `<div class="ens-item"><span class="ens-label">R:R نهایی</span><span class="ens-val mono">${rr}</span></div>`;
+    if (histRel && histRel.rate != null) html += `<div class="ens-item"><span class="ens-label">قابلیت اطمینان تاریخی</span><span class="ens-val mono">${Math.round(histRel.rate * 100)}% (${histRel.samples})</span></div>`;
+    html += '</div>';
+    if (active.length) html += `<div class="ens-active"><span class="ens-label">فعال:</span> ${active.join(' · ')}</div>`;
+    if (strats.length) {
+      html += '<div class="strat-table"><table><thead><tr><th>استراتژی</th><th>سیگنال</th><th>امتیاز</th><th>اطمینان</th></tr></thead><tbody>';
+      for (const s of strats) {
+        if (!s.active && s.id === 'fundamental') continue;
+        const sigCls = s.signal === 'BUY' ? 'bull' : s.signal === 'SELL' ? 'bear' : 'neu';
+        html += `<tr><td>${s.name || s.id}</td><td class="${sigCls}">${SIGNAL_FA[s.signal] || s.signal}</td><td class="mono">${s.score}</td><td class="mono">${s.confidence != null ? Math.round(s.confidence * 100) + '%' : '—'}</td></tr>`;
+      }
+      html += '</tbody></table></div>';
+    }
+    if (supporting.length || conflicting.length) {
+      html += '<div class="ens-factors">';
+      if (supporting.length) html += `<div class="ens-sup"><strong>موافق:</strong> ${supporting.map(s => s.name || s.id).join('، ')}</div>`;
+      if (conflicting.length) html += `<div class="ens-conf"><strong>مخالف:</strong> ${conflicting.map(s => s.name || s.id).join('، ')}</div>`;
+      html += '</div>';
+    }
+    html += '</div>';
+
+    ensBox.innerHTML = html;
+    ensBox.hidden = false;
+  }
 
   // Fundamental factors (only when applied)
   const fundBox = $('fundFactorsBox');
@@ -768,16 +891,24 @@ async function runBacktestUI() {
     }
     if (metrics) {
       const aCls = result.accuracy >= 55 ? 'good' : result.accuracy < 45 ? 'bad' : '';
+      const pc = result.perClass || {};
+      const upF1 = pc.up?.f1 ?? '—';
+      const dnF1 = pc.down?.f1 ?? '—';
+      const neuF1 = pc.neutral?.f1 ?? '—';
       metrics.innerHTML = `
-        <div class="bt-metric"><div class="k">دقت</div><div class="v ${aCls}">${result.accuracy}%</div></div>
+        <div class="bt-metric"><div class="k">دقت ۳کلاسه</div><div class="v ${aCls}">${result.accuracy}%</div></div>
         <div class="bt-metric"><div class="k">دقت جهتی</div><div class="v">${result.directionalAccuracy}%</div></div>
-        <div class="bt-metric"><div class="k">صحت</div><div class="v">${result.precision}%</div></div>
-        <div class="bt-metric"><div class="k">بازیابی</div><div class="v">${result.recall}%</div></div>
-        <div class="bt-metric"><div class="k">F1</div><div class="v">${result.f1}%</div></div>
-        <div class="bt-metric"><div class="k">سیگنال غلط</div><div class="v">${result.falseSignalRate}%</div></div>
+        <div class="bt-metric"><div class="k">F1 خرید</div><div class="v">${upF1}%</div></div>
+        <div class="bt-metric"><div class="k">F1 فروش</div><div class="v">${dnF1}%</div></div>
+        <div class="bt-metric"><div class="k">F1 نگهداری</div><div class="v">${neuF1}%</div></div>
         <div class="bt-metric"><div class="k">نرخ برد</div><div class="v">${result.winRate}%</div></div>
-        <div class="bt-metric"><div class="k">میانگین خطا</div><div class="v">${result.avgErrorPct}%</div></div>
-        <div class="bt-metric"><div class="k">نسبت سود/زیان</div><div class="v">${result.avgRiskReward ?? '—'}</div></div>
+        <div class="bt-metric"><div class="k">Target Hit</div><div class="v">${result.targetHitRate ?? '—'}%</div></div>
+        <div class="bt-metric"><div class="k">Stop Hit</div><div class="v">${result.stopHitRate ?? '—'}%</div></div>
+        <div class="bt-metric"><div class="k">Profit Factor</div><div class="v">${result.profitFactor ?? '—'}</div></div>
+        <div class="bt-metric"><div class="k">Avg R:R</div><div class="v">${result.avgRiskReward ?? '—'}</div></div>
+        <div class="bt-metric"><div class="k">Avg Return</div><div class="v">${result.avgReturnPct ?? '—'}%</div></div>
+        <div class="bt-metric"><div class="k">Max DD</div><div class="v">${result.maxDrawdown ?? '—'}</div></div>
+        <div class="bt-metric"><div class="k">MFE / MAE</div><div class="v">${result.avgMfe ?? '—'} / ${result.avgMae ?? '—'}</div></div>
         <div class="bt-metric"><div class="k">تعداد نمونه</div><div class="v">${result.n}</div></div>
       `;
       metrics.hidden = false;

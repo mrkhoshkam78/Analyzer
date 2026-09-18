@@ -312,6 +312,7 @@
           <div class="metric metric-sl"><span class="metric-k">حد ضرر</span><span class="metric-v mono" id="stop">—</span></div>
         </div>
 
+        <div id="ensembleBox" class="ensemble-box" hidden></div>
         <div id="fundFactorsBox" class="fund-factors-box" hidden></div>
 
         <details class="details-box">
@@ -348,9 +349,10 @@
           <div class="field">
             <label class="label" for="btMode">نوع مدل</label>
             <select id="btMode" class="input">
+              <option value="ensemble" selected>Ensemble چنداستراتژی</option>
               <option value="tech">فقط تکنیکال</option>
               <option value="fund">فقط بنیادی</option>
-              <option value="combined" selected>تکنیکال + بنیادی</option>
+              <option value="combined">تکنیکال + بنیادی</option>
             </select>
           </div>
           <div class="field">
