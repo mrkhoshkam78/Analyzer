@@ -583,3 +583,64 @@ export function getDatasetCoverage(symbol) {
   }
   return out;
 }
+
+/**
+ * Build CSV text from merged historical + manual series (no fabricated fields).
+ * Suitable for download and later re-upload.
+ */
+export function exportMergedCSV(symbol, tf = '1D') {
+  const series = buildAnalysisSeries(symbol, tf);
+  const lines = ['Date,Open,High,Low,Close,Volume'];
+  for (const c of series.candles || []) {
+    let dateStr = '';
+    if (c.bucket) dateStr = String(c.bucket).slice(0, 16);
+    else if (c.ts != null && Number.isFinite(c.ts)) {
+      const d = new Date(c.ts);
+      dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    const vol = (c.v != null && Number.isFinite(c.v)) ? c.v : '';
+    lines.push([
+      dateStr,
+      c.o,
+      c.h,
+      c.l,
+      c.c,
+      vol
+    ].join(','));
+  }
+  return {
+    csv: lines.join('\n'),
+    count: series.candles?.length || 0,
+    histCount: series.histCount,
+    manualCount: series.manualCount,
+    filename: `${String(symbol).toUpperCase()}_${tf}_merged.csv`
+  };
+}
+
+/**
+ * Promote all current manual entries into historical store (merge),
+ * so they survive as permanent CSV-backed series. Manual list is kept
+ * (still useful for overrides) unless clearManualAfter is true.
+ */
+export function promoteManualIntoHistorical(symbol, tf = '1D', clearManualAfter = false) {
+  const s = assertSymbol(symbol);
+  const t = assertTf(tf);
+  const series = buildAnalysisSeries(s, t);
+  const candles = (series.candles || []).map(c => ({
+    o: c.o,
+    h: c.h,
+    l: c.l,
+    c: c.c,
+    v: Number.isFinite(c.v) ? c.v : null,
+    ts: c.ts || null,
+    day: c.bucket ? String(c.bucket).slice(0, 10) : null,
+    bucket: c.bucket || null
+  }));
+  setHistorical(s, candles, t);
+  if (clearManualAfter) clearManual(s, t);
+  return {
+    ok: true,
+    total: candles.length,
+    promotedFromManual: series.manualCount
+  };
+}

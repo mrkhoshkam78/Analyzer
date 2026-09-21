@@ -54,7 +54,7 @@ export const CONFIG = Object.freeze({
 
   // Prediction
   defaultHorizonBars: 5,
-  predictionAlgoVersion: 'v7.0.1-context-mtf-ensemble',
+  predictionAlgoVersion: 'v8.0.1-mpb-memory',
   minSamplesForLearning: 5,
   confidenceClamp: Object.freeze({ min: 0.7, max: 1.15 }),
 
