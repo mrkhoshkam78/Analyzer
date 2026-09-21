@@ -54,6 +54,10 @@
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
           پیش‌بینی
         </a>
+        <a href="#" class="side-link" data-view="mpb">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M6 14h12"/><path d="M8 18h8"/><path d="M10 22h4"/><circle cx="12" cy="10" r="1.5"/></svg>
+          Market Pattern Brain
+        </a>
         <a href="#" class="side-link" data-view="backtest">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4z"/><path d="M4 12h10v4H4z"/><path d="M4 20h7"/></svg>
           بک‌تست
@@ -325,6 +329,85 @@
           <p id="suggestionText" class="advice-v">—</p>
         </div>
         <p class="disclaimer">این خروجی یک مدل محلی است و توصیه سرمایه‌گذاری نیست.</p>
+      </section>
+
+      <!-- Market Pattern Brain -->
+      <section class="card view-panel anim-in" id="view-mpb" hidden aria-labelledby="mpb-title">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">هسته هوشمند</p>
+            <h2 class="card-title" id="mpb-title">Market Pattern Brain</h2>
+          </div>
+          <span class="badge" id="mpbStatusBadge">—</span>
+        </div>
+        <p class="muted mpb-intro">موتور الگوی بازار — آماری، توضیح‌پذیر، بدون سیگنال قطعی. در صورت کمبود داده: <strong>INSUFFICIENT EVIDENCE</strong>.</p>
+
+        <div class="mpb-grid" id="mpbGrid">
+          <div class="mpb-card">
+            <div class="mpb-k">رژیم</div>
+            <div class="mpb-v" id="mpbRegime">—</div>
+            <div class="mpb-sub" id="mpbRegimeConf"></div>
+          </div>
+          <div class="mpb-card">
+            <div class="mpb-k">الگوی فعال</div>
+            <div class="mpb-v" id="mpbPattern">—</div>
+            <div class="mpb-sub" id="mpbSim"></div>
+          </div>
+          <div class="mpb-card">
+            <div class="mpb-k">اطمینان</div>
+            <div class="mpb-v" id="mpbConfidence">—</div>
+            <div class="mpb-sub" id="mpbConfLabel"></div>
+          </div>
+          <div class="mpb-card">
+            <div class="mpb-k">کیفیت داده</div>
+            <div class="mpb-v" id="mpbDataQ">—</div>
+            <div class="mpb-sub" id="mpbDataIssues"></div>
+          </div>
+        </div>
+
+        <details class="details-box" open>
+          <summary>Evidence / Contradictions</summary>
+          <div class="mpb-two-col">
+            <div>
+              <div class="mpb-sec-title pos">شواهد مثبت</div>
+              <ul id="mpbEvidence" class="mpb-list"></ul>
+            </div>
+            <div>
+              <div class="mpb-sec-title neg">تناقض‌ها</div>
+              <ul id="mpbContradictions" class="mpb-list"></ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="details-box">
+          <summary>Historical Analogues & Outcomes</summary>
+          <div id="mpbOutcomes" class="mpb-outcomes"></div>
+          <div class="table-scroll">
+            <table class="data-table" id="mpbMatchesTable">
+              <thead><tr><th>تاریخ</th><th>Similarity</th><th>۵ میله</th><th>۱۰ میله</th></tr></thead>
+              <tbody id="mpbMatchesBody"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <details class="details-box">
+          <summary>Scenarios / Meta-Pattern / Confidence Breakdown</summary>
+          <div id="mpbScenarios" class="mpb-scenarios"></div>
+          <div id="mpbMeta" class="mpb-meta"></div>
+          <div id="mpbConfBreak" class="mpb-conf-break"></div>
+        </details>
+
+        <details class="details-box">
+          <summary>Reasoning Trace (Explainability)</summary>
+          <ol id="mpbTrace" class="mpb-trace"></ol>
+        </details>
+
+        <details class="details-box">
+          <summary>Pattern DNA (JSON)</summary>
+          <pre id="mpbDna" class="mpb-dna mono"></pre>
+        </details>
+
+        <p class="disclaimer">MPB آینده را با قطعیت پیش‌بینی نمی‌کند. فقط الگوهای تاریخی مشابه، شواهد و عدم‌قطعیت را گزارش می‌دهد.</p>
       </section>
 
       <!-- بک‌تست -->

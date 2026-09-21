@@ -1648,3 +1648,70 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .ens-val.bull { color: var(--ok, #22c55e); }
 .ens-val.bear { color: var(--danger, #ef4444); }
+
+/* ── Market Pattern Brain ─────────────────────────── */
+.mpb-intro { font-size: 0.85rem; margin: 0.4rem 0 1rem; line-height: 1.55; }
+.mpb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
+}
+.mpb-card {
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.07));
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+}
+.mpb-k { font-size: 0.72rem; color: var(--muted); margin-bottom: 0.25rem; }
+.mpb-v { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
+.mpb-sub { font-size: 0.72rem; color: var(--muted); margin-top: 0.2rem; }
+.mpb-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 640px) {
+  .mpb-two-col { grid-template-columns: 1fr; }
+}
+.mpb-sec-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem; }
+.mpb-sec-title.pos { color: var(--ok, #22c55e); }
+.mpb-sec-title.neg { color: var(--danger, #ef4444); }
+.mpb-list { margin: 0; padding-inline-start: 1.1rem; font-size: 0.84rem; line-height: 1.55; }
+.mpb-list li { margin-bottom: 0.25rem; }
+.mpb-outcomes { font-size: 0.84rem; margin-bottom: 0.75rem; line-height: 1.5; }
+.mpb-scenarios { display: grid; gap: 0.5rem; margin-bottom: 0.75rem; }
+.mpb-scenario {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.84rem;
+}
+.mpb-scenario strong { display: block; margin-bottom: 0.2rem; }
+.mpb-meta, .mpb-conf-break { font-size: 0.84rem; margin: 0.5rem 0; line-height: 1.5; }
+.mpb-conf-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  margin-top: 0.35rem;
+}
+.mpb-conf-chip {
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+}
+.mpb-trace { font-size: 0.84rem; line-height: 1.6; padding-inline-start: 1.2rem; }
+.mpb-dna {
+  font-size: 0.75rem;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--surface-2, rgba(0,0,0,0.25));
+  border-radius: 10px;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+#mpbStatusBadge.is-ok { background: rgba(34,197,94,0.15); color: var(--ok); }
+#mpbStatusBadge.is-low { background: rgba(234,179,8,0.15); color: #eab308; }
+#mpbStatusBadge.is-bad { background: rgba(239,68,68,0.15); color: var(--danger); }

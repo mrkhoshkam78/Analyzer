@@ -505,6 +505,9 @@ const ICONS = {
 
 function showResult(r, symbolId) {
   if (!r?.ok) { toast(r?.error || 'تحلیل ناموفق', 'err'); return; }
+  window.__lastAnalysisResult = r;
+  // Keep MPB panel in sync if currently visible
+  if ($('view-mpb') && !$('view-mpb').hidden) renderMPBPanel(r);
   const sig = r.signal;
   $('signalPanel').className = 'signal-hero ' + sig;
   $('signal').className = 'signal-value ' + sig;
@@ -806,7 +809,7 @@ function openSmartCal(force) {
 
 function switchView(view) {
   // Dedicated panels that replace main flow content
-  const dedicated = ['backtest', 'debugger'];
+  const dedicated = ['backtest', 'debugger', 'mpb'];
   document.querySelectorAll('.view-panel').forEach(p => { p.hidden = true; });
   document.querySelectorAll('.side-link').forEach(a => a.classList.remove('active'));
 
@@ -828,6 +831,9 @@ function switchView(view) {
     }
     if (view === 'debugger') {
       renderDebuggerPanel();
+    }
+    if (view === 'mpb') {
+      renderMPBPanel(window.__lastAnalysisResult || null);
     }
   } else {
     // Restore main cards
@@ -948,6 +954,134 @@ async function runBacktestUI() {
 }
 
 
+
+/* ── Market Pattern Brain UI ── */
+function renderMPBPanel(result) {
+  const mpb = result?.mpb;
+  const set = (id, text) => { const el = $(id); if (el) el.textContent = text ?? '—'; };
+  const badge = $('mpbStatusBadge');
+
+  if (!mpb) {
+    set('mpbRegime', '—');
+    set('mpbPattern', 'تحلیل را اجرا کنید');
+    set('mpbConfidence', '—');
+    set('mpbDataQ', '—');
+    if (badge) { badge.textContent = 'NO DATA'; badge.className = 'badge is-bad'; }
+    ['mpbEvidence', 'mpbContradictions', 'mpbMatchesBody', 'mpbTrace'].forEach(id => {
+      const el = $(id); if (el) el.innerHTML = '';
+    });
+    if ($('mpbOutcomes')) $('mpbOutcomes').innerHTML = '<span class="muted">هنوز تحلیلی اجرا نشده است.</span>';
+    if ($('mpbScenarios')) $('mpbScenarios').innerHTML = '';
+    if ($('mpbMeta')) $('mpbMeta').textContent = '';
+    if ($('mpbConfBreak')) $('mpbConfBreak').innerHTML = '';
+    if ($('mpbDna')) $('mpbDna').textContent = '';
+    return;
+  }
+
+  const st = mpb.status || 'OK';
+  if (badge) {
+    badge.textContent = st;
+    badge.className = 'badge ' + (st === 'OK' ? 'is-ok' : st === 'INSUFFICIENT_EVIDENCE' ? 'is-bad' : 'is-low');
+  }
+
+  set('mpbRegime', mpb.regime?.primary || '—');
+  set('mpbRegimeConf', mpb.regime?.confidence != null
+    ? `اطمینان رژیم: ${Math.round(mpb.regime.confidence * 100)}٪` : '');
+  const ap = mpb.activePatterns?.[0];
+  set('mpbPattern', ap?.label || ap?.id || '—');
+  set('mpbSim', ap?.similarity != null ? `Similarity: ${(ap.similarity * 100).toFixed(1)}٪` : '');
+  set('mpbConfidence', mpb.confidence?.overall != null ? mpb.confidence.overall + '٪' : '—');
+  set('mpbConfLabel', mpb.confidence?.label || mpb.confidence?.note || '');
+  set('mpbDataQ', mpb.dataQuality?.score != null ? mpb.dataQuality.score + '/100' : '—');
+  set('mpbDataIssues', (mpb.dataQuality?.issues || []).slice(0, 3).join(' · ') || '');
+
+  const evUl = $('mpbEvidence');
+  if (evUl) {
+    const list = mpb.evidence || [];
+    evUl.innerHTML = list.length
+      ? list.map(e => `<li>✓ ${e.text || e} <span class="muted">(${e.source || ''})</span></li>`).join('')
+      : '<li class="muted">—</li>';
+  }
+  const ctUl = $('mpbContradictions');
+  if (ctUl) {
+    const list = mpb.contradictions || [];
+    ctUl.innerHTML = list.length
+      ? list.map(c => `<li>⚠ ${c.text || c} <span class="muted">(${c.source || ''})</span></li>`).join('')
+      : '<li class="muted">هیچ تناقض مهمی ثبت نشد</li>';
+  }
+
+  const outEl = $('mpbOutcomes');
+  if (outEl) {
+    const o = mpb.outcomes || {};
+    const parts = [];
+    for (const h of (mpb.horizons || [5, 10, 20])) {
+      const s = o[String(h)] || o[h];
+      if (!s) continue;
+      if (s.status === 'INSUFFICIENT_EVIDENCE') {
+        parts.push(`<div><strong>${h} میله:</strong> INSUFFICIENT EVIDENCE (n=${s.sampleSize || 0})</div>`);
+      } else {
+        parts.push(
+          `<div><strong>${h} میله:</strong> n=${s.sampleSize} · Win ${(s.winRate * 100).toFixed(0)}٪ · ` +
+          `Median ${(s.medianReturn * 100).toFixed(2)}٪ · MFE ${(s.meanMFE * 100).toFixed(2)}٪ · MAE ${(s.meanMAE * 100).toFixed(2)}٪</div>`
+        );
+      }
+    }
+    outEl.innerHTML = parts.length ? parts.join('') : '<span class="muted">Outcome در دسترس نیست</span>';
+  }
+
+  const tbody = $('mpbMatchesBody');
+  if (tbody) {
+    const matches = mpb.historicalMatches || [];
+    tbody.innerHTML = matches.length
+      ? matches.map(m => {
+          const r5 = m.outcomes?.['5'] || m.outcomes?.[5];
+          const r10 = m.outcomes?.['10'] || m.outcomes?.[10];
+          const fmtR = (o) => o && o.return != null ? (o.return * 100).toFixed(2) + '٪' : '—';
+          return `<tr><td class="mono">${m.date || m.index}</td><td>${(m.similarity * 100).toFixed(1)}٪</td><td>${fmtR(r5)}</td><td>${fmtR(r10)}</td></tr>`;
+        }).join('')
+      : '<tr><td colspan="4" class="muted">نمونه‌ای یافت نشد</td></tr>';
+  }
+
+  const scEl = $('mpbScenarios');
+  if (scEl) {
+    const sc = mpb.scenarios || [];
+    scEl.innerHTML = sc.map(s => `
+      <div class="mpb-scenario">
+        <strong>${s.name}</strong>
+        ${s.probabilityHint != null ? `Hint≈${(s.probabilityHint * 100).toFixed(0)}٪ · ` : ''}
+        Trigger: ${s.trigger || '—'}
+        ${s.note ? `<div class="muted">${s.note}</div>` : ''}
+      </div>
+    `).join('') || '<span class="muted">—</span>';
+  }
+
+  if ($('mpbMeta')) {
+    const meta = mpb.metaPatterns;
+    $('mpbMeta').innerHTML = meta
+      ? `<strong>Meta-Pattern:</strong> ${meta.label || '—'} <span class="muted">(${meta.status})</span>`
+      : '';
+  }
+
+  const cb = $('mpbConfBreak');
+  if (cb && mpb.confidence?.components) {
+    const c = mpb.confidence.components;
+    cb.innerHTML = '<div class="mpb-conf-bar">' +
+      Object.entries(c).map(([k, v]) =>
+        `<span class="mpb-conf-chip">${k}: ${v}٪</span>`
+      ).join('') + '</div>';
+  }
+
+  const tr = $('mpbTrace');
+  if (tr) {
+    const lines = mpb.reasoningTrace || [];
+    tr.innerHTML = lines.map(l => `<li>${l}</li>`).join('') || '<li class="muted">—</li>';
+  }
+
+  if ($('mpbDna')) {
+    const dna = ap?.dna || mpb.activePatterns?.[0]?.dna || null;
+    $('mpbDna').textContent = dna ? JSON.stringify(dna, null, 2) : (mpb.status || '—');
+  }
+}
 
 /* ── Auto Debugger UI ── */
 function renderDebuggerPanel() {
