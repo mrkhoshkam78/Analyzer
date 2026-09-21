@@ -1,5 +1,5 @@
 /**
- * UI Controller V8.0.4
+ * UI Controller V8.0.5
  * Fundamental is an optional input to Prediction (toggle), not a standalone view.
  */
 import { getSymbol, formatPrice, getAllSymbols, registerCustomAsset } from './logic/symbols.js';
@@ -7,7 +7,8 @@ import {
   loadHistorical, loadManual, setHistorical, upsertManualPrices,
   buildAnalysisSeries, getAssetSummary, dayKeyOffset, dayKey,
   getCachedSymbols, dropSessionCache, TIMEFRAMES, getTfMeta, timeBucketKey,
-  getDataDayIndex
+  getDataDayIndex,
+  getDataDayBias
 } from './logic/datasets.js';
 import {
   runAutoDebugger, getLastReport, getDebugHistory, getStatusEmoji,
@@ -204,6 +205,21 @@ async function refreshAssetPanel(symbol) {
   if ($('priceClose')) $('priceClose').value = '';
 }
 
+function fillPriceFormFromRecord(rec) {
+  if (!rec) return;
+  const day = rec.day || (rec.bucket ? String(rec.bucket).slice(0, 10) : '');
+  if (day && $('priceDate')) $('priceDate').value = day;
+  if (isFinite(Number(rec.open)) && $('priceOpen')) $('priceOpen').value = rec.open;
+  if (isFinite(Number(rec.close)) && $('priceClose')) $('priceClose').value = rec.close;
+  // hour/minute from ts if present
+  if (rec.ts && Number.isFinite(rec.ts)) {
+    const d = new Date(rec.ts);
+    if ($('priceHour') && !$('fieldHour')?.hidden) $('priceHour').value = d.getHours();
+    if ($('priceMinute') && !$('fieldMinute')?.hidden) $('priceMinute').value = d.getMinutes();
+  }
+  $('priceOpen')?.focus();
+}
+
 function renderManualList(symbol) {
   const box = $('manualList');
   if (!box) return;
@@ -212,8 +228,40 @@ function renderManualList(symbol) {
     box.innerHTML = '<p class="card-desc">هنوز رکورد دستی برای این بازه نیست.</p>';
     return;
   }
-  box.innerHTML = '<div class="manual-list-title">رکوردهای دستی (باز / بسته)</div>' +
-    manual.map(m => `<div class="manual-item"><span>${m.bucket}</span><strong>${formatPrice(m.open, symbol)} → ${formatPrice(m.close, symbol)}</strong></div>`).join('');
+  box.innerHTML = '<div class="manual-list-title">رکوردهای دستی (باز / بسته) — کلیک برای ویرایش</div>' +
+    manual.map((m, i) => {
+      const day = m.day || (m.bucket ? String(m.bucket).slice(0, 10) : '');
+      const dir = (isFinite(m.open) && isFinite(m.close))
+        ? (m.close > m.open ? 'up' : m.close < m.open ? 'down' : 'flat')
+        : 'flat';
+      return `<div class="manual-item manual-item-edit" data-idx="${i}" data-day="${day}" data-open="${m.open}" data-close="${m.close}" data-ts="${m.ts || ''}" role="button" tabindex="0">
+        <div class="manual-item-main">
+          <span class="manual-item-day mono">${m.bucket || day}</span>
+          <strong class="manual-item-px">${formatPrice(m.open, symbol)} → ${formatPrice(m.close, symbol)}</strong>
+          <span class="manual-dir is-${dir}" aria-hidden="true"></span>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm manual-edit-btn">ویرایش</button>
+      </div>`;
+    }).join('');
+  box.querySelectorAll('.manual-item-edit').forEach(el => {
+    const load = () => {
+      fillPriceFormFromRecord({
+        day: el.getAttribute('data-day'),
+        bucket: el.getAttribute('data-day'),
+        open: Number(el.getAttribute('data-open')),
+        close: Number(el.getAttribute('data-close')),
+        ts: el.getAttribute('data-ts') ? Number(el.getAttribute('data-ts')) : null
+      });
+      if ($('smartCal') && !$('smartCal').hidden) renderSmartCal();
+      toast('آماده ویرایش — پس از تغییر، ذخیره قیمت را بزنید', 'ok');
+    };
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.manual-edit-btn') || e.currentTarget === el) load();
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); load(); }
+    });
+  });
 }
 
 function buildDateTimeFromForm() {
@@ -746,14 +794,21 @@ function applyTheme(theme) {
 /* —— Smart Data Calendar —— */
 let calYear = new Date().getFullYear();
 let calMonth = new Date().getMonth(); // 0-11
-let dayIndexCache = null; // { day: count } for current asset+tf
+let dayIndexCache = null; // { day: count }
+let dayBiasCache = null; // { day: 1|-1|0 }
 
 function refreshDayIndex() {
   if (!currentSymbol) {
     dayIndexCache = Object.create(null);
+    dayBiasCache = Object.create(null);
     return dayIndexCache;
   }
   dayIndexCache = getDataDayIndex(currentSymbol, currentTf || '1D') || Object.create(null);
+  try {
+    dayBiasCache = getDataDayBias(currentSymbol, currentTf || '1D') || Object.create(null);
+  } catch (_) {
+    dayBiasCache = Object.create(null);
+  }
   return dayIndexCache;
 }
 
@@ -778,17 +833,27 @@ function renderSmartCal() {
   for (let i = 0; i < pad; i++) {
     parts.push('<button type="button" class="cal-day is-other" disabled></button>');
   }
+  const bias = dayBiasCache || Object.create(null);
   for (let d = 1; d <= daysInMonth; d++) {
     const key = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const count = idx[key] || 0;
+    const dir = bias[key]; // 1 up, -1 down, 0 flat
     const classes = ['cal-day'];
     if (key === today) classes.push('is-today');
     if (key === selected) classes.push('is-selected');
-    if (count > 0) classes.push('has-data');
-    const title = count > 0 ? `داده موجود (${count})` : 'بدون داده';
-    const pulse = count > 0 ? '<span class="cal-pulse" aria-hidden="true"></span>' : '';
+    if (count > 0) {
+      if (dir === 1) classes.push('is-up');
+      else if (dir === -1) classes.push('is-down');
+      else classes.push('is-flat');
+    }
+    const title = count
+      ? (dir === 1 ? 'صعودی' : dir === -1 ? 'نزولی' : 'خنثی') + ` · ${count} رکورد`
+      : 'بدون داده';
+    const pulse = count > 0
+      ? `<span class="cal-pulse ${dir === 1 ? 'pulse-up' : dir === -1 ? 'pulse-down' : 'pulse-flat'}" aria-hidden="true"></span>`
+      : '';
     parts.push(
-      `<button type="button" class="${classes.join(' ')}" data-day="${key}" title="${title}" aria-label="${key}${count ? ' — داده موجود' : ''}">${d}${pulse}</button>`
+      `<button type="button" class="${classes.join(' ')}" data-day="${key}" title="${title}" aria-label="${key}${count ? ' — ' + title : ''}">${d}${pulse}</button>`
     );
   }
   grid.innerHTML = parts.join('');
@@ -796,6 +861,37 @@ function renderSmartCal() {
     btn.addEventListener('click', () => {
       const day = btn.getAttribute('data-day');
       if ($('priceDate')) $('priceDate').value = day;
+      // اگر رکورد دستی/تاریخی برای این روز هست، فرم را برای ویرایش پر کن
+      try {
+        const manuals = loadManual(currentSymbol, currentTf || '1D');
+        const hit = manuals.find(m => {
+          const d = m.day || (m.bucket ? String(m.bucket).slice(0, 10) : '');
+          return d === day;
+        });
+        if (hit) {
+          fillPriceFormFromRecord(hit);
+        } else {
+          // از تاریخچه اگر O/C موجود باشد
+          const hist = loadHistorical(currentSymbol, currentTf || '1D');
+          const h = hist.find(c => {
+            const d = c.day || (c.ts != null ? dayKey(c.ts) : (c.bucket ? String(c.bucket).slice(0, 10) : null));
+            return d === day;
+          });
+          if (h) {
+            const o = h.o ?? h.open;
+            const c = h.c ?? h.close;
+            if (o != null && c != null) {
+              fillPriceFormFromRecord({ day, open: o, close: c, ts: h.ts });
+            } else if ($('priceOpen')) {
+              $('priceOpen').value = '';
+              $('priceClose').value = '';
+            }
+          } else if ($('priceOpen')) {
+            $('priceOpen').value = '';
+            $('priceClose').value = '';
+          }
+        }
+      } catch (_) {}
       renderSmartCal();
     });
   });
