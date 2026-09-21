@@ -1,5 +1,5 @@
 /**
- * UI Controller V8.0.5
+ * UI Controller V8.0.5UI · Obsidian Editorial
  * Fundamental is an optional input to Prediction (toggle), not a standalone view.
  */
 import { getSymbol, formatPrice, getAllSymbols, registerCustomAsset } from './logic/symbols.js';
@@ -989,7 +989,7 @@ function syncSettingsUI() {
   document.querySelectorAll('input[name="setSkin"]').forEach(r => {
     r.checked = (r.value === skin);
   });
-  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft' };
+  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft — Obsidian Editorial' };
   if ($('skinNameLabel')) $('skinNameLabel').textContent = names[skin] || skin;
   if ($('footerSkinLabel')) $('footerSkinLabel').textContent = `پوسته ${names[skin] || skin} · داده محلی`;
 }
@@ -1011,7 +1011,7 @@ function applySkin(skin) {
   const theme = document.documentElement.getAttribute('data-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', theme);
   try { localStorage.setItem('oma_skin', s); } catch (_) {}
-  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft' };
+  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft — Obsidian Editorial' };
   if ($('skinNameLabel')) $('skinNameLabel').textContent = names[s] || s;
   if ($('footerSkinLabel')) $('footerSkinLabel').textContent = `پوسته ${names[s] || s} · داده محلی`;
   // force repaint so CSS variables apply immediately
