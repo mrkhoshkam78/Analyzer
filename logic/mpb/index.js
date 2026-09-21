@@ -12,6 +12,7 @@ import { buildFeatures } from './features.js';
 import { detectMPBRegime } from './regime.js';
 import { findHistoricalAnalogues, HORIZONS } from './matching.js';
 import { buildEvidence, computeConfidence } from './evidence.js';
+import { savePatternFromResult, listPatterns, patternMemoryStats } from './memory.js';
 import { isNum } from '../indicators.js';
 
 /**
@@ -292,7 +293,7 @@ export function runMPB(candles, options = {}) {
     inSampleHint: analogues.searchStats || null
   };
 
-  return {
+  const payload = {
     version: 'MPB-2.0.0',
     symbol,
     timeframe,
@@ -330,14 +331,37 @@ export function runMPB(candles, options = {}) {
     confidence,
     validation,
     patternMemory: {
-      status: 'SESSION',
-      note: 'Persistent Pattern Library requires longer multi-session history; current run is session-scoped.',
+      status: 'PENDING_SAVE',
+      note: 'پس از اجرا در حافظه محلی ذخیره می‌شود.',
       activeCount: 1
     },
     featureLabels: labels,
     reasoningTrace,
     horizons: HORIZONS
   };
+
+  // Persist pattern snapshot (localStorage) — never blocks analysis
+  try {
+    const saved = savePatternFromResult(payload, { symbol, timeframe });
+    payload.patternMemory = {
+      status: saved.ok ? 'SAVED' : 'SAVE_FAILED',
+      id: saved.id,
+      totalInLibrary: saved.total,
+      note: saved.ok
+        ? 'الگو در حافظه محلی ذخیره شد. می‌توانید دانلود کنید.'
+        : 'ذخیره الگو ناموفق بود.',
+      stats: patternMemoryStats()
+    };
+  } catch (_) {
+    payload.patternMemory = {
+      status: 'SAVE_FAILED',
+      note: 'خطا در ذخیره الگو',
+      totalInLibrary: listPatterns().length
+    };
+  }
+
+  return payload;
 }
 
 export { assessDataQuality, buildFeatures, detectMPBRegime, findHistoricalAnalogues };
+export { listPatterns, exportPatternsJSON, importPatternsJSON, clearAllPatterns, deletePattern, patternMemoryStats } from './memory.js';
