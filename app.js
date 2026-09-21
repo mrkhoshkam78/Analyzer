@@ -904,10 +904,15 @@ function applyLang(lang) {
 function applySkin(skin) {
   const s = skin === 'vector-soft' ? 'vector-soft' : 'terminal-glass';
   document.documentElement.setAttribute('data-skin', s);
+  // ensure theme+skin combo attributes stay in sync for CSS selectors
+  const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
   try { localStorage.setItem('oma_skin', s); } catch (_) {}
   const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft' };
   if ($('skinNameLabel')) $('skinNameLabel').textContent = names[s] || s;
   if ($('footerSkinLabel')) $('footerSkinLabel').textContent = `پوسته ${names[s] || s} · داده محلی`;
+  // force repaint so CSS variables apply immediately
+  document.body && void document.body.offsetHeight;
 }
 
 
@@ -1586,6 +1591,11 @@ async function quickDebuggerAfterAnalysis(candles, symbol, currentPrice) {
 }
 
 function init() {
+  // desktop default: sidebar open so layout reserves column
+  if (window.matchMedia('(min-width: 901px)').matches) {
+    document.body.classList.remove('sidebar-collapsed');
+    $('sidebar')?.classList.add('is-open');
+  }
   applyTheme(getTheme());
   $('themeBtn') && ($('themeBtn').onclick = () => applyTheme(getTheme() === 'dark' ? 'light' : 'dark'));
   tickClock();
@@ -1761,13 +1771,16 @@ function init() {
   if ($('adHistoryBtn')) $('adHistoryBtn').onclick = () => showDebuggerHistory();
 
 // Sidebar open / close (mobile drawer)
+  function isDesktopLayout() {
+    return window.matchMedia('(min-width: 901px)').matches;
+  }
   function openSidebar() {
     const sb = $('sidebar');
     const ov = $('sidebarOverlay');
     if (sb) sb.classList.add('is-open');
     document.body.classList.add('sidebar-open');
     document.body.classList.remove('sidebar-collapsed');
-    if (ov) {
+    if (ov && !isDesktopLayout()) {
       ov.hidden = false;
       ov.classList.add('is-visible');
       ov.setAttribute('aria-hidden', 'false');
@@ -1778,6 +1791,9 @@ function init() {
     const ov = $('sidebarOverlay');
     if (sb) sb.classList.remove('is-open');
     document.body.classList.remove('sidebar-open');
+    if (isDesktopLayout()) {
+      document.body.classList.add('sidebar-collapsed');
+    }
     if (ov) {
       ov.classList.remove('is-visible');
       ov.hidden = true;
@@ -1792,7 +1808,8 @@ function init() {
       e.preventDefault();
       e.stopPropagation();
       switchView(a.dataset.view || 'dashboard');
-      closeSidebar();
+      // فقط در موبایل منو را ببند؛ در دسکتاپ باز بماند
+      if (!isDesktopLayout()) closeSidebar();
     });
   });
   const sbToggle = $('sidebarToggle');
@@ -1809,19 +1826,14 @@ function init() {
       e.preventDefault();
       e.stopPropagation();
       const sb = $('sidebar');
-      const isOpen = sb && sb.classList.contains('is-open');
-      const isDesktop = window.matchMedia('(min-width: 901px)').matches;
-      if (isDesktop) {
-        // Desktop: toggle collapsed class (hide/show sidebar)
+      if (isDesktopLayout()) {
         if (document.body.classList.contains('sidebar-collapsed')) {
-          document.body.classList.remove('sidebar-collapsed');
-          openSidebar();
+          openSidebar(); // expands grid + shows sidebar
         } else {
-          closeSidebar();
-          document.body.classList.add('sidebar-collapsed');
+          closeSidebar(); // collapses grid column so main grows
         }
       } else {
-        // Mobile: drawer open/close
+        const isOpen = sb && sb.classList.contains('is-open');
         if (isOpen) closeSidebar();
         else openSidebar();
       }
