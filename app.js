@@ -1,5 +1,5 @@
 /**
- * UI Controller V8.0.3
+ * UI Controller V8.0.4
  * Fundamental is an optional input to Prediction (toggle), not a standalone view.
  */
 import { getSymbol, formatPrice, getAllSymbols, registerCustomAsset } from './logic/symbols.js';
@@ -879,7 +879,7 @@ function switchView(view) {
 
 function syncSettingsUI() {
   const theme = document.documentElement.getAttribute('data-theme') || 'dark';
-  const skin = document.documentElement.getAttribute('data-skin') || 'terminal-glass';
+  const skin = document.documentElement.getAttribute('data-skin') || localStorage.getItem('oma_skin') || 'terminal-glass';
   const lang = document.documentElement.getAttribute('lang') || 'fa';
   const dark = $('setThemeDark');
   const light = $('setThemeLight');
@@ -889,9 +889,13 @@ function syncSettingsUI() {
   const en = $('setLangEn');
   if (fa) fa.checked = lang !== 'en';
   if (en) en.checked = lang === 'en';
-  const tg = $('setSkinTg');
-  if (tg) tg.checked = true;
-  if ($('skinNameLabel')) $('skinNameLabel').textContent = 'Terminal Glass';
+  // پوسته را از data-skin / localStorage بخوان — هرگز اجبار به Terminal Glass نکن
+  document.querySelectorAll('input[name="setSkin"]').forEach(r => {
+    r.checked = (r.value === skin);
+  });
+  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft' };
+  if ($('skinNameLabel')) $('skinNameLabel').textContent = names[skin] || skin;
+  if ($('footerSkinLabel')) $('footerSkinLabel').textContent = `پوسته ${names[skin] || skin} · داده محلی`;
 }
 
 function applyLang(lang) {
@@ -899,6 +903,9 @@ function applyLang(lang) {
   document.documentElement.setAttribute('lang', l);
   document.documentElement.setAttribute('dir', l === 'en' ? 'ltr' : 'rtl');
   try { localStorage.setItem('oma_lang', l); } catch (_) {}
+  // همبرگر و سایدبار با جهت زبان هم‌تراز می‌شوند (CSS منطقی)
+  document.body.classList.toggle('is-ltr', l === 'en');
+  document.body.classList.toggle('is-rtl', l !== 'en');
 }
 
 function applySkin(skin) {
@@ -1591,6 +1598,15 @@ async function quickDebuggerAfterAnalysis(candles, symbol, currentPrice) {
 }
 
 function init() {
+  // restore skin/theme/lang first so UI never flashes wrong skin
+  try {
+    const sk = localStorage.getItem('oma_skin') || 'terminal-glass';
+    applySkin(sk);
+    applyLang(localStorage.getItem('oma_lang') || 'fa');
+  } catch (_) {
+    applySkin('terminal-glass');
+    applyLang('fa');
+  }
   // desktop default: sidebar open so layout reserves column
   if (window.matchMedia('(min-width: 901px)').matches) {
     document.body.classList.remove('sidebar-collapsed');

@@ -1,5 +1,5 @@
 /* ============================================================
-   Market Analyst V8.0.3 — Performance-first Premium UI
+   Market Analyst V8.0.4 — Performance-first Premium UI
    Skin: Terminal Glass · Theme = color only · Skin = full design
    Financial Terminal · Dark-first · GPU-friendly
    ============================================================ */
@@ -1001,7 +1001,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ===== LAYOUT: Sidebar + Content (fixed) ===== */
 .shell.shell-with-sidebar {
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) 240px;
+  /* ستون ۱ = سایدبار (در RTL سمت راست، در LTR سمت چپ) */
+  grid-template-columns: 240px minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 100vh;
   width: 100%;
@@ -1010,9 +1011,25 @@ button, input, select, textarea { font: inherit; color: inherit; }
   z-index: 1;
   transition: grid-template-columns 0.22s ease;
 }
-/* وقتی منو بسته است، ستون سایدبار جمع می‌شود و محتوا تمام عرض را می‌گیرد */
+.shell.shell-with-sidebar > .sidebar {
+  grid-column: 1;
+  grid-row: 1 / -1;
+}
+.shell.shell-with-sidebar > .site-header {
+  grid-column: 2;
+  grid-row: 1;
+}
+.shell.shell-with-sidebar > .main {
+  grid-column: 2;
+  grid-row: 2;
+}
+.shell.shell-with-sidebar > .site-footer {
+  grid-column: 2;
+  grid-row: 3;
+}
+/* وقتی منو بسته است محتوا تمام‌عرض می‌شود */
 body.sidebar-collapsed .shell.shell-with-sidebar {
-  grid-template-columns: minmax(0, 1fr) 0px;
+  grid-template-columns: 0px minmax(0, 1fr);
 }
 body.sidebar-collapsed .shell.shell-with-sidebar > .sidebar {
   width: 0 !important;
@@ -1025,13 +1042,11 @@ body.sidebar-collapsed .shell.shell-with-sidebar > .sidebar {
 }
 
 .shell.shell-with-sidebar > .sidebar {
-  grid-column: 2;
-  grid-row: 1 / -1;
   width: 240px;
   max-width: 240px;
   background: var(--bg-elev, #12151c);
-  border-right: none;
-  border-left: 1px solid var(--line, #2a3140);
+  border-inline-end: 1px solid var(--line, #2a3140);
+  border-inline-start: none;
   padding: 1rem 0.65rem 1.25rem;
   position: sticky;
   top: 0;
@@ -1047,8 +1062,6 @@ body.sidebar-collapsed .shell.shell-with-sidebar > .sidebar {
 }
 
 .shell.shell-with-sidebar > .site-header {
-  grid-column: 1;
-  grid-row: 1;
   width: 100%;
   max-width: none;
   position: sticky;
@@ -1057,8 +1070,6 @@ body.sidebar-collapsed .shell.shell-with-sidebar > .sidebar {
 }
 
 .shell.shell-with-sidebar > .main {
-  grid-column: 1;
-  grid-row: 2;
   width: 100%;
   max-width: 960px;
   margin: 0 auto;
@@ -1070,8 +1081,6 @@ body.sidebar-collapsed .shell.shell-with-sidebar > .sidebar {
 }
 
 .shell.shell-with-sidebar > .site-footer {
-  grid-column: 1;
-  grid-row: 3;
   width: 100%;
   max-width: none;
 }
@@ -1917,7 +1926,7 @@ body.sidebar-collapsed .shell.shell-with-sidebar > .sidebar {
   .field-action .btn { width: 100%; }
 }
 
-/* ===== V8.0.3UI Sidebar toggle (clean) ===== */
+/* ===== V8.0.4 Sidebar toggle (clean) ===== */
 .sidebar-open-btn {
   display: inline-flex !important;
   align-items: center;
@@ -2250,3 +2259,339 @@ html[data-skin="vector-soft"] .settings-option:has(input:checked) {
 }
 /* hide default wave, show illustrations only for this skin */
 .bg-illustrations { display: none; }
+
+/* همبرگر همیشه در شروع خط (RTL=راست، LTR=چپ) */
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-direction: row; /* در RTL خودِ dir ترتیب را معکوس می‌کند */
+}
+.header-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+/* در RTL: brand (با همبرگر) سمت راست؛ در LTR سمت چپ */
+html[dir="rtl"] .header-main { direction: rtl; }
+html[dir="ltr"] .header-main { direction: ltr; }
+.sidebar-open-btn {
+  order: 0;
+}
+.brand-copy { order: 1; }
+
+/* ===== V8.0.4 Calendar + price form responsive ===== */
+#dailyCard .form-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+  gap: 12px 14px !important;
+  align-items: end;
+}
+#dailyCard .field-calendar {
+  grid-column: 1 / -1 !important;
+  min-width: 0;
+}
+#dailyCard .field-action {
+  grid-column: 1 / -1;
+}
+.cal-wrap {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  align-items: center !important;
+  width: 100%;
+}
+.cal-wrap .input {
+  flex: 1 1 160px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+.cal-toggle {
+  flex: 0 0 auto !important;
+}
+.smart-cal {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  margin-top: 10px;
+  padding: 12px !important;
+}
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cal-weekdays,
+.cal-grid {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+  width: 100% !important;
+}
+.cal-day {
+  min-width: 0 !important;
+  width: 100% !important;
+  aspect-ratio: 1;
+  max-height: 44px;
+  font-size: clamp(0.7rem, 2.2vw, 0.85rem) !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.cal-weekdays span {
+  text-align: center;
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+.manual-list {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  width: 100%;
+}
+.manual-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  word-break: break-word;
+}
+@media (max-width: 640px) {
+  #dailyCard .form-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .cal-wrap { flex-direction: column; align-items: stretch !important; }
+  .cal-toggle { width: 100%; }
+  .cal-day { max-height: 40px; }
+}
+@media (min-width: 900px) {
+  #dailyCard .form-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+  #dailyCard .field-calendar { grid-column: 1 / -1 !important; }
+}
+
+/* Mobile drawer: side depends on language */
+@media (max-width: 900px) {
+  .shell.shell-with-sidebar > .sidebar {
+    right: auto;
+    left: auto;
+    inset-inline-start: 0; /* logical: RTL=right, LTR=left */
+    inset-inline-end: auto;
+    transform: translateX(0);
+  }
+  html[dir="rtl"] .shell.shell-with-sidebar > .sidebar {
+    transform: translateX(105%);
+  }
+  html[dir="ltr"] .shell.shell-with-sidebar > .sidebar {
+    transform: translateX(-105%);
+  }
+  html[dir="rtl"] .shell.shell-with-sidebar > .sidebar.is-open,
+  html[dir="ltr"] .shell.shell-with-sidebar > .sidebar.is-open {
+    transform: translateX(0) !important;
+  }
+}
+
+/* ===== Vector Soft FULL layout redesign ===== */
+html[data-skin="vector-soft"] .shell.shell-with-sidebar {
+  grid-template-columns: 260px minmax(0, 1fr);
+  background: var(--bg);
+}
+html[data-skin="vector-soft"] body.sidebar-collapsed .shell.shell-with-sidebar {
+  grid-template-columns: 0px minmax(0, 1fr);
+}
+html[data-skin="vector-soft"] .shell.shell-with-sidebar > .sidebar {
+  width: 260px;
+  max-width: 260px;
+  padding: 1.25rem 0.85rem;
+  background: linear-gradient(180deg, var(--bg-elev) 0%, color-mix(in srgb, var(--primary) 6%, var(--bg-elev)) 100%);
+  border-inline-end: none;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.08);
+}
+html[dir="rtl"][data-skin="vector-soft"] .shell.shell-with-sidebar > .sidebar {
+  box-shadow: -4px 0 24px rgba(0,0,0,0.08);
+}
+html[data-skin="vector-soft"] .shell.shell-with-sidebar > .main {
+  max-width: 1080px;
+  padding: 20px 22px 40px;
+  gap: 18px;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+/* dashboard cards: asymmetric soft layout */
+html[data-skin="vector-soft"] .main > .card {
+  border-radius: 22px !important;
+  padding: 1.15rem 1.25rem;
+  border: none !important;
+  box-shadow: var(--shadow) !important;
+  background: var(--surface) !important;
+  position: relative;
+  overflow: hidden;
+}
+html[data-skin="vector-soft"] .main > .card::before {
+  content: "";
+  position: absolute;
+  top: 0; inset-inline-start: 0; inset-inline-end: 0;
+  height: 3px;
+  background: var(--grad);
+  opacity: 0.85;
+}
+html[data-skin="vector-soft"] .side-nav {
+  gap: 0.4rem;
+}
+html[data-skin="vector-soft"] .side-link {
+  padding: 0.7rem 0.9rem !important;
+  border-radius: 14px !important;
+  font-weight: 600;
+}
+html[data-skin="vector-soft"] .side-link.active {
+  background: var(--grad) !important;
+  color: #fff !important;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+html[data-skin="vector-soft"] .side-link.active svg {
+  color: #fff !important;
+  opacity: 1 !important;
+}
+html[data-skin="vector-soft"] .site-header {
+  background: transparent !important;
+  border-bottom: none !important;
+  backdrop-filter: none !important;
+}
+html[data-skin="vector-soft"] .site-header::before { display: none; }
+html[data-skin="vector-soft"] .header-main {
+  margin: 12px 18px 0;
+  padding: 10px 14px !important;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+}
+html[data-skin="vector-soft"] .asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+html[data-skin="vector-soft"] .asset-btn {
+  border-radius: 18px !important;
+  padding: 1rem 0.9rem !important;
+  background: var(--surface-2) !important;
+  border: 1.5px solid transparent !important;
+}
+html[data-skin="vector-soft"] .asset-btn[aria-selected="true"] {
+  border-color: var(--primary) !important;
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface)) !important;
+}
+html[data-skin="vector-soft"] .form-grid {
+  gap: 14px;
+}
+html[data-skin="vector-soft"] .smart-cal {
+  border-radius: 18px !important;
+  border: none !important;
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface-2)) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+html[data-skin="vector-soft"] .cal-day {
+  border-radius: 12px !important;
+  border: none !important;
+  background: transparent;
+}
+html[data-skin="vector-soft"] .cal-day.is-selected {
+  background: var(--grad) !important;
+  color: #fff !important;
+}
+html[data-skin="vector-soft"] .cal-day.is-today {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+html[data-skin="vector-soft"] .btn-primary {
+  background: var(--grad) !important;
+  border: none !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 35%, transparent) !important;
+}
+html[data-skin="vector-soft"] .action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-start;
+}
+html[data-skin="vector-soft"] .metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+html[data-skin="vector-soft"] .metric {
+  border-radius: 16px !important;
+  padding: 0.85rem 1rem !important;
+  background: var(--surface-2) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+html[data-skin="vector-soft"] .signal-hero {
+  border-radius: 24px !important;
+  padding: 2rem 1.25rem !important;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--primary) 14%, var(--surface)), var(--surface-2)) !important;
+  border: none !important;
+}
+html[data-skin="vector-soft"] .mpb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+html[data-skin="vector-soft"] .mpb-card {
+  border-radius: 18px !important;
+  padding: 1rem !important;
+  background: var(--surface-2) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+html[data-skin="vector-soft"] .settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+html[data-skin="vector-soft"] .settings-card {
+  border-radius: 20px !important;
+  padding: 1.25rem !important;
+  border: none !important;
+  background: var(--surface-2) !important;
+}
+html[data-skin="vector-soft"] .dropzone {
+  border-radius: 20px !important;
+  padding: 2.25rem 1.25rem !important;
+  border: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent) !important;
+  background:
+    radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 50%),
+    radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 45%),
+    var(--surface-2) !important;
+}
+html[data-skin="vector-soft"] .site-footer {
+  border-top: none;
+  opacity: 0.9;
+  padding: 16px 22px 28px;
+}
+html[data-skin="vector-soft"] .modal {
+  border-radius: 22px !important;
+  border: none !important;
+  padding: 0;
+  overflow: hidden;
+}
+html[data-skin="vector-soft"] .modal-body {
+  padding: 1.5rem !important;
+}
+/* soft floating illustrations stronger */
+html[data-skin="vector-soft"] .bg-illustrations svg {
+  opacity: 0.18;
+  filter: drop-shadow(0 8px 20px color-mix(in srgb, var(--primary) 20%, transparent));
+}
