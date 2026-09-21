@@ -6,6 +6,7 @@
 import { runDecision } from './decision.js';
 import { createPrediction } from './prediction.js';
 import { isNum } from './indicators.js';
+import { runMPB } from './mpb/index.js';
 
 function detectDelim(line) {
   if (line.includes('\t')) return '\t';
@@ -201,6 +202,29 @@ export function analyze(candles, options = {}) {
       result.predictionId = null;
     }
   }
+
+  // MPB v2.0 — Adaptive Market Pattern Brain (non-destructive attachment)
+  try {
+    // Normalize candle shape for MPB (expects .t optional)
+    const mpbCandles = clean.map(c => ({
+      t: c.date || c.ts || null,
+      o: c.o, h: c.h, l: c.l, c: c.c,
+      v: isNum(c.v) ? c.v : 0
+    }));
+    result.mpb = runMPB(mpbCandles, {
+      symbol: options.symbol || 'UNKNOWN',
+      timeframe: options.timeframe || '1D',
+      existingRegime: result.regime || null
+    });
+  } catch (err) {
+    result.mpb = {
+      version: 'MPB-2.0.0',
+      status: 'ERROR',
+      reason: err && err.message ? err.message : 'MPB failed',
+      confidence: { overall: 0, label: 'Very Low', note: 'INSUFFICIENT_EVIDENCE' }
+    };
+  }
+
   return result;
 }
 

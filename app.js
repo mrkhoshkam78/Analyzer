@@ -139,6 +139,17 @@ function updateSmartDateTimeUI() {
   if (!$('priceDate').value) $('priceDate').value = dayKeyOffset(0);
 }
 
+function updateHeaderAssetLabel() {
+  const el = $('headerAsset');
+  if (!el) return;
+  if (!currentSymbol) {
+    el.textContent = '—';
+    return;
+  }
+  const tf = currentTf || ($('tf')?.value) || '1D';
+  el.textContent = `${currentSymbol}/${tf}`;
+}
+
 function onSymbolChange() {
   const id = $('symbol').value;
   const meta = getSymbol(id);
@@ -146,7 +157,7 @@ function onSymbolChange() {
     if ($('assetChip')) $('assetChip').hidden = true;
     if ($('dailyCard')) $('dailyCard').hidden = true;
     currentSymbol = null;
-    if ($('headerAsset')) $('headerAsset').textContent = '—';
+    updateHeaderAssetLabel();
     setHeaderData('آماده');
     return;
   }
@@ -156,11 +167,11 @@ function onSymbolChange() {
   $('chipName').textContent = meta.nameFa;
   $('chipMeta').textContent = `${meta.typeFa} · ${meta.unitFa} · ${currentTf}`;
   if ($('assetChip')) $('assetChip').hidden = false;
-  if ($('headerAsset')) $('headerAsset').textContent = meta.symbol;
+  updateHeaderAssetLabel();
   refreshAssetPanel(id);
 }
 
-function refreshAssetPanel(symbol) {
+async function refreshAssetPanel(symbol) {
   const card = $('dailyCard');
   const meta = getSymbol(symbol);
   if (!meta) {
@@ -170,6 +181,11 @@ function refreshAssetPanel(symbol) {
   currentTf = $('tf').value || '1D';
   loadHistorical(symbol, currentTf);
   loadManual(symbol, currentTf);
+  // V8.0.2: pull from project data/ when local store is thin
+  try {
+    const { ensureProjectData } = await import('./logic/datasets.js');
+    await ensureProjectData(symbol, currentTf);
+  } catch (_) {}
   refreshDayIndex();
   if ($('smartCal') && !$('smartCal').hidden) renderSmartCal();
   if (card) card.hidden = false;
@@ -716,13 +732,14 @@ function getTheme() {
   return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 }
 function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  try { localStorage.setItem('oma_theme', theme); } catch (_) {}
-  const sun = document.querySelector('.icon-sun');
-  const moon = document.querySelector('.icon-moon');
+  const t = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('oma_theme', t); } catch (_) {}
+  const sun = document.querySelector('#themeBtn .icon-sun') || document.querySelector('.icon-sun');
+  const moon = document.querySelector('#themeBtn .icon-moon') || document.querySelector('.icon-moon');
   if (sun && moon) {
-    sun.style.display = theme === 'dark' ? 'none' : 'block';
-    moon.style.display = theme === 'dark' ? 'block' : 'none';
+    sun.style.display = t === 'dark' ? '' : 'none';
+    moon.style.display = t === 'dark' ? 'none' : '';
   }
 }
 
@@ -809,7 +826,7 @@ function openSmartCal(force) {
 
 function switchView(view) {
   // Dedicated panels that replace main flow content
-  const dedicated = ['backtest', 'debugger', 'mpb', 'fundamental'];
+  const dedicated = ['backtest', 'debugger', 'mpb', 'fundamental', 'settings'];
   document.querySelectorAll('.view-panel').forEach(p => { p.hidden = true; });
   document.querySelectorAll('.side-link').forEach(a => a.classList.remove('active'));
 
@@ -826,8 +843,8 @@ function switchView(view) {
     if (panel) panel.hidden = false;
     if (view === 'backtest') {
       if ($('btStatus')) $('btStatus').textContent = currentSymbol
-        ? `نماد فعال: ${currentSymbol} — داده قیمت را قبلاً وارد کرده باشید.`
-        : 'ابتدا نماد و داده قیمت را انتخاب/وارد کنید.';
+        ? `نماد فعال: ${currentSymbol} / ${currentTf || '1D'} — از دادهٔ پروژه (تاریخچه + دستی) استفاده می‌شود.`
+        : 'ابتدا نماد را انتخاب و داده قیمت (پروژه یا دستی) را بارگذاری کنید.';
     }
     if (view === 'debugger') {
       renderDebuggerPanel();
@@ -838,6 +855,9 @@ function switchView(view) {
     }
     if (view === 'fundamental') {
       syncFundPageFromToggle();
+    }
+    if (view === 'settings') {
+      syncSettingsUI();
     }
   } else {
     // Restore main cards
@@ -858,6 +878,37 @@ function switchView(view) {
   }
 }
 
+function syncSettingsUI() {
+  const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+  const skin = document.documentElement.getAttribute('data-skin') || 'terminal-glass';
+  const lang = document.documentElement.getAttribute('lang') || 'fa';
+  const dark = $('setThemeDark');
+  const light = $('setThemeLight');
+  if (dark) dark.checked = theme === 'dark';
+  if (light) light.checked = theme === 'light';
+  const fa = $('setLangFa');
+  const en = $('setLangEn');
+  if (fa) fa.checked = lang !== 'en';
+  if (en) en.checked = lang === 'en';
+  const tg = $('setSkinTg');
+  if (tg) tg.checked = true;
+  if ($('skinNameLabel')) $('skinNameLabel').textContent = 'Terminal Glass';
+}
+
+function applyLang(lang) {
+  const l = lang === 'en' ? 'en' : 'fa';
+  document.documentElement.setAttribute('lang', l);
+  document.documentElement.setAttribute('dir', l === 'en' ? 'ltr' : 'rtl');
+  try { localStorage.setItem('oma_lang', l); } catch (_) {}
+}
+
+function applySkin(skin) {
+  const s = skin || 'terminal-glass';
+  document.documentElement.setAttribute('data-skin', s);
+  try { localStorage.setItem('oma_skin', s); } catch (_) {}
+  if ($('skinNameLabel')) $('skinNameLabel').textContent = s === 'terminal-glass' ? 'Terminal Glass' : s;
+}
+
 
 async function runBacktestUI() {
   const status = $('btStatus');
@@ -867,14 +918,21 @@ async function runBacktestUI() {
     toast('ابتدا نماد را انتخاب کنید', 'err');
     return;
   }
-  if (status) status.textContent = 'در حال اجرای بک‌تست…';
+  if (status) status.textContent = 'در حال آماده‌سازی داده پروژه و اجرای بک‌تست…';
   if (metrics) { metrics.hidden = true; metrics.innerHTML = ''; }
   if (samples) { samples.hidden = true; samples.innerHTML = ''; }
 
   try {
+    try {
+      const { ensureProjectData } = await import('./logic/datasets.js');
+      const proj = await ensureProjectData(currentSymbol, currentTf);
+      if (proj?.ok && proj.source && proj.source !== 'store') {
+        if (status) status.textContent = `داده پروژه بارگذاری شد (${proj.count} کندل از ${proj.source}) — در حال بک‌تست…`;
+      }
+    } catch (_) {}
     const series = buildAnalysisSeries(currentSymbol, currentTf);
     if (!series || !series.candles || series.candles.length < 40) {
-      const msg = `داده کافی نیست (${series?.candles?.length || 0} کندل). حداقل ~40 لازم است.`;
+      const msg = `داده کافی نیست (${series?.candles?.length || 0} کندل). حداقل ~40 لازم است. از بخش «بارگذاری قیمت‌ها» یا فایل‌های data/ استفاده کنید.`;
       if (status) status.textContent = msg;
       toast(msg, 'err');
       return;
@@ -1513,6 +1571,7 @@ function init() {
   $('symbol').addEventListener('change', onSymbolChange);
   $('tf').addEventListener('change', () => {
     currentTf = $('tf').value;
+    updateHeaderAssetLabel();
     updateSmartDateTimeUI();
     if (currentSymbol) refreshAssetPanel(currentSymbol);
   });
@@ -1685,7 +1744,15 @@ function init() {
     menuOpen.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      openSidebar();
+      const sb = $('sidebar');
+      const isOpen = sb && sb.classList.contains('is-open');
+      if (isOpen) {
+        closeSidebar();
+        document.body.classList.add('sidebar-collapsed');
+      } else {
+        document.body.classList.remove('sidebar-collapsed');
+        openSidebar();
+      }
     });
   }
   const overlay = $('sidebarOverlay');
@@ -1702,6 +1769,16 @@ function init() {
   // Backtest run
   $('btRunBtn')?.addEventListener('click', runBacktestUI);
 
+  // Settings page
+  document.querySelectorAll('input[name="setTheme"]').forEach(r => {
+    r.addEventListener('change', () => { if (r.checked) applyTheme(r.value); });
+  });
+  document.querySelectorAll('input[name="setLang"]').forEach(r => {
+    r.addEventListener('change', () => { if (r.checked) applyLang(r.value); });
+  });
+  document.querySelectorAll('input[name="setSkin"]').forEach(r => {
+    r.addEventListener('change', () => { if (r.checked) applySkin(r.value); });
+  });
 
   window.__OMA_V5__ = { getCachedSymbols, buildAnalysisSeries, loadManual, loadHistorical, getDataDayIndex };
 }

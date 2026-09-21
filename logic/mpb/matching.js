@@ -5,16 +5,19 @@
 import { isNum } from '../indicators.js';
 import { buildFeatures, buildFeatureSequence } from './features.js';
 
+/* V8.0.2 — rebalanced weights for more realistic analogue ranking
+ * (structure + volatility get slightly more weight; pure correlation slightly less) */
 const DEFAULT_WEIGHTS = Object.freeze({
-  correlation: 0.30,
-  euclidean: 0.20,
-  cosine: 0.15,
-  structure: 0.15,
-  momentum: 0.10,
-  volatility: 0.10
+  correlation: 0.24,
+  euclidean: 0.18,
+  cosine: 0.14,
+  structure: 0.20,
+  momentum: 0.12,
+  volatility: 0.12
 });
 
-const HORIZONS = [5, 10, 20];
+/* Multi-horizon outcomes: short → swing (more realistic coverage) */
+const HORIZONS = [3, 5, 10, 15, 20];
 
 function pearson(a, b) {
   const n = Math.min(a.length, b.length);

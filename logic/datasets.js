@@ -143,6 +143,44 @@ export function loadHistorical(symbol, tf = '1D') {
   return data;
 }
 
+/**
+ * V8.0.2 — Try load OHLCV from project data/ folder (relative paths).
+ * Paths tried: data/{SYM}/{TF}.csv , data/{SYM}_{TF}.csv , data/{SYM}/1D.csv
+ * Safe on file:// (fails silently). Call once per symbol×tf when store is sparse.
+ */
+export async function ensureProjectData(symbol, tf = '1D') {
+  const s = assertSymbol(symbol);
+  const t = assertTf(tf);
+  const existing = loadHistorical(s, t);
+  if (existing && existing.length >= 30) return { ok: true, source: 'store', count: existing.length };
+
+  const candidates = [
+    `data/${s}/${t}.csv`,
+    `data/${s}_${t}.csv`,
+    `data/${s}/1D.csv`,
+    `data/${s}_1D.csv`
+  ];
+  // also try lowercase tf variants used in some dumps
+  if (t === '1H') candidates.push(`data/${s}/1h.csv`, `data/${s}_1h.csv`);
+
+  for (const path of candidates) {
+    try {
+      const res = await fetch(path, { cache: 'no-store' });
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (!text || text.length < 40) continue;
+      const result = importHistoricalCsv(s, t, text, 'skip');
+      if (result && result.ok) {
+        const after = loadHistorical(s, t);
+        return { ok: true, source: path, count: after.length, added: result.added || 0 };
+      }
+    } catch {
+      /* file:// or missing — ignore */
+    }
+  }
+  return { ok: false, source: null, count: existing?.length || 0 };
+}
+
 export function setHistorical(symbol, candles, tf = '1D') {
   const s = assertSymbol(symbol);
   const t = assertTf(tf);

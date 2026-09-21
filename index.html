@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl" data-theme="dark">
+<html lang="fa" dir="rtl" data-theme="dark" data-skin="terminal-glass">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="تحلیل‌گر بازار آفلاین — ترمینال مالی فارسی">
-  <title>تحلیل‌گر بازار</title>
+  <meta name="description" content="تحلیل‌گر بازار آفلاین — ترمینال مالی فارسی · پوسته Terminal Glass">
+  <title>تحلیل‌گر بازار · v8.0.2</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -14,8 +14,14 @@
       try {
         var t = localStorage.getItem('oma_theme');
         document.documentElement.setAttribute('data-theme', (t === 'light' || t === 'dark') ? t : 'dark');
+        var skin = localStorage.getItem('oma_skin') || 'terminal-glass';
+        document.documentElement.setAttribute('data-skin', skin);
+        var lang = localStorage.getItem('oma_lang') || 'fa';
+        document.documentElement.setAttribute('lang', lang);
+        document.documentElement.setAttribute('dir', lang === 'en' ? 'ltr' : 'rtl');
       } catch (e) {
         document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.setAttribute('data-skin', 'terminal-glass');
       }
     })();
   </script>
@@ -74,11 +80,11 @@
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
           </button>
           <div class="brand-copy">
-            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v8.0.1</span></h1>
+            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v8.0.2</span></h1>
           </div>
         </div>
         <div class="header-center" id="headerAssetSlot">
-          <span class="header-asset-value mono" id="headerAsset">—</span>
+          <span class="header-status-pill header-asset-pill mono" id="headerAsset">—</span>
         </div>
         <div class="header-meta-inline" aria-label="ساعت و تاریخ">
           <span class="meta-chip" id="clockJalali">—</span>
@@ -435,9 +441,15 @@
           <div>
             <p class="eyebrow">اعتبارسنجی تاریخی</p>
             <h2 class="card-title" id="bt-title">بک‌تست</h2>
-            <p class="card-desc">پیش‌بینی روی داده گذشته و مقایسه با قیمت واقعی آینده</p>
+            <p class="card-desc">Walk-forward واقعی بدون نگاه به آینده: در هر نقطه فقط دادهٔ گذشته برای پیش‌بینی استفاده می‌شود و با مسیر واقعی قیمت (High/Low) مقایسه می‌گردد.</p>
           </div>
         </div>
+        <p class="muted bt-intro">
+          <strong>افق:</strong> چند کندل بعد هدف/استاپ ارزیابی می‌شود.
+          <strong>فاصله نمونه‌ها:</strong> برای سرعت بیشتر می‌توانید هر N کندل یک نمونه بگیرید.
+          <strong>مدل:</strong> Ensemble چند استراتژی، فقط تکنیکال، فقط بنیادی یا ترکیب.
+          داده از همان مخزن پروژه (تاریخچه + ورود دستی) خوانده می‌شود.
+        </p>
         <div class="bt-controls form-grid">
           <div class="field">
             <label class="label" for="btHorizon">افق پیش‌بینی</label>
@@ -472,6 +484,58 @@
         <div id="btStatus" class="status-line"></div>
         <div id="btMetrics" class="bt-metrics" hidden></div>
         <div id="btSamples" class="bt-samples" hidden></div>
+      </section>
+
+      <!-- تنظیمات -->
+      <section class="card view-panel anim-in" id="view-settings" hidden aria-labelledby="settings-title">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">شخصی‌سازی</p>
+            <h2 class="card-title" id="settings-title">تنظیمات</h2>
+            <p class="card-desc">تم رنگ، زبان و پوستهٔ طراحی — جدا از یکدیگر</p>
+          </div>
+        </div>
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h3 class="settings-h">تم رنگ</h3>
+            <p class="muted settings-desc">فقط پالت رنگ (روشن / تاریک). روی شکل دکمه‌ها و کادرها اثر ندارد.</p>
+            <div class="settings-row">
+              <label class="settings-option">
+                <input type="radio" name="setTheme" value="dark" id="setThemeDark">
+                <span>تاریک</span>
+              </label>
+              <label class="settings-option">
+                <input type="radio" name="setTheme" value="light" id="setThemeLight">
+                <span>روشن</span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-card">
+            <h3 class="settings-h">زبان رابط</h3>
+            <p class="muted settings-desc">جهت و برچسب‌های اصلی رابط کاربری.</p>
+            <div class="settings-row">
+              <label class="settings-option">
+                <input type="radio" name="setLang" value="fa" id="setLangFa" checked>
+                <span>فارسی (RTL)</span>
+              </label>
+              <label class="settings-option">
+                <input type="radio" name="setLang" value="en" id="setLangEn">
+                <span>English (LTR)</span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-card">
+            <h3 class="settings-h">پوسته (Skin)</h3>
+            <p class="muted settings-desc">پوسته کل طراحی (شعاع گوشه‌ها، شیشه‌ای بودن، دکمه‌ها، کادرها) را تعریف می‌کند؛ جدا از تم رنگ است.</p>
+            <div class="settings-row">
+              <label class="settings-option">
+                <input type="radio" name="setSkin" value="terminal-glass" id="setSkinTg" checked>
+                <span>Terminal Glass</span>
+              </label>
+            </div>
+            <p class="hint">پوستهٔ فعلی: <strong id="skinNameLabel">Terminal Glass</strong> — طراحی ترمینال مالی با افکت شیشه‌ای و گوشه‌های نرم.</p>
+          </div>
+        </div>
       </section>
 
       <!-- Auto Debugger -->
@@ -520,8 +584,8 @@
     </main>
 
     <footer class="site-footer">
-      <span>نسخه ۵.۰۵ · آفلاین</span>
-      <span class="muted">بدون سرور · داده محلی</span>
+      <span>نسخه ۸.۰.۲ · آفلاین</span>
+      <span class="muted">پوسته Terminal Glass · داده محلی</span>
     </footer>
   </div>
 

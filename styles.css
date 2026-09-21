@@ -1,9 +1,11 @@
 /* ============================================================
-   Market Analyst V5.05 — Performance-first Premium UI
+   Market Analyst V8.0.2 — Performance-first Premium UI
+   Skin: Terminal Glass · Theme = color only · Skin = full design
    Financial Terminal · Dark-first · GPU-friendly
    ============================================================ */
 
-:root {
+:root,
+[data-skin="terminal-glass"] {
   --font: "Vazirmatn", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
 
@@ -32,6 +34,8 @@
   --max: 960px;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   --focus: 0 0 0 3px rgba(99, 102, 241, 0.35);
+  --glass-bg: color-mix(in srgb, var(--surface) 78%, transparent);
+  --glass-blur: 12px;
 }
 
 [data-theme="light"] {
@@ -1813,3 +1817,178 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .fund-page-body { margin-top: 0.75rem; }
 .fund-page-body .card-desc { margin-bottom: 0.5rem; }
+
+/* ── V8.0.2 Skin: Terminal Glass applied to all components ── */
+[data-skin="terminal-glass"] .card,
+[data-skin="terminal-glass"] .mpb-card,
+[data-skin="terminal-glass"] .settings-card,
+[data-skin="terminal-glass"] .fund-page-card,
+[data-skin="terminal-glass"] .mpb-lib-item,
+[data-skin="terminal-glass"] .ad-hero,
+[data-skin="terminal-glass"] .modal-body {
+  border-radius: var(--r-lg);
+  background: var(--glass-bg, var(--surface));
+  backdrop-filter: blur(var(--glass-blur, 12px));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 12px));
+  border: 1px solid var(--line);
+}
+[data-skin="terminal-glass"] .btn {
+  border-radius: 10px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+[data-skin="terminal-glass"] .btn:active { transform: scale(0.97); }
+[data-skin="terminal-glass"] .input,
+[data-skin="terminal-glass"] select.input,
+[data-skin="terminal-glass"] textarea.input {
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+[data-skin="terminal-glass"] .header-status-pill,
+[data-skin="terminal-glass"] .header-asset-pill,
+[data-skin="terminal-glass"] .meta-chip,
+[data-skin="terminal-glass"] .badge,
+[data-skin="terminal-glass"] .status-pill,
+[data-skin="terminal-glass"] .ver-badge {
+  border-radius: 999px;
+}
+[data-skin="terminal-glass"] .icon-btn {
+  border-radius: 10px;
+}
+
+/* Header asset pill — exact vertical/horizontal center */
+.header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.header-asset-pill,
+.header-status-pill.header-asset-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  padding: 0.35rem 0.85rem;
+  min-height: 1.85rem;
+  min-width: 5.5rem;
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--accent, #22d3ee) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #22d3ee) 28%, transparent);
+  color: var(--text);
+  white-space: nowrap;
+  margin: 0 auto;
+}
+.site-header-compact .header-center {
+  align-items: center;
+  justify-content: center;
+}
+.site-header-compact .header-asset-pill {
+  font-size: 0.82rem;
+  padding: 0.28rem 0.75rem;
+}
+
+/* Settings page */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+.settings-card {
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.settings-h {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.settings-desc { margin: 0; font-size: 0.82rem; line-height: 1.45; }
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  margin-top: 0.25rem;
+}
+.settings-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.settings-option:has(input:checked) {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary-2, var(--primary));
+}
+.settings-option input { accent-color: var(--primary); }
+
+.bt-intro {
+  font-size: 0.84rem;
+  line-height: 1.55;
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.bt-intro strong { color: var(--accent); margin-inline-end: 0.15rem; }
+
+/* Price form responsive on laptop (wider minmax + better break) */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .form-grid { grid-template-columns: repeat(3, 1fr); }
+  .field-calendar { grid-column: 1 / -1; }
+  .field-action { grid-column: 1 / -1; }
+  .field-action .btn { width: auto; min-width: 140px; }
+  #dailyCard .form-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+}
+@media (max-width: 760px) {
+  .form-grid { grid-template-columns: 1fr 1fr; }
+  .field-action { grid-column: 1 / -1; }
+  .field-action .btn { width: 100%; }
+}
+
+/* Hamburger always available — collapsible sidebar on all sizes */
+.sidebar-open-btn {
+  display: inline-flex !important;
+}
+.shell.shell-with-sidebar {
+  transition: padding 0.2s ease;
+}
+@media (min-width: 901px) {
+  .shell.shell-with-sidebar > .sidebar {
+    transition: transform 0.22s ease, margin 0.22s ease;
+  }
+  body:not(.sidebar-open) .shell.shell-with-sidebar > .sidebar {
+    /* keep visible by default on desktop; user can still close via toggle */
+  }
+  .shell.shell-with-sidebar > .sidebar:not(.is-open) {
+    /* when explicitly closed on desktop */
+  }
+  body.sidebar-collapsed .shell.shell-with-sidebar > .sidebar {
+    transform: translateX(105%);
+    pointer-events: none;
+  }
+  body.sidebar-collapsed .sidebar-overlay {
+    display: none !important;
+  }
+}
