@@ -297,7 +297,8 @@ function tableToText() {
   return lines.join('\n');
 }
 function collectImportText() {
-  return activeTab === 'table' ? tableToText() : ($('data').value || '').trim();
+  // v8.0.3: only file/textarea path remains
+  return ($('data')?.value || '').trim();
 }
 
 async function importHistoricalIfAny(sym, tf) {
@@ -1586,7 +1587,7 @@ async function quickDebuggerAfterAnalysis(candles, symbol, currentPrice) {
 
 function init() {
   applyTheme(getTheme());
-  $('themeBtn').onclick = () => applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
+  $('themeBtn') && ($('themeBtn').onclick = () => applyTheme(getTheme() === 'dark' ? 'light' : 'dark'));
   tickClock();
   setInterval(tickClock, 1000);
   renderAssetPicker();
@@ -1621,8 +1622,8 @@ function init() {
     if (pref === '1' && $('fundToggle')) $('fundToggle').checked = true;
   } catch (_) {}
 
-  $('analyzeBtn').onclick = () => runAnalysis(false);
-  $('clearBtn').onclick = clearAll;
+  $('analyzeBtn') && ($('analyzeBtn').onclick = () => runAnalysis(false));
+  $('clearBtn') && ($('clearBtn').onclick = clearAll);
 
   // Fundamental toggle (optional input to Prediction)
   const fundToggle = $('fundToggle');
@@ -1634,12 +1635,7 @@ function init() {
     setFundHint();
   }
 
-  document.querySelectorAll('.tab').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
-  // table UI removed in v8.0.3
-  // pasteRows removed in v8.0.3
-      }
-    });
-  });
+  // tabs/paste/table removed in v8.0.3 — file upload only
 
   async function ingestCsvFile(file) {
     if (!file) return;
