@@ -440,6 +440,33 @@ export function getDataDayIndex(symbol, tf = '1D') {
   return map;
 }
 
+/**
+ * Per-day bias for calendar: +1 bullish (close>open), -1 bearish (close<open), 0 flat/unknown.
+ * Manual records override historical for the same day.
+ */
+export function getDataDayBias(symbol, tf = '1D') {
+  const s = assertSymbol(symbol);
+  const t = assertTf(tf);
+  const hist = loadHistorical(s, t);
+  const manual = loadManual(s, t);
+  const map = Object.create(null);
+  for (const c of hist) {
+    const d = c.day || (c.ts != null ? dayKey(c.ts) : (c.bucket ? String(c.bucket).slice(0, 10) : null));
+    if (!d) continue;
+    const o = isNum(c.o) ? c.o : (isNum(c.open) ? c.open : null);
+    const cl = isNum(c.c) ? c.c : (isNum(c.close) ? c.close : null);
+    if (o == null || cl == null || o <= 0) continue;
+    map[d] = cl > o ? 1 : cl < o ? -1 : 0;
+  }
+  for (const m of manual) {
+    const d = m.day || (m.bucket ? String(m.bucket).slice(0, 10) : null);
+    if (!d) continue;
+    if (!isNum(m.open) || !isNum(m.close) || m.open <= 0) continue;
+    map[d] = m.close > m.open ? 1 : m.close < m.open ? -1 : 0;
+  }
+  return map;
+}
+
 export function invalidateDayIndex(symbol, tf) {
   if (!cache.dayIndex) return;
   if (!symbol) {
