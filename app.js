@@ -809,7 +809,7 @@ function openSmartCal(force) {
 
 function switchView(view) {
   // Dedicated panels that replace main flow content
-  const dedicated = ['backtest', 'debugger', 'mpb'];
+  const dedicated = ['backtest', 'debugger', 'mpb', 'fundamental'];
   document.querySelectorAll('.view-panel').forEach(p => { p.hidden = true; });
   document.querySelectorAll('.side-link').forEach(a => a.classList.remove('active'));
 
@@ -834,6 +834,10 @@ function switchView(view) {
     }
     if (view === 'mpb') {
       renderMPBPanel(window.__lastAnalysisResult || null);
+      refreshMPBLibrary();
+    }
+    if (view === 'fundamental') {
+      syncFundPageFromToggle();
     }
   } else {
     // Restore main cards
@@ -956,17 +960,127 @@ async function runBacktestUI() {
 
 
 /* ── Market Pattern Brain UI ── */
+function downloadTextFile(filename, text, mime = 'application/json') {
+  const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+async function downloadMergedCsv() {
+  const sym = currentSymbol || $('symbol')?.value;
+  if (!sym) { toast('ابتدا نماد را انتخاب کنید', 'err'); return; }
+  try {
+    const { exportMergedCSV, promoteManualIntoHistorical } = await import('./logic/datasets.js');
+    // Persist manual into historical so next upload/session keeps them
+    promoteManualIntoHistorical(sym, currentTf || '1D', false);
+    const out = exportMergedCSV(sym, currentTf || '1D');
+    if (!out.count) { toast('داده‌ای برای دانلود نیست', 'err'); return; }
+    downloadTextFile(out.filename, out.csv, 'text/csv');
+    toast(`CSV ذخیره شد · ${out.count} ردیف (دستی: ${out.manualCount})`, 'ok');
+    setDataStatus(`CSV به‌روز: ${out.count} ردیف · تاریخچه+دستی`, 'ok');
+  } catch (err) {
+    toast(err?.message || 'خطا در ساخت CSV', 'err');
+  }
+}
+
+async function downloadPatternLibrary() {
+  try {
+    const { exportPatternsJSON } = await import('./logic/mpb/memory.js');
+    const json = exportPatternsJSON();
+    const name = `mpb_patterns_${new Date().toISOString().slice(0, 10)}.json`;
+    downloadTextFile(name, json, 'application/json');
+    toast('حافظه الگوها دانلود شد', 'ok');
+  } catch (err) {
+    toast(err?.message || 'خطا در دانلود الگوها', 'err');
+  }
+}
+
+async function importPatternLibraryFile(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const { importPatternsJSON } = await import('./logic/mpb/memory.js');
+    const res = importPatternsJSON(text);
+    if (!res.ok) { toast(res.error || 'بارگذاری ناموفق', 'err'); return; }
+    toast(`${res.added} الگو اضافه شد · مجموع ${res.total}`, 'ok');
+    refreshMPBLibrary();
+  } catch (err) {
+    toast(err?.message || 'خطا در خواندن فایل', 'err');
+  }
+}
+
+async function refreshMPBLibrary() {
+  const box = $('mpbLibraryList');
+  const statsEl = $('mpbMemoryStats');
+  try {
+    const { listPatterns, patternMemoryStats, deletePattern } = await import('./logic/mpb/memory.js');
+    const items = listPatterns();
+    const stats = patternMemoryStats();
+    if (statsEl) statsEl.textContent = `ذخیره‌شده: ${stats.total} الگو`;
+    if (!box) return;
+    if (!items.length) {
+      box.innerHTML = '<p class="muted">هنوز الگویی ذخیره نشده. پس از «اجرای تحلیل» الگوها اینجا می‌مانند.</p>';
+      return;
+    }
+    box.innerHTML = items.slice(0, 30).map(it => `
+      <div class="mpb-lib-item" data-id="${it.id}">
+        <div>
+          <strong>${it.patternLabel || it.patternId || 'الگو'}</strong>
+          <span class="muted"> · ${it.symbol}/${it.timeframe}</span>
+          <div class="mono muted">${(it.savedAt || '').replace('T', ' ').slice(0, 19)} · اطمینان ${it.confidence ?? '—'}٪</div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm mpb-del" data-id="${it.id}">حذف</button>
+      </div>
+    `).join('');
+    box.querySelectorAll('.mpb-del').forEach(btn => {
+      btn.onclick = async () => {
+        const { deletePattern } = await import('./logic/mpb/memory.js');
+        deletePattern(btn.dataset.id);
+        refreshMPBLibrary();
+        toast('الگو حذف شد', 'ok');
+      };
+    });
+  } catch {
+    if (statsEl) statsEl.textContent = 'حافظه در دسترس نیست';
+    if (box) box.innerHTML = '';
+  }
+}
+
+function syncFundPageFromToggle() {
+  const main = $('fundToggle');
+  const page = $('fundTogglePage');
+  if (page && main) page.checked = !!main.checked;
+  const hint = $('fundPageHint');
+  if (hint) hint.textContent = (page && page.checked) ? 'روشن — در اجرای تحلیل لحاظ می‌شود' : 'خاموش — فقط تحلیل قیمت';
+  const st = $('fundPageStatus');
+  if (st) st.textContent = (page && page.checked)
+    ? 'تحلیل بنیادی فعال است. برای دریافت داده، Backend باید در حال اجرا باشد.'
+    : 'تحلیل بنیادی خاموش است.';
+}
+
 function renderMPBPanel(result) {
   const mpb = result?.mpb;
   const set = (id, text) => { const el = $(id); if (el) el.textContent = text ?? '—'; };
   const badge = $('mpbStatusBadge');
+  const FA_REGIME = {
+    BullTrend: 'روند صعودی', BearTrend: 'روند نزولی', Sideways: 'خنثی / رنج',
+    HighVol: 'نوسان بالا', LowVol: 'نوسان پایین', Compression: 'فشردگی',
+    Expansion: 'گسترش نوسان', Breakout: 'شکست سطح', Reversal: 'بازگشت',
+    Accumulation: 'جمع‌آوری', Distribution: 'توزیع', Unclear: 'نامشخص'
+  };
 
   if (!mpb) {
     set('mpbRegime', '—');
-    set('mpbPattern', 'تحلیل را اجرا کنید');
+    set('mpbPattern', 'ابتدا تحلیل را اجرا کنید');
     set('mpbConfidence', '—');
     set('mpbDataQ', '—');
-    if (badge) { badge.textContent = 'NO DATA'; badge.className = 'badge is-bad'; }
+    if (badge) { badge.textContent = 'بدون داده'; badge.className = 'badge is-bad'; }
     ['mpbEvidence', 'mpbContradictions', 'mpbMatchesBody', 'mpbTrace'].forEach(id => {
       const el = $(id); if (el) el.innerHTML = '';
     });
@@ -975,24 +1089,28 @@ function renderMPBPanel(result) {
     if ($('mpbMeta')) $('mpbMeta').textContent = '';
     if ($('mpbConfBreak')) $('mpbConfBreak').innerHTML = '';
     if ($('mpbDna')) $('mpbDna').textContent = '';
+    refreshMPBLibrary();
     return;
   }
 
   const st = mpb.status || 'OK';
+  const stFa = st === 'OK' ? 'آماده' : st === 'INSUFFICIENT_EVIDENCE' ? 'شواهد ناکافی' : st;
   if (badge) {
-    badge.textContent = st;
+    badge.textContent = stFa;
     badge.className = 'badge ' + (st === 'OK' ? 'is-ok' : st === 'INSUFFICIENT_EVIDENCE' ? 'is-bad' : 'is-low');
   }
 
-  set('mpbRegime', mpb.regime?.primary || '—');
+  const reg = mpb.regime?.primary || '—';
+  set('mpbRegime', FA_REGIME[reg] || reg);
   set('mpbRegimeConf', mpb.regime?.confidence != null
-    ? `اطمینان رژیم: ${Math.round(mpb.regime.confidence * 100)}٪` : '');
+    ? `اطمینان از وضعیت: ${Math.round(mpb.regime.confidence * 100)}٪` : '');
   const ap = mpb.activePatterns?.[0];
   set('mpbPattern', ap?.label || ap?.id || '—');
-  set('mpbSim', ap?.similarity != null ? `Similarity: ${(ap.similarity * 100).toFixed(1)}٪` : '');
+  set('mpbSim', ap?.similarity != null ? `شباهت: ${(ap.similarity * 100).toFixed(1)}٪` : '');
   set('mpbConfidence', mpb.confidence?.overall != null ? mpb.confidence.overall + '٪' : '—');
-  set('mpbConfLabel', mpb.confidence?.label || mpb.confidence?.note || '');
-  set('mpbDataQ', mpb.dataQuality?.score != null ? mpb.dataQuality.score + '/100' : '—');
+  const confMap = { High: 'بالا', Moderate: 'متوسط', Low: 'پایین', 'Very Low': 'خیلی پایین' };
+  set('mpbConfLabel', confMap[mpb.confidence?.label] || mpb.confidence?.label || mpb.confidence?.note || '');
+  set('mpbDataQ', mpb.dataQuality?.score != null ? mpb.dataQuality.score + ' از ۱۰۰' : '—');
   set('mpbDataIssues', (mpb.dataQuality?.issues || []).slice(0, 3).join(' · ') || '');
 
   const evUl = $('mpbEvidence');
@@ -1007,7 +1125,7 @@ function renderMPBPanel(result) {
     const list = mpb.contradictions || [];
     ctUl.innerHTML = list.length
       ? list.map(c => `<li>⚠ ${c.text || c} <span class="muted">(${c.source || ''})</span></li>`).join('')
-      : '<li class="muted">هیچ تناقض مهمی ثبت نشد</li>';
+      : '<li class="muted">تناقض مهمی ثبت نشد</li>';
   }
 
   const outEl = $('mpbOutcomes');
@@ -1018,15 +1136,15 @@ function renderMPBPanel(result) {
       const s = o[String(h)] || o[h];
       if (!s) continue;
       if (s.status === 'INSUFFICIENT_EVIDENCE') {
-        parts.push(`<div><strong>${h} میله:</strong> INSUFFICIENT EVIDENCE (n=${s.sampleSize || 0})</div>`);
+        parts.push(`<div><strong>${h} دوره بعد:</strong> شواهد ناکافی (تعداد نمونه=${s.sampleSize || 0})</div>`);
       } else {
         parts.push(
-          `<div><strong>${h} میله:</strong> n=${s.sampleSize} · Win ${(s.winRate * 100).toFixed(0)}٪ · ` +
-          `Median ${(s.medianReturn * 100).toFixed(2)}٪ · MFE ${(s.meanMFE * 100).toFixed(2)}٪ · MAE ${(s.meanMAE * 100).toFixed(2)}٪</div>`
+          `<div><strong>${h} دوره بعد:</strong> نمونه ${s.sampleSize} · رشد ${(s.winRate * 100).toFixed(0)}٪ · ` +
+          `میانه بازده ${(s.medianReturn * 100).toFixed(2)}٪ · بیشترین سود ${(s.meanMFE * 100).toFixed(2)}٪ · بیشترین ضرر ${(s.meanMAE * 100).toFixed(2)}٪</div>`
         );
       }
     }
-    outEl.innerHTML = parts.length ? parts.join('') : '<span class="muted">Outcome در دسترس نیست</span>';
+    outEl.innerHTML = parts.length ? parts.join('') : '<span class="muted">نتیجه تاریخی در دسترس نیست</span>';
   }
 
   const tbody = $('mpbMatchesBody');
@@ -1039,18 +1157,19 @@ function renderMPBPanel(result) {
           const fmtR = (o) => o && o.return != null ? (o.return * 100).toFixed(2) + '٪' : '—';
           return `<tr><td class="mono">${m.date || m.index}</td><td>${(m.similarity * 100).toFixed(1)}٪</td><td>${fmtR(r5)}</td><td>${fmtR(r10)}</td></tr>`;
         }).join('')
-      : '<tr><td colspan="4" class="muted">نمونه‌ای یافت نشد</td></tr>';
+      : '<tr><td colspan="4" class="muted">نمونه مشابهی پیدا نشد</td></tr>';
   }
 
   const scEl = $('mpbScenarios');
   if (scEl) {
+    const nameFa = { bullish: 'سناریوی صعودی', bearish: 'سناریوی نزولی', neutral: 'سناریوی خنثی', insufficient: 'شواهد ناکافی' };
     const sc = mpb.scenarios || [];
     scEl.innerHTML = sc.map(s => `
       <div class="mpb-scenario">
-        <strong>${s.name}</strong>
-        ${s.probabilityHint != null ? `Hint≈${(s.probabilityHint * 100).toFixed(0)}٪ · ` : ''}
-        Trigger: ${s.trigger || '—'}
-        ${s.note ? `<div class="muted">${s.note}</div>` : ''}
+        <strong>${nameFa[s.id] || s.name}</strong>
+        ${s.probabilityHint != null ? `تقریبی≈${(s.probabilityHint * 100).toFixed(0)}٪ · ` : ''}
+        شرط: ${s.trigger || '—'}
+        ${s.note ? `<div class="muted">${s.note === 'INSUFFICIENT_EVIDENCE' ? 'شواهد ناکافی' : s.note}</div>` : ''}
       </div>
     `).join('') || '<span class="muted">—</span>';
   }
@@ -1058,16 +1177,25 @@ function renderMPBPanel(result) {
   if ($('mpbMeta')) {
     const meta = mpb.metaPatterns;
     $('mpbMeta').innerHTML = meta
-      ? `<strong>Meta-Pattern:</strong> ${meta.label || '—'} <span class="muted">(${meta.status})</span>`
+      ? `<strong>توالی الگو:</strong> ${meta.label || '—'} <span class="muted">(${meta.status === 'DETECTED' ? 'شناسایی‌شده' : meta.status === 'PARTIAL' ? 'ناقص' : 'بدون توالی'})</span>`
       : '';
   }
 
   const cb = $('mpbConfBreak');
   if (cb && mpb.confidence?.components) {
+    const labels = {
+      dataQuality: 'کیفیت داده',
+      regimeAlignment: 'هم‌راستایی وضعیت',
+      patternSimilarity: 'شباهت الگو',
+      historicalReliability: 'پایداری تاریخی',
+      evidenceStrength: 'قدرت شواهد',
+      sampleAdequacy: 'کفایت نمونه',
+      contradictionPenalty: 'جریمه تناقض'
+    };
     const c = mpb.confidence.components;
     cb.innerHTML = '<div class="mpb-conf-bar">' +
       Object.entries(c).map(([k, v]) =>
-        `<span class="mpb-conf-chip">${k}: ${v}٪</span>`
+        `<span class="mpb-conf-chip">${labels[k] || k}: ${v}٪</span>`
       ).join('') + '</div>';
   }
 
@@ -1081,6 +1209,11 @@ function renderMPBPanel(result) {
     const dna = ap?.dna || mpb.activePatterns?.[0]?.dna || null;
     $('mpbDna').textContent = dna ? JSON.stringify(dna, null, 2) : (mpb.status || '—');
   }
+
+  if (mpb.patternMemory?.totalInLibrary != null && $('mpbMemoryStats')) {
+    $('mpbMemoryStats').textContent = `ذخیره‌شده: ${mpb.patternMemory.totalInLibrary} الگو`;
+  }
+  refreshMPBLibrary();
 }
 
 /* ── Auto Debugger UI ── */
@@ -1384,6 +1517,27 @@ function init() {
     if (currentSymbol) refreshAssetPanel(currentSymbol);
   });
   $('priceForm').addEventListener('submit', saveDailyPrice);
+  $('downloadCsvBtn')?.addEventListener('click', downloadMergedCsv);
+  $('mpbDownloadPatternsBtn')?.addEventListener('click', downloadPatternLibrary);
+  $('mpbImportPatternsBtn')?.addEventListener('click', () => $('mpbImportFile')?.click());
+  $('mpbImportFile')?.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) importPatternLibraryFile(f);
+    e.target.value = '';
+  });
+  $('fundTogglePage')?.addEventListener('change', () => {
+    const main = $('fundToggle');
+    if (main) main.checked = !!$('fundTogglePage').checked;
+    // persist preference
+    try { localStorage.setItem('oma_fund_toggle', main && main.checked ? '1' : '0'); } catch (_) {}
+    syncFundPageFromToggle();
+  });
+  // restore fund preference
+  try {
+    const pref = localStorage.getItem('oma_fund_toggle');
+    if (pref === '1' && $('fundToggle')) $('fundToggle').checked = true;
+  } catch (_) {}
+
   $('analyzeBtn').onclick = () => runAnalysis(false);
   $('clearBtn').onclick = clearAll;
 
