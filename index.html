@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="تحلیل‌گر بازار آفلاین — ترمینال مالی فارسی · پوسته Terminal Glass">
-  <title>تحلیل‌گر بازار · v8.0.2</title>
+  <meta name="description" content="تحلیل‌گر بازار آفلاین — ترمینال مالی فارسی · پوسته‌های Terminal Glass و Vector Soft">
+  <title>تحلیل‌گر بازار · v8.0.3</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -80,7 +80,7 @@
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
           </button>
           <div class="brand-copy">
-            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v8.0.2</span></h1>
+            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v8.0.3</span></h1>
           </div>
         </div>
         <div class="header-center" id="headerAssetSlot">
@@ -201,43 +201,23 @@
           <div>
             <p class="eyebrow">داده بازار</p>
             <h2 class="card-title" id="ohlcv-title">بارگذاری قیمت‌ها</h2>
-            <p class="card-desc">چسباندن، جدول یا فایل CSV</p>
+            <p class="card-desc">آپلود فایل CSV قیمت‌ها</p>
           </div>
           <span class="collapse-chevron" aria-hidden="true">▼</span>
         </button>
         <div id="ohlcvBody" class="collapse-body" hidden>
-          <div class="tabs" role="tablist">
-            <button type="button" class="tab active" data-tab="paste" role="tab" aria-selected="true">چسباندن</button>
-            <button type="button" class="tab" data-tab="table" role="tab" aria-selected="false">جدول</button>
-            <button type="button" class="tab" data-tab="file" role="tab" aria-selected="false">فایل</button>
+          <p class="card-desc" style="margin-bottom:0.75rem">فقط فایل CSV قیمت‌ها (تاریخ، باز، سقف، کف، بسته، حجم). پس از انتخاب، داده مستقیماً در مخزن نماد ذخیره می‌شود.</p>
+          <div id="drop" class="dropzone" role="button" tabindex="0">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg>
+            <strong>انتخاب یا رها کردن فایل CSV</strong>
+            <span>فرمت: Date,Open,High,Low,Close,Volume</span>
+            <input id="csv" type="file" accept=".csv,text/csv,text/plain" tabindex="-1" aria-hidden="true">
           </div>
-          <div id="panelPaste" class="tab-panel active" role="tabpanel">
-            <label class="label" for="data">متن داده (تاریخ، باز، سقف، کف، بسته، حجم)</label>
-            <textarea id="data" class="input input-area mono" placeholder="Date,Open,High,Low,Close,Volume" aria-label="داده قیمت"></textarea>
+          <div id="fileName" class="file-chip" hidden>
+            <span id="fileNameText">—</span>
+            <span id="fileMeta" class="muted"></span>
           </div>
-          <div id="panelTable" class="tab-panel" role="tabpanel" hidden>
-            <div class="row-actions">
-              <button type="button" class="btn btn-ghost btn-sm" id="addRowBtn">ردیف جدید</button>
-              <button type="button" class="btn btn-ghost btn-sm" id="pasteRowsBtn">چسباندن ردیف‌ها</button>
-            </div>
-            <div class="table-scroll">
-              <table class="data-table">
-                <thead><tr><th>تاریخ</th><th>باز</th><th>سقف</th><th>کف</th><th>بسته</th><th>حجم</th><th></th></tr></thead>
-                <tbody id="manualBody"></tbody>
-              </table>
-            </div>
-          </div>
-          <div id="panelFile" class="tab-panel" role="tabpanel" hidden>
-            <div id="drop" class="dropzone" role="button" tabindex="0">
-              <strong>انتخاب یا رها کردن فایل</strong>
-              <span>فرمت CSV قیمت‌ها</span>
-              <input id="csv" type="file" accept=".csv,text/csv,text/plain" tabindex="-1" aria-hidden="true">
-            </div>
-            <div id="fileName" class="file-chip" hidden>
-              <span id="fileNameText">—</span>
-              <span id="fileMeta" class="muted"></span>
-            </div>
-          </div>
+          <textarea id="data" class="sr-only" tabindex="-1" aria-hidden="true"></textarea>
           <div id="dataStatus" class="status-line" role="status"></div>
         </div>
       </section>
@@ -323,11 +303,20 @@
           </div>
           <span class="badge" id="mpbStatusBadge">—</span>
         </div>
-        <p class="muted mpb-intro">این بخش وضعیت فعلی بازار را با نمونه‌های تاریخی مشابه مقایسه می‌کند و نتیجه را همراه با شواهد، تناقض‌ها و میزان اطمینان نشان می‌دهد. اگر داده کافی نباشد، صریحاً اعلام می‌کند: <strong>شواهد ناکافی</strong>.</p>
+        <p class="muted mpb-intro">
+          بازار الان را با دوره‌های شبیه در گذشته مقایسه می‌کند و می‌گوید «چه الگویی فعال است» و «بعد از آن الگوها معمولاً چه شد».
+          اگر داده کم باشد، صریحاً <strong>شواهد ناکافی</strong> اعلام می‌شود.
+        </p>
+        <div class="mpb-suggest-box" id="mpbSuggestBox">
+          <div class="mpb-suggest-k">پیشنهاد بر اساس الگو</div>
+          <p class="mpb-suggest-v" id="mpbSuggestion">پس از اجرای تحلیل، پیشنهاد ساده اینجا نمایش داده می‌شود.</p>
+        </div>
 
         <div class="mpb-toolbar">
+          <button type="button" class="btn btn-primary btn-sm" id="mpbLoadCsvBtn">بارگذاری CSV قیمت</button>
+          <input type="file" id="mpbCsvFile" accept=".csv,text/csv,text/plain" hidden>
           <button type="button" class="btn btn-outline btn-sm" id="mpbDownloadPatternsBtn">دانلود حافظه الگوها</button>
-          <button type="button" class="btn btn-ghost btn-sm" id="mpbImportPatternsBtn">بارگذاری الگوها</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="mpbImportPatternsBtn">بارگذاری الگو (JSON)</button>
           <input type="file" id="mpbImportFile" accept=".json,application/json" hidden>
           <span class="muted" id="mpbMemoryStats">—</span>
         </div>
@@ -441,14 +430,14 @@
           <div>
             <p class="eyebrow">اعتبارسنجی تاریخی</p>
             <h2 class="card-title" id="bt-title">بک‌تست</h2>
-            <p class="card-desc">Walk-forward واقعی بدون نگاه به آینده: در هر نقطه فقط دادهٔ گذشته برای پیش‌بینی استفاده می‌شود و با مسیر واقعی قیمت (High/Low) مقایسه می‌گردد.</p>
+            <p class="card-desc">آیا سیگنال‌های مدل در گذشته درست کار کرده‌اند؟ بدون نگاه به آینده آزمایش می‌شود.</p>
           </div>
         </div>
         <p class="muted bt-intro">
-          <strong>افق:</strong> چند کندل بعد هدف/استاپ ارزیابی می‌شود.
-          <strong>فاصله نمونه‌ها:</strong> برای سرعت بیشتر می‌توانید هر N کندل یک نمونه بگیرید.
-          <strong>مدل:</strong> Ensemble چند استراتژی، فقط تکنیکال، فقط بنیادی یا ترکیب.
-          داده از همان مخزن پروژه (تاریخچه + ورود دستی) خوانده می‌شود.
+          مدل روی دادهٔ قدیمی پیش‌بینی می‌کند؛ بعد با قیمت واقعی مقایسه می‌شود.
+          <strong>افق</strong> = چند کندل بعد هدف/استاپ چک شود ·
+          <strong>فاصله نمونه‌ها</strong> = سرعت تست ·
+          داده از همان مخزن پروژه (فایل CSV + ورود دستی) خوانده می‌شود.
         </p>
         <div class="bt-controls form-grid">
           <div class="field">
@@ -532,8 +521,12 @@
                 <input type="radio" name="setSkin" value="terminal-glass" id="setSkinTg" checked>
                 <span>Terminal Glass</span>
               </label>
+              <label class="settings-option">
+                <input type="radio" name="setSkin" value="vector-soft" id="setSkinVs">
+                <span>Vector Soft</span>
+              </label>
             </div>
-            <p class="hint">پوستهٔ فعلی: <strong id="skinNameLabel">Terminal Glass</strong> — طراحی ترمینال مالی با افکت شیشه‌ای و گوشه‌های نرم.</p>
+            <p class="hint">پوستهٔ فعلی: <strong id="skinNameLabel">Terminal Glass</strong> — Terminal Glass (ترمینال شیشه‌ای) یا Vector Soft (مینیمال وکتوری).</p>
           </div>
         </div>
       </section>
@@ -584,8 +577,8 @@
     </main>
 
     <footer class="site-footer">
-      <span>نسخه ۸.۰.۲ · آفلاین</span>
-      <span class="muted">پوسته Terminal Glass · داده محلی</span>
+      <span>نسخه ۸.۰.۳ · آفلاین</span>
+      <span class="muted" id="footerSkinLabel">پوسته Terminal Glass · داده محلی</span>
     </footer>
   </div>
 
@@ -614,7 +607,7 @@
       </div>
       <div class="modal-actions">
         <button type="submit" class="btn btn-primary" value="ok">افزودن</button>
-        <button type="submit" class="btn btn-ghost" value="cancel">انصراف</button>
+        <button type="button" class="btn btn-ghost" id="addAssetCancelBtn">انصراف</button>
       </div>
     </form>
   </dialog>

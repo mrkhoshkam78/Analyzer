@@ -1,5 +1,5 @@
 /**
- * UI Controller V6.05
+ * UI Controller V8.0.3
  * Fundamental is an optional input to Prediction (toggle), not a standalone view.
  */
 import { getSymbol, formatPrice, getAllSymbols, registerCustomAsset } from './logic/symbols.js';
@@ -715,16 +715,14 @@ function showResult(r, symbolId) {
 }
 
 function clearAll() {
-  $('current').value = '';
-  $('data').value = '';
-  $('priceOpen').value = '';
-  $('priceClose').value = '';
-  $('result').hidden = true;
+  if ($('current')) $('current').value = '';
+  if ($('data')) $('data').value = '';
+  if ($('priceOpen')) $('priceOpen').value = '';
+  if ($('priceClose')) $('priceClose').value = '';
+  if ($('result')) $('result').hidden = true;
   if ($('csv')) $('csv').value = '';
-  const body = $('manualBody');
-  if (body) { body.innerHTML = ''; for (let i = 0; i < 4; i++) addTableRow(); }
+  if ($('fileName')) $('fileName').hidden = true;
   setDataStatus('فرم پاک شد؛ Dataset ذخیره‌شده حفظ شد.', 'ok');
-  switchTab('paste');
   if (currentSymbol) refreshAssetPanel(currentSymbol);
 }
 
@@ -903,10 +901,12 @@ function applyLang(lang) {
 }
 
 function applySkin(skin) {
-  const s = skin || 'terminal-glass';
+  const s = skin === 'vector-soft' ? 'vector-soft' : 'terminal-glass';
   document.documentElement.setAttribute('data-skin', s);
   try { localStorage.setItem('oma_skin', s); } catch (_) {}
-  if ($('skinNameLabel')) $('skinNameLabel').textContent = s === 'terminal-glass' ? 'Terminal Glass' : s;
+  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft' };
+  if ($('skinNameLabel')) $('skinNameLabel').textContent = names[s] || s;
+  if ($('footerSkinLabel')) $('footerSkinLabel').textContent = `پوسته ${names[s] || s} · داده محلی`;
 }
 
 
@@ -1138,6 +1138,7 @@ function renderMPBPanel(result) {
     set('mpbPattern', 'ابتدا تحلیل را اجرا کنید');
     set('mpbConfidence', '—');
     set('mpbDataQ', '—');
+    if ($('mpbSuggestion')) $('mpbSuggestion').textContent = 'پس از اجرای تحلیل، پیشنهاد ساده اینجا نمایش داده می‌شود.';
     if (badge) { badge.textContent = 'بدون داده'; badge.className = 'badge is-bad'; }
     ['mpbEvidence', 'mpbContradictions', 'mpbMatchesBody', 'mpbTrace'].forEach(id => {
       const el = $(id); if (el) el.innerHTML = '';
@@ -1168,6 +1169,29 @@ function renderMPBPanel(result) {
   set('mpbConfidence', mpb.confidence?.overall != null ? mpb.confidence.overall + '٪' : '—');
   const confMap = { High: 'بالا', Moderate: 'متوسط', Low: 'پایین', 'Very Low': 'خیلی پایین' };
   set('mpbConfLabel', confMap[mpb.confidence?.label] || mpb.confidence?.label || mpb.confidence?.note || '');
+  // پیشنهاد ساده برای کاربر عمومی بر اساس الگو و رژیم
+  if ($('mpbSuggestion')) {
+    let suggest = '';
+    if (st === 'INSUFFICIENT_EVIDENCE') {
+      suggest = 'داده یا نمونه‌های تاریخی کافی نیست. CSV بیشتری بارگذاری کنید یا بازه زمانی دیگری امتحان کنید.';
+    } else {
+      const conf = mpb.confidence?.overall ?? 0;
+      const regKey = mpb.regime?.primary || '';
+      const pat = ap?.label || ap?.id || 'الگوی نامشخص';
+      if (regKey === 'BullTrend' && conf >= 55) {
+        suggest = `الگوی «${pat}» در روند صعودی دیده می‌شود. نمونه‌های مشابه تاریخی بیشتر رشد داشته‌اند — با احتیاط و حد ضرر مدیریت کنید.`;
+      } else if (regKey === 'BearTrend' && conf >= 55) {
+        suggest = `الگوی «${pat}» در روند نزولی است. در گذشته اغلب فشار فروش ادامه داشته — از ورود عجولانه بپرهیزید.`;
+      } else if (regKey === 'Sideways' || regKey === 'Compression') {
+        suggest = `بازار در حالت رنج/فشردگی («${pat}») است. صبر برای شکست واضح سطح معمولاً منطقی‌تر از معامله زودهنگام است.`;
+      } else if (conf < 40) {
+        suggest = `اطمینان پایین است. الگوی «${pat}» را فقط به‌عنوان هشدار در نظر بگیرید، نه سیگنال قطعی.`;
+      } else {
+        suggest = `الگوی فعال: «${pat}». جزئیات شواهد و نمونه‌های تاریخی را در بخش‌های پایین ببینید و با مدیریت ریسک تصمیم بگیرید.`;
+      }
+    }
+    $('mpbSuggestion').textContent = suggest;
+  }
   set('mpbDataQ', mpb.dataQuality?.score != null ? mpb.dataQuality.score + ' از ۱۰۰' : '—');
   set('mpbDataIssues', (mpb.dataQuality?.issues || []).slice(0, 3).join(' · ') || '');
 
@@ -1611,39 +1635,71 @@ function init() {
   }
 
   document.querySelectorAll('.tab').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
-  for (let i = 0; i < 4; i++) addTableRow();
-  $('addRowBtn')?.addEventListener('click', () => addTableRow());
-  $('pasteRowsBtn')?.addEventListener('click', () => {
-    const raw = prompt('OHLCV:');
-    if (!raw) return;
-    raw.trim().split(/\n/).forEach(line => {
-      const cols = line.includes(',') ? line.split(',') : line.trim().split(/\s+/);
-      if (cols.length >= 5 && !/date|open/i.test(cols[0])) {
-        addTableRow({ date: cols[0], o: cols[1], h: cols[2], l: cols[3], c: cols[4], v: cols[5] || '' });
+  // table UI removed in v8.0.3
+  // pasteRows removed in v8.0.3
       }
     });
   });
 
+  async function ingestCsvFile(file) {
+    if (!file) return;
+    const text = await file.text();
+    if ($('data')) $('data').value = text;
+    if ($('fileName')) {
+      $('fileName').hidden = false;
+      if ($('fileNameText')) $('fileNameText').textContent = file.name;
+      if ($('fileMeta')) $('fileMeta').textContent = `${Math.round(file.size / 1024)} KB`;
+    }
+    const sym = currentSymbol || $('symbol')?.value;
+    if (!sym) {
+      toast('ابتدا نماد را انتخاب کنید، سپس فایل را بارگذاری کنید', 'err');
+      setDataStatus('نماد انتخاب نشده — فایل در بافر است', 'warn');
+      return;
+    }
+    currentTf = $('tf')?.value || currentTf || '1D';
+    const imp = await importHistoricalIfAny(sym, currentTf);
+    if (imp.error) {
+      toast(imp.error, 'err');
+      setDataStatus(imp.error, 'err');
+      return;
+    }
+    // also try project path cache refresh
+    try {
+      const { ensureProjectData } = await import('./logic/datasets.js');
+      await ensureProjectData(sym, currentTf);
+    } catch (_) {}
+    refreshAssetPanel(sym);
+    const n = imp.imported || 0;
+    const msg = n ? `${n} کندل از CSV برای ${sym}/${currentTf} ذخیره شد` : 'فایل خوانده شد (ممکن است تکراری باشد)';
+    setDataStatus(msg, 'ok');
+    toast(msg, 'ok');
+  }
+
   const drop = $('drop'), csv = $('csv');
   if (drop && csv) {
     drop.onclick = () => csv.click();
+    drop.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); csv.click(); } };
     drop.ondragover = e => { e.preventDefault(); drop.classList.add('dragover'); };
     drop.ondragleave = () => drop.classList.remove('dragover');
     drop.ondrop = async e => {
       e.preventDefault(); drop.classList.remove('dragover');
       const f = e.dataTransfer.files[0];
-      if (f) {
-        $('data').value = await f.text();
-        if ($('fileName')) { $('fileName').hidden = false; $('fileNameText').textContent = f.name; }
-        switchTab('paste');
-        toast('فایل خوانده شد', 'ok');
-      }
+      if (f) await ingestCsvFile(f);
     };
     csv.onchange = async () => {
       const f = csv.files[0];
-      if (f) { $('data').value = await f.text(); switchTab('paste'); }
+      if (f) await ingestCsvFile(f);
+      csv.value = '';
     };
   }
+
+  // MPB: load CSV price data into current symbol
+  $('mpbLoadCsvBtn')?.addEventListener('click', () => $('mpbCsvFile')?.click());
+  $('mpbCsvFile')?.addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) await ingestCsvFile(f);
+    e.target.value = '';
+  });
 
   const ohlcvToggle = $('ohlcvToggle');
   const ohlcvBody = $('ohlcvBody');
@@ -1673,18 +1729,29 @@ function init() {
     if ($('smartCal') && !$('smartCal').hidden) renderSmartCal();
   });
 
-  $('addAssetBtn').onclick = () => $('addAssetDialog').showModal();
-  $('addAssetForm').onsubmit = (e) => {
-    const submitter = e.submitter;
-    if (submitter && submitter.value === 'cancel') return;
+  $('addAssetBtn').onclick = () => {
+    const dlg = $('addAssetDialog');
+    if ($('newSym')) $('newSym').value = '';
+    if ($('newName')) $('newName').value = '';
+    if ($('newCat')) $('newCat').value = 'stocks';
+    dlg?.showModal();
+  };
+  $('addAssetCancelBtn')?.addEventListener('click', (e) => {
     e.preventDefault();
+    e.stopPropagation();
+    $('addAssetDialog')?.close();
+  });
+  $('addAssetForm').onsubmit = (e) => {
+    e.preventDefault();
+    const symRaw = ($('newSym')?.value || '').trim();
+    if (!symRaw) { toast('نماد را وارد کنید', 'err'); return; }
     const res = registerCustomAsset({
-      symbol: $('newSym').value,
-      nameFa: $('newName').value || $('newSym').value,
-      category: $('newCat').value
+      symbol: symRaw,
+      nameFa: ($('newName')?.value || '').trim() || symRaw,
+      category: $('newCat')?.value || 'stocks'
     });
-    if (!res.ok) { toast(res.error, 'err'); return; }
-    $('addAssetDialog').close();
+    if (!res.ok) { toast(res.error || 'افزودن ناموفق', 'err'); return; }
+    $('addAssetDialog')?.close();
     renderAssetPicker();
     selectAsset(res.asset.symbol);
     toast(`دارایی ${res.asset.symbol} افزوده شد`, 'ok');
@@ -1703,6 +1770,7 @@ function init() {
     const ov = $('sidebarOverlay');
     if (sb) sb.classList.add('is-open');
     document.body.classList.add('sidebar-open');
+    document.body.classList.remove('sidebar-collapsed');
     if (ov) {
       ov.hidden = false;
       ov.classList.add('is-visible');
@@ -1746,12 +1814,20 @@ function init() {
       e.stopPropagation();
       const sb = $('sidebar');
       const isOpen = sb && sb.classList.contains('is-open');
-      if (isOpen) {
-        closeSidebar();
-        document.body.classList.add('sidebar-collapsed');
+      const isDesktop = window.matchMedia('(min-width: 901px)').matches;
+      if (isDesktop) {
+        // Desktop: toggle collapsed class (hide/show sidebar)
+        if (document.body.classList.contains('sidebar-collapsed')) {
+          document.body.classList.remove('sidebar-collapsed');
+          openSidebar();
+        } else {
+          closeSidebar();
+          document.body.classList.add('sidebar-collapsed');
+        }
       } else {
-        document.body.classList.remove('sidebar-collapsed');
-        openSidebar();
+        // Mobile: drawer open/close
+        if (isOpen) closeSidebar();
+        else openSidebar();
       }
     });
   }
@@ -1779,6 +1855,12 @@ function init() {
   document.querySelectorAll('input[name="setSkin"]').forEach(r => {
     r.addEventListener('change', () => { if (r.checked) applySkin(r.value); });
   });
+  try {
+    const sk = localStorage.getItem('oma_skin') || 'terminal-glass';
+    const radio = document.querySelector(`input[name="setSkin"][value="${sk}"]`);
+    if (radio) radio.checked = true;
+    applySkin(sk);
+  } catch (_) { applySkin('terminal-glass'); }
 
   window.__OMA_V5__ = { getCachedSymbols, buildAnalysisSeries, loadManual, loadHistorical, getDataDayIndex };
 }
