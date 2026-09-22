@@ -241,7 +241,7 @@ export function runDecision(candles, options = {}) {
   const volRegime = ind.atrPct > CONFIG.highVolPct ? 'high'
     : ind.atrPct < CONFIG.lowVolPct ? 'low' : 'normal';
 
-  // Entry engine
+  // Entry engine V9.01 — multi-scenario EV-aware
   const entry = computeEntry({
     price,
     signal: ens.signal,
@@ -255,7 +255,14 @@ export function runDecision(candles, options = {}) {
     riskScore,
     fib: ind.fibonacci,
     eventState: context.event?.state,
-    sessionLiquidity: context.session?.liquidity
+    sessionLiquidity: context.session?.liquidity,
+    symbolId: symbol,
+    dataQuality: context.dataQuality?.score ?? 0.5,
+    timeframe,
+    equity: options.equity ?? null,
+    riskPct: options.riskPct ?? CONFIG.defaultRiskPct,
+    histSamples: histAcc?.samples || 0,
+    candleCount: candles.length
   });
 
   // Target/Stop: prefer entry engine levels when valid, else structure+ATR
@@ -367,16 +374,21 @@ export function runDecision(candles, options = {}) {
       resistance,
       confidence: ens.confidence,
       horizonBars,
-      rr,
+      rr: entry.netRR != null ? entry.netRR : rr,
       target2: entry.target2,
-      algoVersion: 'v7.0.1-context-mtf-ensemble',
+      algoVersion: 'v9.01-entry-ev-ensemble',
       learningNote: learning.note,
       regime: regimeInfo.regime,
       entry: entry.preferredEntry,
       entryType: entry.entryType,
+      entryDirection: entry.direction,
       waitForEntry: entry.waitForEntry,
       invalidation: entry.invalidation,
-      disclaimer: 'پیش‌بینی قطعی نیست. بر اساس Ensemble چنداستراتژی، Context و Multi-Timeframe محلی است.'
+      winP: entry.winP,
+      evR: entry.evR,
+      modelConfidence: entry.modelConfidence,
+      selectedScenario: entry.selectedScenario,
+      disclaimer: 'پیش‌بینی قطعی نیست. Entry V9.01 بر اساس سناریوهای ساختاری، EV محافظه‌کارانه و Ensemble محلی است — نه تضمین سود.'
     },
     suggestion,
     signal: ens.signal,

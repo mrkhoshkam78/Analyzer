@@ -59,5 +59,11 @@ export const CONFIG = Object.freeze({
   confidenceClamp: Object.freeze({ min: 0.7, max: 1.15 }),
 
   // Learning: how much past accuracy shifts confidence
-  learningStrength: 0.25
+  learningStrength: 0.25,
+
+  // Entry Engine V9.01 gates
+  entryMinRR: 1.15,          // minimum raw R:R (Breakout may pass slightly lower via EV)
+  entryMinEV_R: -0.02,       // reject if expected value in R-units below this
+  minSamplesForKelly: 30,    // historical closed trades required to enable Kelly
+  defaultRiskPct: 0.01       // 1% equity risk default for position sizing
 });
