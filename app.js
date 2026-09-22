@@ -682,23 +682,51 @@ function showResult(r, symbolId) {
     }
     html += '</div>';
 
-    // Entry
-    html += '<div class="ens-section"><div class="ens-sec-title">نقطه ورود / Entry</div>';
-    if (entry && (entry.entryType || entry.preferredEntry != null)) {
+    // Entry V9.01
+    html += '<div class="ens-section"><div class="ens-sec-title">نقطه ورود / Entry Engine v9.01</div>';
+    if (entry && (entry.entryType || entry.preferredEntry != null || entry.direction === 'No Trade')) {
       const wait = entry.waitForEntry;
+      const noTrade = entry.direction === 'No Trade' || entry.entryType === 'No Trade' || entry.entryType === 'No Valid Entry';
+      const dirCls = noTrade ? 'neu' : (entry.direction === 'Long' ? 'bull' : entry.direction === 'Short' ? 'bear' : 'neu');
       html += `<div class="ens-grid">`;
-      html += `<div class="ens-item"><span class="ens-label">نوع ورود</span><span class="ens-val">${entry.entryType || '—'}</span></div>`;
-      html += `<div class="ens-item"><span class="ens-label">وضعیت</span><span class="ens-val ${wait ? 'bear' : 'bull'}">${wait ? 'Wait for Entry' : 'ورود معتبر'}</span></div>`;
+      html += `<div class="ens-item"><span class="ens-label">جهت سناریو</span><span class="ens-val ${dirCls}">${entry.direction || '—'}</span></div>`;
+      html += `<div class="ens-item"><span class="ens-label">نوع / سناریو</span><span class="ens-val">${entry.entryType || '—'}</span></div>`;
+      html += `<div class="ens-item"><span class="ens-label">وضعیت</span><span class="ens-val ${noTrade ? 'bear' : wait ? 'neu' : 'bull'}">${noTrade ? 'No Trade' : wait ? 'Wait for Entry' : 'ورود معتبر'}</span></div>`;
       if (entry.preferredEntry != null) html += `<div class="ens-item"><span class="ens-label">ورود پیشنهادی</span><span class="ens-val mono">${entry.preferredEntry}</span></div>`;
       if (entry.entryZone) html += `<div class="ens-item"><span class="ens-label">ناحیه ورود</span><span class="ens-val mono">${entry.entryZone.low} – ${entry.entryZone.high}</span></div>`;
-      if (entry.stop != null) html += `<div class="ens-item"><span class="ens-label">Stop</span><span class="ens-val mono">${entry.stop}</span></div>`;
-      if (entry.target1 != null) html += `<div class="ens-item"><span class="ens-label">Target 1</span><span class="ens-val mono">${entry.target1}</span></div>`;
-      if (entry.target2 != null) html += `<div class="ens-item"><span class="ens-label">Target 2</span><span class="ens-val mono">${entry.target2}</span></div>`;
-      if (entry.rr != null) html += `<div class="ens-item"><span class="ens-label">R:R</span><span class="ens-val mono">${entry.rr}</span></div>`;
-      if (entry.invalidation != null) html += `<div class="ens-item"><span class="ens-label">Invalidation</span><span class="ens-val mono">${entry.invalidation}</span></div>`;
+      if (entry.activation) html += `<div class="ens-item"><span class="ens-label">شرط فعال‌سازی</span><span class="ens-val">${entry.activation}</span></div>`;
+      if (entry.stop != null) html += `<div class="ens-item"><span class="ens-label">حد ضرر</span><span class="ens-val mono">${entry.stop}</span></div>`;
+      if (entry.target1 != null) html += `<div class="ens-item"><span class="ens-label">هدف ۱</span><span class="ens-val mono">${entry.target1}</span></div>`;
+      if (entry.target2 != null) html += `<div class="ens-item"><span class="ens-label">هدف ۲</span><span class="ens-val mono">${entry.target2}</span></div>`;
+      if (entry.rr != null) html += `<div class="ens-item"><span class="ens-label">R:R خام</span><span class="ens-val mono">${entry.rr}</span></div>`;
+      if (entry.netRR != null) html += `<div class="ens-item"><span class="ens-label">R:R خالص (پس از هزینه)</span><span class="ens-val mono">${entry.netRR}</span></div>`;
+      if (entry.evR != null) html += `<div class="ens-item"><span class="ens-label">ارزش موردانتظار (R)</span><span class="ens-val mono ${entry.evR >= 0 ? 'bull' : 'bear'}">${entry.evR}</span></div>`;
+      if (entry.winP != null) html += `<div class="ens-item"><span class="ens-label">احتمال تخمینی موفقیت</span><span class="ens-val mono">${Math.round(entry.winP * 100)}% <span class="muted">(مدل)</span></span></div>`;
+      if (entry.modelConfidence != null) html += `<div class="ens-item"><span class="ens-label">اطمینان مدل</span><span class="ens-val mono">${Math.round(entry.modelConfidence * 100)}%</span></div>`;
+      if (entry.invalidation != null) html += `<div class="ens-item"><span class="ens-label">ابطال سناریو</span><span class="ens-val mono">${entry.invalidation}</span></div>`;
+      if (entry.regime) html += `<div class="ens-item"><span class="ens-label">رژیم بازار</span><span class="ens-val">${entry.regime}</span></div>`;
       html += `</div>`;
       if (entry.reason) html += `<div class="ens-active">${entry.reason}</div>`;
-      if (entry.confirmation?.length) html += `<div class="ens-active muted">تأیید: ${entry.confirmation.join(' · ')}</div>`;
+      if (entry.confirmation?.length) html += `<div class="ens-active muted">عوامل مؤثر: ${entry.confirmation.join(' · ')}</div>`;
+      if (entry.scenarios?.length) {
+        html += '<div class="strat-table" style="margin-top:8px"><table><thead><tr><th>سناریو</th><th>ورود</th><th>R:R</th><th>EV(R)</th><th>امتیاز</th></tr></thead><tbody>';
+        for (const s of entry.scenarios) {
+          const sel = s.id === entry.selectedScenario ? ' style="font-weight:700"' : '';
+          html += `<tr${sel}><td>${s.name || s.id}</td><td class="mono">${s.entry ?? '—'}</td><td class="mono">${s.netRR ?? s.rr ?? '—'}</td><td class="mono">${s.evR ?? '—'}</td><td class="mono">${s.score ?? '—'}</td></tr>`;
+        }
+        html += '</tbody></table></div>';
+      }
+      if (entry.rejectedScenarios?.length) {
+        html += `<div class="ens-active muted">ردشده: ${entry.rejectedScenarios.map(r => `${r.name || r.id} (${r.reason})`).join(' · ')}</div>`;
+      }
+      if (entry.position?.note) {
+        html += `<div class="ens-active muted">اندازه موقعیت: ${entry.position.note}${entry.position.units != null ? ` · units≈${entry.position.units}` : ''}</div>`;
+      }
+      if (entry.costNote) html += `<div class="ens-active muted">${entry.costNote}</div>`;
+      if (entry.limitations?.length) {
+        html += `<div class="ens-active muted">محدودیت‌ها: ${entry.limitations.join(' · ')}</div>`;
+      }
+      if (entry.computedAt) html += `<div class="ens-active muted">آخرین محاسبه: ${entry.computedAt}</div>`;
     } else {
       html += `<div class="ens-active muted">Setup ورود تعریف نشده</div>`;
     }

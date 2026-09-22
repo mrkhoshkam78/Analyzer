@@ -85,6 +85,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
     var(--bg);
 }
 
+/* Out of document flow — visible only when skin enables it (vector-soft) */
+.bg-illustrations {
+  display: none;
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.bg-illustrations svg {
+  position: absolute;
+}
+
 .shell {
   position: relative;
   z-index: 1;
@@ -839,6 +852,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 /* Responsive */
+@media (max-width: 900px) {
+  .asset-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+}
 @media (max-width: 760px) {
   .main { padding: 14px 12px 32px; gap: 12px; }
   .asset-grid { grid-template-columns: 1fr; }
@@ -847,13 +863,27 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .field-action { grid-column: 1 / -1; }
   .field-action .btn { width: 100%; }
   .metrics-grid { grid-template-columns: 1fr 1fr; }
-  .action-bar .btn { flex: 1; }
+  .action-bar .btn { flex: 1; min-width: 0; }
   .signal-value { font-size: 32px; }
   .status-item { flex: 1 1 calc(50% - 8px); }
   .site-tagline { display: none; }
+  .header-asset-pill,
+  .header-status-pill.header-asset-pill {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .site-header-compact .header-main {
+    gap: 6px;
+    padding: 8px 10px !important;
+  }
+  .site-header-compact .site-name {
+    font-size: 0.88rem !important;
+  }
 }
 @media (max-width: 420px) {
   .form-grid, .metrics-grid { grid-template-columns: 1fr; }
+  .action-bar { flex-direction: column; }
+  .action-bar .btn { width: 100%; }
 }
 
 /* Smart Data Calendar — performance-friendly pulse */
