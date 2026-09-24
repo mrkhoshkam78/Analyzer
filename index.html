@@ -99,7 +99,7 @@
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
           </button>
           <div class="brand-copy">
-            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v10</span></h1>
+            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v10.0.2</span></h1>
           </div>
         </div>
         <div class="header-center" id="headerAssetSlot">
@@ -326,20 +326,23 @@
           </div>
           <span class="badge" id="mpbStatusBadge">—</span>
         </div>
-        <p class="muted mpb-intro">
-          بازار الان را با دوره‌های شبیه در گذشته مقایسه می‌کند و می‌گوید «چه الگویی فعال است» و «بعد از آن الگوها معمولاً چه شد».
-          اگر داده کم باشد، صریحاً <strong>شواهد ناکافی</strong> اعلام می‌شود.
-        </p>
+        <div class="section-intro mpb-intro-box">
+          <p class="section-intro-lead">این بخش مثل یک دفتر خاطرات بازار است.</p>
+          <p class="muted section-intro-body">
+            نگاه می‌کند بازار الان شبیه کدام روزهای گذشته است، بعد می‌گوید آن موقع‌ها معمولاً بعدش چه شد.
+            اگر داده کم باشد، رک و راست می‌گوید «شواهد کافی نیست» — چیزی از خودش نمی‌سازد.
+          </p>
+        </div>
         <div class="mpb-suggest-box" id="mpbSuggestBox">
-          <div class="mpb-suggest-k">پیشنهاد بر اساس الگو</div>
-          <p class="mpb-suggest-v" id="mpbSuggestion">پس از اجرای تحلیل، پیشنهاد ساده اینجا نمایش داده می‌شود.</p>
+          <div class="mpb-suggest-k">خلاصهٔ ساده</div>
+          <p class="mpb-suggest-v" id="mpbSuggestion">بعد از اجرای تحلیل، اینجا به زبان ساده می‌گوید الان چه الگویی دیده می‌شود.</p>
         </div>
 
         <div class="mpb-toolbar">
-          <button type="button" class="btn btn-primary btn-sm" id="mpbLoadCsvBtn">بارگذاری CSV قیمت</button>
+          <button type="button" class="btn btn-primary btn-sm" id="mpbLoadCsvBtn">آپلود قیمت (CSV)</button>
           <input type="file" id="mpbCsvFile" accept=".csv,text/csv,text/plain" hidden>
-          <button type="button" class="btn btn-outline btn-sm" id="mpbDownloadPatternsBtn">دانلود حافظه الگوها</button>
-          <button type="button" class="btn btn-ghost btn-sm" id="mpbImportPatternsBtn">بارگذاری الگو (JSON)</button>
+          <button type="button" class="btn btn-outline btn-sm" id="mpbDownloadPatternsBtn">ذخیرهٔ حافظه</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="mpbImportPatternsBtn">بازیابی حافظه</button>
           <input type="file" id="mpbImportFile" accept=".json,application/json" hidden>
           <span class="muted" id="mpbMemoryStats">—</span>
         </div>
@@ -453,15 +456,18 @@
           <div>
             <p class="eyebrow">اعتبارسنجی تاریخی</p>
             <h2 class="card-title" id="bt-title">بک‌تست</h2>
-            <p class="card-desc">آیا سیگنال‌های مدل در گذشته درست کار کرده‌اند؟ بدون نگاه به آینده آزمایش می‌شود.</p>
+            <p class="card-desc">آزمایش روی گذشته — بدون تقلب از آینده</p>
           </div>
         </div>
-        <p class="muted bt-intro">
-          مدل روی دادهٔ قدیمی پیش‌بینی می‌کند؛ بعد با قیمت واقعی مقایسه می‌شود.
-          <strong>افق</strong> = چند کندل بعد هدف/استاپ چک شود ·
-          <strong>فاصله نمونه‌ها</strong> = سرعت تست ·
-          داده از همان مخزن پروژه (فایل CSV + ورود دستی) خوانده می‌شود.
-        </p>
+        <div class="section-intro bt-intro-box">
+          <p class="section-intro-lead">بک‌تست یعنی: «اگر همان سیگنال‌ها را دیروز می‌گرفتی، چه می‌شد؟»</p>
+          <p class="muted section-intro-body">
+            مدل فقط با داده‌های قدیمی تصمیم می‌گیرد، بعد نتیجه را با قیمت واقعی همان زمان‌ها مقایسه می‌کنیم.
+            <span class="intro-chip">افق</span> یعنی چند کندل جلوتر را چک کنیم ·
+            <span class="intro-chip">فاصله نمونه‌ها</span> یعنی تست چقدر سریع/متراکم باشد.
+            داده از همان فایل‌ها و ورود دستی خودت خوانده می‌شود.
+          </p>
+        </div>
         <div class="bt-controls form-grid">
           <div class="field">
             <label class="label" for="btHorizon">افق پیش‌بینی</label>

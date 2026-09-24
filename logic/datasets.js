@@ -144,8 +144,8 @@ export function loadHistorical(symbol, tf = '1D') {
 }
 
 /**
- * V8.0.2 — Try load OHLCV from project data/ folder (relative paths).
- * Paths tried: data/{SYM}/{sym}-1d.csv , data/{SYM}/{TF}.csv , data/{SYM}_{TF}.csv
+ * V10.0.1 — Load OHLCV from project data/ folder (relative paths).
+ * Paths: data/{SYM}/{sym}-{tf}.csv , data/{SYM}/{TF}.csv , aliases 1D/4H/1H
  * Safe on file:// (fails silently). Call once per symbol×tf when store is sparse.
  */
 export async function ensureProjectData(symbol, tf = '1D') {
@@ -154,17 +154,32 @@ export async function ensureProjectData(symbol, tf = '1D') {
   const existing = loadHistorical(s, t);
   if (existing && existing.length >= 30) return { ok: true, source: 'store', count: existing.length };
 
+  const symLower = s.toLowerCase();
+  const tLower = t.toLowerCase();
   const candidates = [
-    `data/${s}/${s.toLowerCase()}-1d.csv`,
+    `data/${s}/${symLower}-${tLower}.csv`,
+    `data/${s}/${symLower}-1d.csv`,
     `data/${s}/${t}.csv`,
+    `data/${s}/${tLower}.csv`,
     `data/${s}_${t}.csv`,
+    `data/${s}_${tLower}.csv`,
     `data/${s}/1D.csv`,
+    `data/${s}/4H.csv`,
+    `data/${s}/1H.csv`,
     `data/${s}_1D.csv`
   ];
-  // also try lowercase tf variants used in some dumps
-  if (t === '1H') candidates.push(`data/${s}/1h.csv`, `data/${s}_1h.csv`);
+  if (t === '1D') {
+    candidates.unshift(`data/${s}/${symLower}-1d.csv`, `data/${s}/1D.csv`);
+  } else if (t === '4H') {
+    candidates.unshift(`data/${s}/${symLower}-4h.csv`, `data/${s}/4H.csv`);
+  } else if (t === '1H') {
+    candidates.unshift(`data/${s}/${symLower}-1h.csv`, `data/${s}/1H.csv`);
+  }
 
+  const seen = new Set();
   for (const path of candidates) {
+    if (seen.has(path)) continue;
+    seen.add(path);
     try {
       const res = await fetch(path, { cache: 'no-store' });
       if (!res.ok) continue;
@@ -250,8 +265,9 @@ export function upsertManualPrices(symbol, entries, tf = '1D') {
     if (e.datetime) {
       const d = new Date(e.datetime);
       if (Number.isFinite(d.getTime())) {
-        ts = d.getTime();
-        bucket = timeBucketKey(d, t);
+        if (ts == null) ts = d.getTime();
+        // Keep explicit day/bucket (form date) so calendar bias matches selected day
+        if (!bucket) bucket = timeBucketKey(d, t);
       }
     }
     if (!bucket && e.day) bucket = e.day;
@@ -259,7 +275,7 @@ export function upsertManualPrices(symbol, entries, tf = '1D') {
 
     byBucket.set(bucket, {
       bucket,
-      day: String(bucket).slice(0, 10),
+      day: e.day || String(bucket).slice(0, 10),
       open,
       close,
       ts: ts || Date.parse(String(bucket).length === 10 ? bucket + 'T12:00:00' : bucket),
@@ -484,9 +500,78 @@ export function invalidateDayIndex(symbol, tf) {
 }
 
 /**
+ * Normalize date/datetime strings (MT5: 2025.01.02 or 2025.01.02 15:00:00).
+ * Returns { ts, day } or nulls.
+ */
+function parseBarDateTime(rawDate, rawTime) {
+  let day = null;
+  let ts = null;
+  const dPart = String(rawDate || '').trim();
+  const tPart = String(rawTime || '').trim();
+  if (!dPart) return { ts: null, day: null };
+
+  // YYYY.MM.DD or YYYY-MM-DD or YYYY/MM/DD
+  let normDay = dPart;
+  const mDot = dPart.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
+  if (mDot) {
+    normDay = `${mDot[1]}-${mDot[2].padStart(2, '0')}-${mDot[3].padStart(2, '0')}`;
+    day = normDay;
+  } else if (/^\d{4}-\d{2}-\d{2}/.test(dPart)) {
+    day = dPart.slice(0, 10);
+    normDay = day;
+  }
+
+  // Combined datetime in first column: "2025-01-02 15:00:00" or "2025.01.02 15:00"
+  let timeStr = tPart;
+  if (!timeStr && dPart.includes(' ')) {
+    const sp = dPart.split(/\s+/);
+    if (sp.length >= 2) {
+      const m2 = sp[0].match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
+      if (m2) {
+        day = `${m2[1]}-${m2[2].padStart(2, '0')}-${m2[3].padStart(2, '0')}`;
+        normDay = day;
+        timeStr = sp[1];
+      }
+    }
+  }
+
+  if (/^\d{10,13}$/.test(dPart)) {
+    ts = Number(dPart.length === 10 ? Number(dPart) * 1000 : dPart);
+    day = dayKey(ts);
+    return { ts, day };
+  }
+
+  if (normDay && /^\d{4}-\d{2}-\d{2}$/.test(normDay)) {
+    const hm = (timeStr || '12:00:00').match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    const hh = hm ? hm[1].padStart(2, '0') : '12';
+    const mm = hm ? hm[2] : '00';
+    const ss = hm && hm[3] ? hm[3] : '00';
+    // Use local noon/default so calendar day matches CSV date (avoid UTC day-shift)
+    const local = new Date(`${normDay}T${hh}:${mm}:${ss}`);
+    if (Number.isFinite(local.getTime())) {
+      ts = local.getTime();
+      day = normDay;
+    } else {
+      const parsed = Date.parse(`${normDay}T${hh}:${mm}:${ss}`);
+      if (Number.isFinite(parsed)) {
+        ts = parsed;
+        day = normDay;
+      }
+    }
+  } else {
+    const parsed = Date.parse(dPart);
+    if (Number.isFinite(parsed)) {
+      ts = parsed;
+      day = dayKey(ts);
+    }
+  }
+  return { ts, day };
+}
+
+/**
  * Parse OHLCV CSV text → candles[].
- * Accepts headers: timestamp/date/time, open, high, low, close, volume (case-insensitive).
- * Does not invent volume; null if missing.
+ * Accepts: date/datetime, optional time, open, high, low, close, volume/tickvol.
+ * MT5-style dates (2025.01.02) supported. Does not invent volume; null if missing.
  */
 export function parseOhlcvCsv(text, tf = '1D') {
   const lines = String(text || '').trim().split(/\r?\n/).filter(Boolean);
@@ -500,12 +585,14 @@ export function parseOhlcvCsv(text, tf = '1D') {
     }
     return -1;
   };
-  const iTs = idx(['timestamp', 'datetime', 'date', 'time', 'ts']);
+  const iDate = idx(['datetime', 'timestamp', 'date', 'ts']);
+  const iTime = idx(['time']);
+  // if header has both date and time as separate cols, prefer date+time
   const iO = idx(['open', 'o']);
   const iH = idx(['high', 'h']);
   const iL = idx(['low', 'l']);
   const iC = idx(['close', 'c', 'price']);
-  const iV = idx(['volume', 'vol', 'v']);
+  const iV = idx(['volume', 'vol', 'v', 'tickvol', 'tickvolume']);
 
   if (iC < 0) return { ok: false, error: 'ستون Close یافت نشد', candles: [] };
 
@@ -526,23 +613,25 @@ export function parseOhlcvCsv(text, tf = '1D') {
       high = Math.max(open, close);
       low = Math.min(open, close);
     }
-    if (high < low) { const t = high; high = low; low = t; }
+    if (high < low) { const tmp = high; high = low; low = tmp; }
     const vol = iV >= 0 && cols[iV] !== '' && Number.isFinite(Number(cols[iV])) ? Number(cols[iV]) : null;
 
     let ts = null;
-    if (iTs >= 0 && cols[iTs]) {
-      const raw = cols[iTs].trim();
-      if (/^\d{10,13}$/.test(raw)) ts = Number(raw.length === 10 ? raw * 1000 : raw);
-      else {
-        const d = Date.parse(raw);
-        if (Number.isFinite(d)) ts = d;
-      }
+    let day = null;
+    if (iDate >= 0 && cols[iDate]) {
+      const rawTime = iTime >= 0 && cols[iTime] ? cols[iTime] : '';
+      const parsed = parseBarDateTime(cols[iDate], rawTime);
+      ts = parsed.ts;
+      day = parsed.day;
     }
+    const bucket = ts != null
+      ? timeBucketKey(ts, tf)
+      : (day && (getTfMeta(tf).kind === 'day' || getTfMeta(tf).kind === 'week') ? day : null);
     candles.push({
       o: open, h: high, l: low, c: close, v: vol,
       ts,
-      day: ts != null ? dayKey(ts) : null,
-      bucket: ts != null ? timeBucketKey(ts, tf) : null
+      day: day || (ts != null ? dayKey(ts) : null),
+      bucket
     });
   }
 

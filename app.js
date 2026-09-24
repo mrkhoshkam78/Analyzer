@@ -2,7 +2,7 @@
  * UI Controller V8.0.5UI · Obsidian Editorial
  * Fundamental is an optional input to Prediction (toggle), not a standalone view.
  */
-import { getSymbol, formatPrice, getAllSymbols, registerCustomAsset } from './logic/symbols.js';
+import { getSymbol, formatPrice, getAllSymbols, registerCustomAsset, removeCustomAsset } from './logic/symbols.js';
 import {
   loadHistorical, loadManual, setHistorical, upsertManualPrices,
   buildAnalysisSeries, getAssetSummary, dayKeyOffset, dayKey,
@@ -101,6 +101,8 @@ function renderAssetPicker() {
   box.innerHTML = '';
   sel.innerHTML = '<option value="">—</option>';
   for (const a of assets) {
+    const wrap = document.createElement('div');
+    wrap.className = 'asset-btn-wrap';
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'asset-btn';
@@ -111,13 +113,49 @@ function renderAssetPicker() {
       <span class="asset-btn-name">${a.nameFa}</span>
       <span class="asset-btn-unit">${a.typeFa || a.category || ''} · ${a.unitFa || a.unit}</span>`;
     btn.addEventListener('click', () => selectAsset(a.symbol));
-    box.appendChild(btn);
+    wrap.appendChild(btn);
+    if (!a.builtin) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'asset-del-btn';
+      del.title = 'حذف نماد';
+      del.setAttribute('aria-label', `حذف نماد ${a.symbol}`);
+      del.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        confirmRemoveAsset(a.symbol, a.nameFa);
+      });
+      wrap.appendChild(del);
+    }
+    box.appendChild(wrap);
     const opt = document.createElement('option');
     opt.value = a.symbol;
     opt.textContent = a.symbol;
     sel.appendChild(opt);
   }
   if (currentSymbol) sel.value = currentSymbol;
+}
+
+function confirmRemoveAsset(symbol, nameFa) {
+  const label = nameFa ? `${symbol} (${nameFa})` : symbol;
+  const ok = window.confirm(`آیا از حذف نماد «${label}» مطمئن هستید؟\n\nدادهٔ دستی این نماد در همین مرورگر پاک نمی‌شود، اما نماد از فهرست حذف می‌شود.`);
+  if (!ok) return;
+  const res = removeCustomAsset(symbol);
+  if (!res.ok) {
+    toast(res.error || 'حذف ناموفق', 'err');
+    return;
+  }
+  if (currentSymbol === symbol) {
+    currentSymbol = null;
+    if ($('symbol')) $('symbol').value = '';
+    if ($('assetChip')) $('assetChip').hidden = true;
+    if ($('dailyCard')) $('dailyCard').hidden = true;
+    updateHeaderAssetLabel();
+    setHeaderData('آماده');
+  }
+  renderAssetPicker();
+  toast(`نماد ${symbol} حذف شد`, 'ok');
 }
 
 function selectAsset(symbol) {
@@ -301,8 +339,15 @@ function saveDailyPrice(e) {
     toast('تاریخ/زمان نامعتبر است', 'err');
     return;
   }
+  // Prefer form date as day so calendar pulse matches selected day (avoid UTC shift)
+  const formDay = ($('priceDate')?.value || '').slice(0, 10);
+  const tfMeta = getTfMeta(currentTf);
   const res = upsertManualPrices(sym, [{
-    datetime: dt.toISOString(),
+    datetime: formDay
+      ? `${formDay}T${pad(dt.getHours())}:${pad(dt.getMinutes())}:00`
+      : dt.toISOString(),
+    day: formDay || undefined,
+    bucket: formDay && (tfMeta?.kind === 'day' || tfMeta?.kind === 'week') ? formDay : undefined,
     open,
     close,
     ts: dt.getTime()
@@ -511,10 +556,14 @@ async function runAnalysis(silent = false) {
       setProcessing(true, 'تحلیل ترکیبی…');
     }
 
-    // Build multi-TF seriesMap from available historical data (no fabrication)
+    // Multi-TF map: primary + siblings already in store.
+    // When analyzing 1D, also fetch 4H so MTF can use daily bias + 4H structure (no fabrication).
     const seriesMap = { [currentTf]: series.candles };
     try {
-      const { loadHistorical, TIMEFRAMES } = await import('./logic/datasets.js');
+      const { loadHistorical, TIMEFRAMES, ensureProjectData } = await import('./logic/datasets.js');
+      if (currentTf === '1D') {
+        try { await ensureProjectData(sym, '4H'); } catch (_) { /* optional */ }
+      }
       for (const tf of TIMEFRAMES) {
         if (tf.id === currentTf) continue;
         const hist = loadHistorical(sym, tf.id);

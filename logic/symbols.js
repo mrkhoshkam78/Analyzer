@@ -110,6 +110,24 @@ export function registerCustomAsset(meta) {
   return { ok: true, asset: entry };
 }
 
+/**
+ * Remove a user-added symbol. Built-in symbols cannot be removed.
+ */
+export function removeCustomAsset(symbolId) {
+  const symbol = String(symbolId || '').trim().toUpperCase();
+  if (!symbol) return { ok: false, error: 'نماد نامعتبر است.' };
+  if (BUILTIN[symbol]) {
+    return { ok: false, error: 'نمادهای پیش‌فرض (مثل طلا و برنت) قابل حذف نیستند.' };
+  }
+  const map = loadCustom();
+  if (!map[symbol]) {
+    return { ok: false, error: 'این نماد در فهرست سفارشی پیدا نشد.' };
+  }
+  delete map[symbol];
+  saveCustom(map);
+  return { ok: true, symbol };
+}
+
 export function formatPrice(value, symbolId) {
   if (value == null || !Number.isFinite(value)) return '—';
   const meta = getSymbol(symbolId);
