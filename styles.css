@@ -888,9 +888,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* Smart Data Calendar — performance-friendly pulse */
 .field-calendar { position: relative; }
-.cal-wrap { display: flex; gap: 8px; align-items: center; }
-.cal-wrap .input { flex: 1; }
-.cal-toggle { white-space: nowrap; flex-shrink: 0; }
+.cal-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.cal-wrap .input {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.cal-toggle {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
 
 .smart-cal {
   margin-top: 10px;
@@ -2007,24 +2018,73 @@ body.sidebar-collapsed .shell.shell-with-sidebar > .sidebar {
 }
 .bt-intro strong { color: var(--accent); margin-inline-end: 0.15rem; }
 
-/* Price form responsive on laptop (wider minmax + better break) */
-.form-grid {
+/* Price form responsive — manual entry (#dailyCard) mobile + laptop */
+#dailyCard .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
   align-items: end;
 }
-@media (min-width: 761px) and (max-width: 1100px) {
-  .form-grid { grid-template-columns: repeat(3, 1fr); }
-  .field-calendar { grid-column: 1 / -1; }
-  .field-action { grid-column: 1 / -1; }
-  .field-action .btn { width: auto; min-width: 140px; }
-  #dailyCard .form-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+#dailyCard .field-calendar {
+  grid-column: 1 / -1;
 }
+#dailyCard .field-action {
+  grid-column: 1 / -1;
+}
+#dailyCard .field-action .btn {
+  width: 100%;
+  max-width: 280px;
+}
+
+@media (min-width: 761px) and (max-width: 1100px) {
+  #dailyCard .form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  #dailyCard .field-calendar,
+  #dailyCard .field-action {
+    grid-column: 1 / -1;
+  }
+  #dailyCard .field-action .btn {
+    width: auto;
+    min-width: 160px;
+    max-width: 240px;
+  }
+}
+
 @media (max-width: 760px) {
-  .form-grid { grid-template-columns: 1fr 1fr; }
-  .field-action { grid-column: 1 / -1; }
-  .field-action .btn { width: 100%; }
+  #dailyCard .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  #dailyCard .field-calendar,
+  #dailyCard .field-action {
+    grid-column: 1 / -1;
+  }
+  #dailyCard .field-action .btn {
+    width: 100%;
+    max-width: none;
+  }
+  .cal-wrap {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cal-wrap .input {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+  .cal-toggle {
+    width: 100%;
+  }
+  .manual-list .manual-item {
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 420px) {
+  #dailyCard .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ===== V8.0.4 Sidebar toggle (clean) ===== */
