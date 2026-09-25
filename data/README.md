@@ -1,4 +1,4 @@
-# Project market data (V10.0.1)
+# Project market data (V10.0.2)
 
 Offline OHLCV used by `ensureProjectData` → historical store → calendar + analysis.
 
@@ -7,9 +7,9 @@ Offline OHLCV used by `ensureProjectData` → historical store → calendar + an
 ```
 data/
   XAUUSD/
-    xauusd-1d.csv   (or 1D.csv)
-    xauusd-4h.csv   (or 4H.csv)
-    xauusd-1h.csv   (or 1H.csv)
+    xauusd-1d.csv
+    xauusd-4h.csv
+    xauusd-1h.csv
   BRENT/
     brent-1d.csv
     brent-4h.csv
@@ -26,3 +26,4 @@ Dates: `YYYY-MM-DD` (MT5 `YYYY.MM.DD` also accepted).
 - Requires HTTP server (not file://) for fetch of these files.
 - Manual prices stay in browser localStorage; they do not rewrite these CSVs.
 - Calendar day index merges historical + manual per symbol×timeframe.
+- When analyzing 1D, 4H is also loaded for multi-timeframe agreement.

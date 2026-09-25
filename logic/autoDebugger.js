@@ -28,7 +28,7 @@ const RT_STATE_KEY = 'auto_debugger_rt_state';
 /** Max auto-correction attempts per event (loop protection) */
 const CORRECTION_DEPTH_LIMIT = 2;
 const VERSION = '1.2.0';
-const APP_VERSION = 'V5.05';
+const APP_VERSION = 'V10.0.2';
 
 const TOLERANCE = Object.freeze({
   rsi: 0.15,
