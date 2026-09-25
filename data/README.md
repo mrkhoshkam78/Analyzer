@@ -1,4 +1,4 @@
-# Project market data (V10.0.2)
+# Project market data (V10.0.3)
 
 Offline OHLCV used by `ensureProjectData` → historical store → calendar + analysis.
 
@@ -27,3 +27,4 @@ Dates: `YYYY-MM-DD` (MT5 `YYYY.MM.DD` also accepted).
 - Manual prices stay in browser localStorage; they do not rewrite these CSVs.
 - Calendar day index merges historical + manual per symbol×timeframe.
 - When analyzing 1D, 4H is also loaded for multi-timeframe agreement.
+- Project CSV is preferred over synthetic seed so calendar shows full series.

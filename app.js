@@ -1,5 +1,5 @@
 /**
- * UI Controller V10.0.2 · Obsidian Editorial
+ * UI Controller V10.0.3 · Obsidian Editorial
  * Fundamental is an optional input to Prediction (toggle), not a standalone view.
  */
 import { getSymbol, formatPrice, getAllSymbols, registerCustomAsset, removeCustomAsset } from './logic/symbols.js';

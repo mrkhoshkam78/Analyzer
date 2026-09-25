@@ -1,5 +1,5 @@
 /* ============================================================
-   Market Analyst V8.0.5 — Performance-first Premium UI
+   Market Analyst V10.0.3 — Performance-first Premium UI
    Skin: Terminal Glass · Theme = color only · Skin = full design
    Financial Terminal · Dark-first · GPU-friendly
    ============================================================ */
@@ -2224,7 +2224,7 @@ body.sidebar-collapsed .shell.shell-with-sidebar > .sidebar {
 
 
 /* ============================================================
-   Vector Soft — Obsidian Editorial | V8.1
+   Vector Soft — Obsidian Editorial | V10.0.3
    Matte editorial data interface · Independent of Terminal Glass
    Palette: Obsidian #171A20 · Graphite #222731 · Ivory #F2EEE6 · Signal Orange #FF9D45
    Buy/Sell: green/red ONLY for directional market data
@@ -3069,7 +3069,7 @@ html[data-skin="vector-soft"] .loading-line .spinner {
   border-top-color: var(--signal);
 }
 
-/* ===== V10.0.2 — asset delete + section intros (MPB / Backtest) ===== */
+/* ===== V10.0.3 — asset delete + section intros (MPB / Backtest) ===== */
 .asset-btn-wrap {
   position: relative;
   display: flex;
@@ -3094,7 +3094,7 @@ html[data-skin="vector-soft"] .loading-line .spinner {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0.55;
+  opacity: 0.75;
   transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
   z-index: 2;
 }
@@ -3174,4 +3174,68 @@ html[data-skin="vector-soft"] .section-intro {
 }
 html[data-skin="vector-soft"] .asset-del-btn:hover {
   background: color-mix(in srgb, var(--sell) 10%, var(--bg));
+}
+
+/* ===== V10.0.3 — Moving pulses for Vector Soft · Obsidian Editorial ===== */
+html[data-skin="vector-soft"] .cal-day .cal-pulse {
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  bottom: 5px;
+  animation: vsCalPulseMove 2.4s ease-in-out infinite;
+  box-shadow: 0 0 0 0 currentColor;
+}
+html[data-skin="vector-soft"] .cal-day .cal-pulse.pulse-up {
+  background: var(--buy) !important;
+  color: var(--buy);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--buy) 45%, transparent);
+}
+html[data-skin="vector-soft"] .cal-day .cal-pulse.pulse-down {
+  background: var(--sell) !important;
+  color: var(--sell);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--sell) 45%, transparent);
+}
+html[data-skin="vector-soft"] .cal-day .cal-pulse.pulse-flat {
+  background: var(--text-3) !important;
+  color: var(--text-3);
+  box-shadow: 0 0 4px 0 color-mix(in srgb, var(--text-3) 30%, transparent);
+}
+html[data-skin="vector-soft"] .cal-day.is-selected .cal-pulse {
+  background: #fff !important;
+  color: #fff;
+  box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.35);
+}
+
+@keyframes vsCalPulseMove {
+  0%   { opacity: 0.95; transform: scale(0.85) translateY(0); }
+  25%  { opacity: 1;    transform: scale(1.15) translateY(-2px); }
+  50%  { opacity: 0.7;  transform: scale(0.9)  translateY(1px); }
+  75%  { opacity: 1;    transform: scale(1.1)  translateY(-1px); }
+  100% { opacity: 0.95; transform: scale(0.85) translateY(0); }
+}
+
+/* Soft traveling ring (second layer via pseudo) */
+html[data-skin="vector-soft"] .cal-day .cal-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0;
+  animation: vsCalRing 2.4s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes vsCalRing {
+  0%   { opacity: 0.55; transform: scale(0.6); }
+  70%  { opacity: 0;    transform: scale(1.6); }
+  100% { opacity: 0;    transform: scale(1.6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="vector-soft"] .cal-day .cal-pulse,
+  html[data-skin="vector-soft"] .cal-day .cal-pulse::after {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
 }
