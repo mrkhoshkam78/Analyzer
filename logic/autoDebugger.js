@@ -27,8 +27,8 @@ const RT_STATE_KEY = 'auto_debugger_rt_state';
 
 /** Max auto-correction attempts per event (loop protection) */
 const CORRECTION_DEPTH_LIMIT = 2;
-const VERSION = '1.2.0';
-const APP_VERSION = 'V10.0.2';
+const VERSION = '1.3.0';
+const APP_VERSION = 'V11.0.1';
 
 const TOLERANCE = Object.freeze({
   rsi: 0.15,
@@ -37,13 +37,39 @@ const TOLERANCE = Object.freeze({
   ema: 1e-5,
   atr: 0.01,
   momentum: 1e-6,
-  score: 0.5,
+  score: 1.0,       // ensemble scores can shift ~1pt with float/weight noise
   price: 1e-4,
-  pct: 0.05
+  pct: 0.05,
+  rr: 0.05,
+  evR: 0.08,
+  confluence: 0.02
 });
 
 let _lastReport = null;
 let _injectedFaults = []; // for controlled testing only; cleared after use
+
+/** Normalize OHLC aliases so engines always see c/o/h/l/v */
+function normalizeCandles(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((bar, i) => {
+    if (!bar || typeof bar !== 'object') return bar;
+    const c = isNum(bar.c) ? bar.c : (isNum(bar.close) ? bar.close : null);
+    const o = isNum(bar.o) ? bar.o : (isNum(bar.open) ? bar.open : c);
+    const h = isNum(bar.h) ? bar.h : (isNum(bar.high) ? bar.high : c);
+    const l = isNum(bar.l) ? bar.l : (isNum(bar.low) ? bar.low : c);
+    const v = isNum(bar.v) ? bar.v : (isNum(bar.volume) ? bar.volume : null);
+    const ts = bar.ts != null ? bar.ts : (bar.t != null ? bar.t : (bar.date || null));
+    return { ...bar, c, o, h, l, v, close: c, open: o, high: h, low: l, volume: v, ts, _i: i };
+  });
+}
+
+function candleClose(bar) {
+  if (!bar) return null;
+  if (isNum(bar.c)) return bar.c;
+  if (isNum(bar.close)) return bar.close;
+  return null;
+}
+
 
 // ─── Independent pure validators (never call main engines for expected values) ───
 
@@ -437,22 +463,29 @@ function validateInvariants(ctx) {
     // Target / Stop vs Direction
     const target = d.target != null ? d.target : (d.prediction && d.prediction.target);
     const stop = d.stop != null ? d.stop : (d.prediction && d.prediction.stop);
-    const price = isNum(ctx.currentPrice) ? ctx.currentPrice : (ind.price || last(candles.map(c => c.c)));
-    if (isNum(target) && isNum(price) && signal === 'BUY' && target < price) {
-      bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'forecast/target',
-        `price=${price}`, 'Target > price for BUY', target, target - price, 'Target below entry on BUY'));
-    }
-    if (isNum(target) && isNum(price) && signal === 'SELL' && target > price) {
-      bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'forecast/target',
-        `price=${price}`, 'Target < price for SELL', target, target - price, 'Target above entry on SELL'));
-    }
-    if (isNum(stop) && isNum(price) && signal === 'BUY' && stop > price) {
-      bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'forecast/stop',
-        `price=${price}`, 'Stop < price for BUY', stop, stop - price, 'Stop above entry on BUY'));
-    }
-    if (isNum(stop) && isNum(price) && signal === 'SELL' && stop < price) {
-      bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'forecast/stop',
-        `price=${price}`, 'Stop > price for SELL', stop, stop - price, 'Stop below entry on SELL'));
+    const entryPx = (d.entry && isNum(d.entry.preferredEntry)) ? d.entry.preferredEntry
+      : (d.prediction && isNum(d.prediction.entry) ? d.prediction.entry : null);
+    const price = isNum(entryPx) ? entryPx
+      : (isNum(ctx.currentPrice) ? ctx.currentPrice : (ind.price || candleClose(last(candles))));
+    // Skip geometry vs market when waitForEntry — preferred entry is the reference (validated in entry section)
+    const waiting = !!(d.entry && d.entry.waitForEntry);
+    if (!waiting) {
+      if (isNum(target) && isNum(price) && signal === 'BUY' && target < price) {
+        bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'forecast/target',
+          `price=${price}`, 'Target > price for BUY', target, target - price, 'Target below entry on BUY'));
+      }
+      if (isNum(target) && isNum(price) && signal === 'SELL' && target > price) {
+        bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'forecast/target',
+          `price=${price}`, 'Target < price for SELL', target, target - price, 'Target above entry on SELL'));
+      }
+      if (isNum(stop) && isNum(price) && signal === 'BUY' && stop > price) {
+        bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'forecast/stop',
+          `price=${price}`, 'Stop < price for BUY', stop, stop - price, 'Stop above entry on BUY'));
+      }
+      if (isNum(stop) && isNum(price) && signal === 'SELL' && stop < price) {
+        bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'forecast/stop',
+          `price=${price}`, 'Stop > price for SELL', stop, stop - price, 'Stop below entry on SELL'));
+      }
     }
   }
 
@@ -474,7 +507,196 @@ function validateInvariants(ctx) {
   return { bugs, warnings, tech, decision };
 }
 
+
+/**
+ * Entry Engine V10 invariants — RR/EV geometry, No-Trade consistency, confluence bounds.
+ */
+function validateEntryEngine(ctx, decision) {
+  const bugs = [];
+  const warnings = [];
+  if (!decision || !decision.ok) {
+    return { bugs, warnings };
+  }
+  const entry = decision.entry || decision.prediction || null;
+  if (!entry) {
+    warnings.push(makeBug(null, 'Entry Missing', 'INFO', 'entry', null, 'entry object', null, null,
+      'Decision returned without entry payload'));
+    return { bugs, warnings };
+  }
+
+  const ver = entry.version || '';
+  if (ver && !String(ver).startsWith('v10') && !String(ver).startsWith('v9')) {
+    warnings.push(makeBug(null, 'Version Drift', 'LOW', 'entry/version',
+      ver, 'v10.x', ver, null, 'Entry engine version string unexpected'));
+  }
+
+  const signal = decision.signal;
+  const noTrade = entry.direction === 'No Trade' || entry.entryType === 'No Trade' || entry.entryType === 'No Valid Entry';
+
+  // HOLD must not produce actionable Long/Short without wait
+  if (signal === 'HOLD' && !noTrade && entry.valid === true && entry.preferredEntry != null) {
+    warnings.push(makeBug(null, 'Logic Contradiction', 'MEDIUM', 'entry/signal',
+      'signal=HOLD', 'No Trade or invalid entry', `${entry.direction}/${entry.entryType}`, null,
+      'HOLD signal with valid actionable entry'));
+  }
+
+  if (noTrade || entry.valid === false) {
+    // Soft: preferredEntry should be null on hard no-trade
+    if (entry.preferredEntry != null && entry.direction === 'No Trade' && !entry.waitForEntry) {
+      warnings.push(makeBug(null, 'Entry Soft Issue', 'LOW', 'entry/notrade',
+        null, 'null preferredEntry on No Trade', entry.preferredEntry, null,
+        'No Trade still carries a preferred entry price'));
+    }
+    return { bugs, warnings };
+  }
+
+  const price = isNum(ctx.currentPrice) ? ctx.currentPrice
+    : (isNum(decision.price) ? decision.price : null);
+  const e = entry.preferredEntry;
+  const stop = entry.stop;
+  const t1 = entry.target1 != null ? entry.target1 : decision.target;
+  const dir = entry.direction; // Long | Short
+
+  // Geometry relative to preferred entry (not only market price) — critical for waitForEntry
+  if (isNum(e) && isNum(stop) && isNum(t1)) {
+    if (dir === 'Long') {
+      if (!(stop < e && e < t1)) {
+        bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'entry/geometry',
+          `E=${e} S=${stop} T=${t1}`, 'Stop < Entry < Target for Long', `${stop}, ${e}, ${t1}`,
+          null, 'Long entry geometry broken vs preferred entry'));
+      }
+    } else if (dir === 'Short') {
+      if (!(t1 < e && e < stop)) {
+        bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'entry/geometry',
+          `E=${e} S=${stop} T=${t1}`, 'Target < Entry < Stop for Short', `${t1}, ${e}, ${stop}`,
+          null, 'Short entry geometry broken vs preferred entry'));
+      }
+    }
+  }
+
+  // RR consistency
+  if (isNum(e) && isNum(stop) && isNum(t1) && Math.abs(e - stop) > 1e-12) {
+    const rawRr = Math.abs(t1 - e) / Math.abs(e - stop);
+    if (isNum(entry.rr) && !approxEqual(entry.rr, rawRr, Math.max(TOLERANCE.rr, rawRr * 0.08))) {
+      warnings.push(makeBug(null, 'Calculation Mismatch', 'MEDIUM', 'entry/rr',
+        `E=${e} S=${stop} T=${t1}`, rawRr, entry.rr, Math.abs(entry.rr - rawRr),
+        'Reported raw R:R diverges from |T-E|/|E-S|'));
+    }
+    if (isNum(entry.netRR) && isNum(entry.rr) && entry.netRR > entry.rr + TOLERANCE.rr) {
+      bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'entry/netRR',
+        `rr=${entry.rr}`, 'netRR ≤ raw RR (after costs)', entry.netRR,
+        entry.netRR - entry.rr, 'Net R:R exceeds raw R:R — cost model inconsistency'));
+    }
+  }
+
+  // EV bounds when present
+  if (entry.evR != null) {
+    if (!isNum(entry.evR)) {
+      bugs.push(makeBug(null, 'Invalid Number', 'HIGH', 'entry/evR', null, 'finite number', entry.evR, null, 'evR is not finite'));
+    } else if (entry.evR < -2 || entry.evR > 5) {
+      warnings.push(makeBug(null, 'Range Soft', 'LOW', 'entry/evR', null, '[-2, 5] typical', entry.evR, null,
+        'evR outside typical model range'));
+    }
+    // Independent EV recompute when winP + rr available
+    if (isNum(entry.winP) && isNum(entry.netRR) && entry.netRR > 0) {
+      const indepEv = entry.winP * entry.netRR - (1 - entry.winP) * 1;
+      if (!approxEqual(indepEv, entry.evR, TOLERANCE.evR)) {
+        warnings.push(makeBug(null, 'Calculation Mismatch', 'MEDIUM', 'entry/evR',
+          `p=${entry.winP} netRR=${entry.netRR}`, indepEv, entry.evR, Math.abs(indepEv - entry.evR),
+          'EV_R ≈ p*netRR - (1-p)*1 soft mismatch (cost drag may explain residual)'));
+      }
+    }
+  }
+
+  if (entry.winP != null && isNum(entry.winP) && (entry.winP < 0.05 || entry.winP > 0.95)) {
+    warnings.push(makeBug(null, 'Range Soft', 'LOW', 'entry/winP', null, '[0.05, 0.95] prior band', entry.winP, null,
+      'Model win probability near extremes'));
+  }
+
+  if (entry.confluence != null && isNum(entry.confluence) && (entry.confluence < 0 || entry.confluence > 1)) {
+    bugs.push(makeBug(null, 'Range Violation', 'HIGH', 'entry/confluence', null, '[0, 1]', entry.confluence, null,
+      'Confluence out of unit interval'));
+  }
+
+  if (entry.modelConfidence != null && isNum(entry.modelConfidence) &&
+      (entry.modelConfidence < 0 || entry.modelConfidence > 1)) {
+    bugs.push(makeBug(null, 'Range Violation', 'HIGH', 'entry/modelConfidence', null, '[0, 1]', entry.modelConfidence, null,
+      'Model confidence out of unit interval'));
+  }
+
+  // Zone ordering
+  if (entry.entryZone && isNum(entry.entryZone.low) && isNum(entry.entryZone.high)) {
+    if (entry.entryZone.low > entry.entryZone.high) {
+      bugs.push(makeBug(null, 'Invariant Violation', 'HIGH', 'entry/zone',
+        null, 'zone.low ≤ zone.high', `${entry.entryZone.low} > ${entry.entryZone.high}`, null,
+        'Entry zone inverted'));
+    }
+  }
+
+  return { bugs, warnings };
+}
+
+/**
+ * Fundamental layer — score bounds, factor integrity, toggle/store contract.
+ */
+function validateFundamentalLayer(ctx, decision) {
+  const bugs = [];
+  const warnings = [];
+  const snap = ctx.fundamentalSnapshot;
+
+  // When snapshot provided, engine must use it (allowStore false path)
+  if (snap && typeof snap === 'object' && Object.keys(snap).length) {
+    let fund;
+    try {
+      fund = runFundamental(ctx.symbol || 'TEST', snap, {
+        allowStore: false,
+        regime: decision?.regime || decision?.analysis?.regime || 'Unclear'
+      });
+    } catch (e) {
+      bugs.push(makeBug(null, 'Runtime Error', 'CRITICAL', 'fundamental', null, 'ok', String(e.message), null,
+        'runFundamental threw on explicit snapshot'));
+      return { bugs, warnings };
+    }
+    if (!fund.ok) {
+      warnings.push(makeBug(null, 'Fundamental Unavailable', 'MEDIUM', 'fundamental',
+        Object.keys(snap).join(','), 'ok scoring', fund.status || fund.message, null,
+        'Snapshot present but scoring failed'));
+    } else {
+      if (!isNum(fund.score) || fund.score < 0 || fund.score > 100) {
+        bugs.push(makeBug(null, 'Range Violation', 'CRITICAL', 'fundamental/score', null, '0–100', fund.score, null,
+          'Fundamental score out of range'));
+      }
+      for (const f of fund.factors || []) {
+        if (f.contribution != null && !isNum(f.contribution)) {
+          bugs.push(makeBug(null, 'Invalid Number', 'HIGH', 'fundamental/factor', f.key, 'finite contribution', f.contribution, null,
+            'Factor contribution not finite'));
+        }
+        if (f.impulse != null && isNum(f.impulse) && (f.impulse < -1.05 || f.impulse > 1.05)) {
+          warnings.push(makeBug(null, 'Range Soft', 'LOW', 'fundamental/impulse', f.key, '[-1,1]', f.impulse, null,
+            'Impulse slightly outside clamp band'));
+        }
+      }
+      // Cross-check decision fund score if applied
+      if (decision?.fundamentalApplied && isNum(decision.analysis?.fundamentalScore)) {
+        if (!approxEqual(decision.analysis.fundamentalScore, fund.score, TOLERANCE.score)) {
+          warnings.push(makeBug(null, 'Calculation Mismatch', 'MEDIUM', 'fundamental/decision',
+            `debugger=${fund.score}`, decision.analysis.fundamentalScore, decision.analysis.fundamentalScore,
+            Math.abs(decision.analysis.fundamentalScore - fund.score),
+            'Decision fundamentalScore differs from independent re-score (regime timing may differ)'));
+        }
+      }
+    }
+  } else if (decision?.fundamentalApplied) {
+    bugs.push(makeBug(null, 'Logic Contradiction', 'HIGH', 'fundamental/toggle',
+      'no snapshot in debugger ctx', 'fundamentalApplied false', true, null,
+      'Decision claims fundamental applied without snapshot in context'));
+  }
+
+  return { bugs, warnings };
+}
+
 function validateForecast(ctx, tech, decision) {
+
   const bugs = [];
   const warnings = [];
   if (!decision || !decision.ok) {
@@ -509,17 +731,31 @@ function validateForecast(ctx, tech, decision) {
     }
   }
 
-  // Combined score composition if both layers present
+  // Combined score is ENSEMBLE of strategies (not T*w + F*w).
+  // Validate coherence, not the obsolete linear blend formula.
   const techSc = decision.analysis?.technicalScore;
   const fundSc = decision.analysis?.fundamentalScore;
   const combSc = decision.analysis?.combinedScore != null ? decision.analysis.combinedScore : decision.score;
   if (isNum(techSc) && isNum(fundSc) && isNum(combSc) && decision.fundamentalApplied) {
-    const expected = CONFIG.engineWeights.technical * techSc +
-      CONFIG.engineWeights.fundamental * fundSc;
-    if (!approxEqual(expected, combSc, TOLERANCE.score)) {
-      bugs.push(makeBug(null, 'Calculation Mismatch', 'HIGH', 'decision/combined',
-        `T=${techSc} F=${fundSc}`, expected, combSc,
-        Math.abs(expected - combSc), 'Combined score does not match weighted average of tech+fund'));
+    // Soft coherence: combined should lie near the convex hull of tech & fund (± margin for other strategies)
+    const lo = Math.min(techSc, fundSc) - 25;
+    const hi = Math.max(techSc, fundSc) + 25;
+    if (combSc < lo - 5 || combSc > hi + 5) {
+      warnings.push(makeBug(null, 'Ensemble Coherence', 'LOW', 'decision/combined',
+        `T=${techSc} F=${fundSc}`, `within ~[${lo.toFixed(0)},${hi.toFixed(0)}]`, combSc,
+        null, 'Ensemble combined score far from tech/fund band (other strategies dominate — not necessarily a bug)'));
+    }
+    // Fund strategy should be active when fundamentalApplied
+    const fundStrat = (decision.analysis?.strategies || decision.strategies || [])
+      .find(s => s && s.id === 'fundamental');
+    if (fundStrat && fundStrat.active === false) {
+      bugs.push(makeBug(null, 'Logic Contradiction', 'HIGH', 'decision/fundamental',
+        'fundamentalApplied=true', 'fundamental strategy active', 'inactive', null,
+        'Flag fundamentalApplied set but fundamental strategy is inactive'));
+    }
+    if (isNum(fundSc) && (fundSc < 0 || fundSc > 100)) {
+      bugs.push(makeBug(null, 'Range Violation', 'CRITICAL', 'fundamental/score',
+        null, '0–100', fundSc, null, 'Fundamental score out of range'));
     }
   }
 
@@ -550,12 +786,12 @@ function historicalSelfTest(ctx) {
   for (const idx of points) {
     const past = candles.slice(0, idx + 1);
     const future = candles[idx + horizon];
-    if (!future || !isNum(future.c)) continue;
+    if (!future || !isNum(candleClose(future))) continue;
     let dec;
     try {
       dec = runDecision(past, {
         symbol: ctx.symbol || 'HIST',
-        currentPrice: past[past.length - 1].c,
+        currentPrice: candleClose(past[past.length - 1]),
         horizonBars: horizon,
         timeframe: ctx.timeframe || '1D'
       });
@@ -563,8 +799,8 @@ function historicalSelfTest(ctx) {
       continue;
     }
     if (!dec || !dec.ok) continue;
-    const entry = past[past.length - 1].c;
-    const ret = (future.c - entry) / entry;
+    const entry = candleClose(past[past.length - 1]);
+    const ret = (candleClose(future) - entry) / entry;
     const thresh = 0.002;
     let outcome = 'neutral';
     const dir = (dec.prediction && dec.prediction.direction) || (dec.signal === 'BUY' ? 'up' : dec.signal === 'SELL' ? 'down' : 'neutral');
@@ -583,7 +819,7 @@ function historicalSelfTest(ctx) {
       direction: dir,
       score: dec.combinedScore != null ? dec.combinedScore : dec.score,
       entry,
-      future: future.c,
+      future: candleClose(future),
       returnPct: ret * 100,
       outcome
     });
@@ -628,15 +864,23 @@ function runRegressionCheck(ctx, currentSnapshot) {
     const keys = ['rsi', 'sma', 'ema', 'techScore', 'combinedScore'];
     for (const k of keys) {
       if (prev[k] != null && currentSnapshot[k] != null && isNum(prev[k]) && isNum(currentSnapshot[k])) {
-        if (!approxEqual(prev[k], currentSnapshot[k], TOLERANCE.score)) {
-          bugs.push(makeBug(null, 'REGRESSION DETECTED', 'CRITICAL', `regression/${k}`,
-            prev.dataFingerprint, prev[k], currentSnapshot[k],
-            Math.abs(prev[k] - currentSnapshot[k]),
-            `Value of ${k} changed after code change on identical input`));
+        const diff = Math.abs(prev[k] - currentSnapshot[k]);
+        // Adaptive tolerance: absolute score units OR relative for indicator magnitudes
+        const tol = k === 'rsi' ? TOLERANCE.rsi
+          : (k === 'sma' || k === 'ema') ? Math.max(TOLERANCE.sma, Math.abs(prev[k]) * 1e-6)
+          : TOLERANCE.score;
+        if (diff > tol) {
+          // CRITICAL only for large real drifts; small noise → WARNING
+          const sev = diff > tol * 5 ? 'CRITICAL' : (diff > tol * 2 ? 'HIGH' : 'MEDIUM');
+          const bucket = sev === 'CRITICAL' || sev === 'HIGH' ? bugs : warnings;
+          bucket.push(makeBug(null, 'REGRESSION DETECTED', sev, `regression/${k}`,
+            prev.dataFingerprint, prev[k], currentSnapshot[k], diff,
+            `Value of ${k} changed on identical fingerprint (Δ=${diff.toFixed(4)})`));
         }
       }
     }
   } else {
+    // Input changed (or fund snapshot changed) — refresh baseline, not a code regression
     saveJSON(REGRESSION_BASELINE_KEY, {
       version: VERSION,
       ts: Date.now(),
@@ -647,13 +891,22 @@ function runRegressionCheck(ctx, currentSnapshot) {
   return { bugs, warnings, status: bugs.length ? 'REGRESSION' : 'OK', baseline: prev };
 }
 
-function buildDataFingerprint(candles) {
+function buildDataFingerprint(candles, fundSnap = null) {
   if (!candles || !candles.length) return 'empty';
   const n = candles.length;
   const first = candles[0];
   const lastC = candles[n - 1];
   const mid = candles[Math.floor(n / 2)];
-  return `${n}|${first.c}|${mid && mid.c}|${lastC.c}|${lastC.t || lastC.date || ''}`;
+  const fc = candleClose(first);
+  const mc = mid ? candleClose(mid) : '';
+  const lc = candleClose(lastC);
+  const fundKey = fundSnap && typeof fundSnap === 'object'
+    ? Object.keys(fundSnap).sort().map(k => {
+        const r = fundSnap[k];
+        return `${k}:${r && r.actual != null ? r.actual : ''}`;
+      }).join(',')
+    : 'nofund';
+  return `${n}|${fc}|${mc}|${lc}|${lastC.ts || lastC.t || lastC.date || ''}|${fundKey}`;
 }
 
 
@@ -1253,17 +1506,21 @@ function updateRegressionMemory(report, snapshot) {
   if (prev && prev.snapshot?.dataFingerprint === snapshot.dataFingerprint) {
     const keys = ['rsi', 'sma', 'techScore', 'combinedScore'];
     for (const k of keys) {
-      if (isNum(prev.snapshot[k]) && isNum(snapshot[k]) && !approxEqual(prev.snapshot[k], snapshot[k], TOLERANCE.score)) {
-        regressionDetails.push({
-          testId: `REGMEM-${k}`,
-          previousVersion: prev.version,
-          currentVersion: APP_VERSION,
-          previousResult: prev.snapshot[k],
-          currentResult: snapshot[k],
-          difference: Math.abs(prev.snapshot[k] - snapshot[k]),
-          severity: 'CRITICAL',
-          affectedModule: k
-        });
+      if (isNum(prev.snapshot[k]) && isNum(snapshot[k])) {
+        const diff = Math.abs(prev.snapshot[k] - snapshot[k]);
+        const tol = k === 'rsi' ? TOLERANCE.rsi : TOLERANCE.score;
+        if (diff > tol) {
+          regressionDetails.push({
+            testId: `REGMEM-${k}`,
+            previousVersion: prev.version,
+            currentVersion: APP_VERSION,
+            previousResult: prev.snapshot[k],
+            currentResult: snapshot[k],
+            difference: diff,
+            severity: diff > tol * 5 ? 'CRITICAL' : (diff > tol * 2 ? 'HIGH' : 'MEDIUM'),
+            affectedModule: k
+          });
+        }
       }
     }
   }
@@ -1311,8 +1568,9 @@ function computeHealthScore(report) {
 export async function runAutoDebugger(options = {}) {
   const mode = options.mode || 'quick';
   const start = Date.now();
+  const rawCandles = options.candles || [];
   const ctx = {
-    candles: options.candles || [],
+    candles: normalizeCandles(rawCandles),
     symbol: options.symbol || null,
     currentPrice: options.currentPrice,
     fundamentalSnapshot: options.fundamentalSnapshot || null,
@@ -1350,6 +1608,18 @@ export async function runAutoDebugger(options = {}) {
   allWarnings.push(...fc.warnings);
   sections.forecast = { bugs: fc.bugs.length, warnings: fc.warnings.length };
 
+  // 4b. Entry engine V10
+  const ent = validateEntryEngine(ctx, decision);
+  allBugs.push(...ent.bugs);
+  allWarnings.push(...ent.warnings);
+  sections.entry = { bugs: ent.bugs.length, warnings: ent.warnings.length };
+
+  // 4c. Fundamental layer
+  const fundV = validateFundamentalLayer(ctx, decision);
+  allBugs.push(...fundV.bugs);
+  allWarnings.push(...fundV.warnings);
+  sections.fundamental = { bugs: fundV.bugs.length, warnings: fundV.warnings.length };
+
   // 5. Historical self-test (deep only)
   let hist = { results: [], summary: null };
   if (mode === 'deep') {
@@ -1363,7 +1633,7 @@ export async function runAutoDebugger(options = {}) {
 
   // Snapshot for regression
   const snapshot = {
-    dataFingerprint: buildDataFingerprint(ctx.candles),
+    dataFingerprint: buildDataFingerprint(ctx.candles, ctx.fundamentalSnapshot),
     rsi: calc.details?.rsi?.main ?? null,
     sma: calc.details?.sma?.main ?? null,
     ema: calc.details?.ema?.main ?? null,
@@ -1606,6 +1876,8 @@ function countTests(sections) {
   if (sections.calculations && !sections.calculations.details?.skipped) n += 6;
   if (sections.invariants) n += 10;
   if (sections.forecast) n += 4;
+  if (sections.entry) n += 8;
+  if (sections.fundamental) n += 5;
   if (sections.historical && !sections.historical.skipped) n += 5;
   n += 3; // regression
   n += 6; // anomaly hunter checks

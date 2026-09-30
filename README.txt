@@ -20,3 +20,18 @@ Analyzer v11.0.1 — Offline Market Analyst (debugged)
 - reasoning استراتژی خوانا (nameFa/dir) به‌جای [object Object]
 - برداشت پیشنهادی لایه فاندامنتال را در No Trade و Wait-for-Entry هم نشان می‌دهد
 - مسیر تحلیل: اولویت با store محلی آفلاین
+
+Auto Debugger v1.3.0 (دیباگ‌شده):
+- حذف false-positive فرمول ترکیبی tech+fund (ensemble واقعی است)
+- اعتبارسنجی Entry V10 (هندسه، RR، EV، confluence)
+- اعتبارسنجی لایه Fundamental
+- نرمال‌سازی OHLC (close/open ↔ c/o)
+- severity رگرسیون تطبیقی + fingerprint شامل fund
+- APP_VERSION = V11.0.1
+
+v11.0.1 offline polish:
+- Fundamental: variable list UI + pure offline (no EODHD / backend message)
+- Data paths: only data/{SYM}/{sym}-{tf}.csv (xauusd-1d, brent-4h, …)
+- Asset delete SVG on every symbol (core symbols protected)
+- Animations: fadeSlideIn, softGlow, gentleFloat
+- MPB loads OHLCV from data/ via ensureProjectData

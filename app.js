@@ -114,20 +114,22 @@ function renderAssetPicker() {
       <span class="asset-btn-unit">${a.typeFa || a.category || ''} · ${a.unitFa || a.unit}</span>`;
     btn.addEventListener('click', () => selectAsset(a.symbol));
     wrap.appendChild(btn);
-    if (!a.builtin) {
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'asset-del-btn';
-      del.title = 'حذف نماد';
-      del.setAttribute('aria-label', `حذف نماد ${a.symbol}`);
-      del.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
-      del.addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        confirmRemoveAsset(a.symbol, a.nameFa);
-      });
-      wrap.appendChild(del);
-    }
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'asset-del-btn' + (a.builtin ? ' is-builtin' : '');
+    del.title = a.builtin ? 'نماد پیش‌فرض — قابل حذف نیست' : 'حذف نماد';
+    del.setAttribute('aria-label', `حذف نماد ${a.symbol}`);
+    del.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>`;
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (a.builtin) {
+        toast('نمادهای پیش‌فرض (XAUUSD / BRENT / …) قابل حذف نیستند', 'err');
+        return;
+      }
+      confirmRemoveAsset(a.symbol, a.nameFa);
+    });
+    wrap.appendChild(del);
     box.appendChild(wrap);
     const opt = document.createElement('option');
     opt.value = a.symbol;
@@ -159,6 +161,7 @@ function confirmRemoveAsset(symbol, nameFa) {
 }
 
 function selectAsset(symbol) {
+  try { window.currentSymbol = symbol; } catch (_) {}
   const meta = getSymbol(symbol);
   if (!meta) return;
   currentSymbol = symbol;
@@ -201,6 +204,7 @@ function onSymbolChange() {
     return;
   }
   currentSymbol = id;
+  try { window.currentSymbol = id; } catch (_) {}
   currentTf = $('tf').value || '1D';
   $('chipSym').textContent = meta.symbol;
   $('chipName').textContent = meta.nameFa;
@@ -208,6 +212,7 @@ function onSymbolChange() {
   if ($('assetChip')) $('assetChip').hidden = false;
   updateHeaderAssetLabel();
   refreshAssetPanel(id);
+  try { refreshFundVarSelect(); refreshFundStoredList(); } catch (_) {}
 }
 
 async function refreshAssetPanel(symbol) {
@@ -438,7 +443,8 @@ function setFundFetchStatus(text, cls) {
  * Never invents data. When toggle OFF this is not called.
  */
 async function fetchFundamentalSnapshot(symbol) {
-  // client-side soft cache (same TTL idea as server)
+  // Offline-only: never call external/backend fundamental API (no EODHD dependency).
+  // Local store is preferred via buildSnapshotFromStore in runAnalysis.
   try {
     const raw = sessionStorage.getItem(FUND_CACHE_KEY);
     if (raw) {
@@ -449,50 +455,15 @@ async function fetchFundamentalSnapshot(symbol) {
           snapshot: obj.snapshot,
           fetchedAt: obj.fetchedAt || new Date(obj.ts).toISOString(),
           fromCache: true,
-          coverage: obj.coverage
+          coverage: obj.coverage || 'offline'
         };
       }
     }
   } catch { /* ignore */ }
-
-  const url = `${API_BASE}/api/fundamental?symbol=${encodeURIComponent(symbol)}`;
-  let res;
-  try {
-    res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(25000) });
-  } catch (e) {
-    return {
-      ok: false,
-      error: 'سرور فاندامنتال در دسترس نیست. Backend را با EODHD_API_TOKEN اجرا کنید.',
-      code: 'NETWORK'
-    };
-  }
-  let body = null;
-  try { body = await res.json(); } catch { body = null; }
-  if (!res.ok || !body || body.ok === false) {
-    return {
-      ok: false,
-      error: (body && body.error) || `خطای سرور فاندامنتال (${res.status})`,
-      code: (body && body.code) || 'HTTP'
-    };
-  }
-  if (!body.snapshot || typeof body.snapshot !== 'object') {
-    return { ok: false, error: 'پاسخ فاندامنتال نامعتبر یا خالی است.', code: 'EMPTY' };
-  }
-  try {
-    sessionStorage.setItem(FUND_CACHE_KEY, JSON.stringify({
-      symbol,
-      ts: Date.now(),
-      fetchedAt: body.fetchedAt,
-      snapshot: body.snapshot,
-      coverage: body.coverage
-    }));
-  } catch { /* quota */ }
   return {
-    ok: true,
-    snapshot: body.snapshot,
-    fetchedAt: body.fetchedAt,
-    fromCache: Boolean(body._fromCache),
-    coverage: body.coverage
+    ok: false,
+    error: 'داده بنیادی دستی خالی است. مقادیر را در صفحه تحلیل بنیادی وارد کنید.',
+    code: 'OFFLINE_EMPTY'
   };
 }
 
@@ -547,23 +518,9 @@ async function runAnalysis(silent = false) {
           };
           setFundFetchStatus('فاندامنتال از دادهٔ دستی محلی', 'is-ok');
         } else {
-          // Optional backend only if offline empty — never hard-fail analysis
-          const fundRes = await fetchFundamentalSnapshot(sym);
-          if (fundRes.ok && fundRes.snapshot) {
-            fundSnap = fundRes.snapshot;
-            fundMeta = {
-              used: true,
-              mode: 'with_fundamental',
-              fromCache: fundRes.fromCache,
-              fetchedAt: fundRes.fetchedAt,
-              coverage: fundRes.coverage,
-              source: 'backend'
-            };
-            setFundFetchStatus('فاندامنتال از سرور محلی', 'is-ok');
-          } else {
-            setFundFetchStatus('داده بنیادی دستی خالی است — فقط تکنیکال ادامه یافت', 'is-err');
-            if (!silent) toast('برای ترکیب بنیادی، در صفحه تحلیل بنیادی مقادیر را وارد کنید', 'err');
-          }
+          // Offline-only: no EODHD / backend dependency
+          setFundFetchStatus('داده بنیادی دستی خالی است — فقط تکنیکال ادامه یافت', 'is-warn');
+          if (!silent) toast('برای ترکیب بنیادی، در صفحه «تحلیل بنیادی» مقادیر را وارد کنید', 'err');
         }
       } catch (e) {
         setFundFetchStatus('خطا در بارگذاری فاندامنتال آفلاین', 'is-err');
@@ -1053,8 +1010,20 @@ function switchView(view) {
       renderDebuggerPanel();
     }
     if (view === 'mpb') {
-      renderMPBPanel(window.__lastAnalysisResult || null);
-      refreshMPBLibrary();
+      (async () => {
+        try {
+          if (currentSymbol) {
+            const { ensureProjectData } = await import('./logic/datasets.js');
+            await ensureProjectData(currentSymbol, currentTf || '1D');
+            if ((currentTf || '1D') === '1D') {
+              try { await ensureProjectData(currentSymbol, '4H'); } catch (_) {}
+              try { await ensureProjectData(currentSymbol, '1H'); } catch (_) {}
+            }
+          }
+        } catch (_) {}
+        renderMPBPanel(window.__lastAnalysisResult || null);
+        refreshMPBLibrary();
+      })();
     }
     if (view === 'fundamental') {
       try { wireFundForm(); } catch (_) {}
@@ -1336,7 +1305,7 @@ function syncFundPageFromToggle() {
   if (hint) hint.textContent = (page && page.checked) ? 'روشن — در اجرای تحلیل لحاظ می‌شود' : 'خاموش — فقط تحلیل قیمت';
   const st = $('fundPageStatus');
   if (st) st.textContent = (page && page.checked)
-    ? 'تحلیل بنیادی فعال است. برای دریافت داده، Backend باید در حال اجرا باشد.'
+    ? 'تحلیل بنیادی فعال است — داده از ورودی دستی آفلاین خوانده می‌شود.'
     : 'تحلیل بنیادی خاموش است.';
 }
 
@@ -1852,6 +1821,8 @@ function init() {
     const pref = localStorage.getItem('oma_fund_toggle');
     if (pref === '1' && $('fundToggle')) $('fundToggle').checked = true;
   } catch (_) {}
+  // Pre-wire offline fundamental form so variable list is ready
+  try { wireFundForm(); } catch (_) {}
 
   $('analyzeBtn') && ($('analyzeBtn').onclick = () => runAnalysis(false));
   $('clearBtn') && ($('clearBtn').onclick = clearAll);
@@ -2110,16 +2081,52 @@ async function ensureFundModule() {
   }
 }
 
+function activeFundSymbol() {
+  const fromMod = (typeof currentSymbol === 'string' && currentSymbol) ? currentSymbol : '';
+  const fromWin = (typeof window !== 'undefined' && window.currentSymbol) ? window.currentSymbol : '';
+  const fromLs = localStorage.getItem('oma_symbol') || '';
+  const fromSel = $('symbol')?.value || '';
+  return String(fromMod || fromWin || fromLs || fromSel || 'XAUUSD').toUpperCase();
+}
+
 async function refreshFundVarSelect() {
   const sel = $('fundVarSelect');
-  if (!sel) return;
+  const list = $('fundVarList');
   const mod = await ensureFundModule();
-  if (!mod) return;
-  const sym = (window.currentSymbol || localStorage.getItem('oma_symbol') || 'XAUUSD').toUpperCase();
-  const schema = mod.getSchemaForSymbol(sym);
-  sel.innerHTML = schema.map(v =>
-    `<option value="${v.id}">${v.nameFa} (${v.unit})</option>`
-  ).join('');
+  if (!mod) {
+    if (sel) sel.innerHTML = '<option value="">— ماژول بنیادی بارگذاری نشد —</option>';
+    if (list) list.innerHTML = '<p class="muted">ماژول بنیادی در دسترس نیست.</p>';
+    return;
+  }
+  const sym = activeFundSymbol();
+  const schema = mod.getSchemaForSymbol(sym) || [];
+  if (sel) {
+    sel.innerHTML = schema.length
+      ? schema.map(v => `<option value="${v.id}">${v.nameFa} (${v.unit})</option>`).join('')
+      : '<option value="">— متغیری تعریف نشده —</option>';
+  }
+  if (list) {
+    if (!schema.length) {
+      list.innerHTML = '<p class="muted">متغیری برای این نماد تعریف نشده.</p>';
+    } else {
+      list.innerHTML = schema.map(v => {
+        const dir = v.bullWhen === 'higher' ? '↑ صعودی با افزایش' : (v.bullWhen === 'lower' ? '↓ صعودی با کاهش' : '');
+        return `<button type="button" class="fund-var-chip" data-var="${v.id}" title="${v.id}">
+          <span class="fund-var-name">${v.nameFa}</span>
+          <span class="fund-var-meta mono">${v.unit}${dir ? ' · ' + dir : ''}</span>
+        </button>`;
+      }).join('');
+      list.querySelectorAll('.fund-var-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (sel) {
+            sel.value = btn.dataset.var;
+            sel.dispatchEvent(new Event('change'));
+          }
+          list.querySelectorAll('.fund-var-chip').forEach(b => b.classList.toggle('is-active', b === btn));
+        });
+      });
+    }
+  }
 }
 
 async function refreshFundStoredList() {
@@ -2128,7 +2135,7 @@ async function refreshFundStoredList() {
   if (!box) return;
   const mod = await ensureFundModule();
   if (!mod) return;
-  const sym = (window.currentSymbol || localStorage.getItem('oma_symbol') || 'XAUUSD').toUpperCase();
+  const sym = activeFundSymbol();
   const data = mod.getFundamentalData(sym);
   const schema = mod.getSchemaForSymbol(sym);
   const rows = schema.filter(v => data[v.id]).map(v => {
@@ -2153,7 +2160,7 @@ function wireFundForm() {
     saveBtn.addEventListener('click', async () => {
       const mod = await ensureFundModule();
       if (!mod) return;
-      const sym = (window.currentSymbol || localStorage.getItem('oma_symbol') || 'XAUUSD').toUpperCase();
+      const sym = activeFundSymbol();
       const varId = $('fundVarSelect')?.value;
       const res = mod.upsertFundamentalVar(sym, varId, {
         actual: $('fundActual')?.value,
@@ -2174,7 +2181,7 @@ function wireFundForm() {
     clearBtn.addEventListener('click', async () => {
       const mod = await ensureFundModule();
       if (!mod) return;
-      const sym = (window.currentSymbol || localStorage.getItem('oma_symbol') || 'XAUUSD').toUpperCase();
+      const sym = activeFundSymbol();
       mod.clearFundamentalVar(sym);
       const msg = $('fundFormMsg');
       if (msg) msg.textContent = 'داده‌های نماد پاک شد.';

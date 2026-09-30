@@ -482,7 +482,7 @@ export function runDecision(candles, options = {}) {
       evR: entry.evR,
       modelConfidence: entry.modelConfidence,
       selectedScenario: entry.selectedScenario,
-      disclaimer: 'پیش‌بینی قطعی نیست. Entry V9.01 بر اساس سناریوهای ساختاری، EV محافظه‌کارانه و Ensemble محلی است — نه تضمین سود.'
+      disclaimer: 'پیش‌بینی قطعی نیست. Entry V10.0 بر اساس سناریوهای ساختاری، EV محافظه‌کارانه و Ensemble محلی است — نه تضمین سود.'
     },
     suggestion,
     signal: ens.signal,

@@ -154,27 +154,12 @@ export async function ensureProjectData(symbol, tf = '1D') {
   const existing = loadHistorical(s, t);
   if (existing && existing.length >= 30) return { ok: true, source: 'store', count: existing.length };
 
+  // Offline-only named files: data/{SYM}/{sym}-{tf}.csv  (xauusd-1d, brent-4h, …)
   const symLower = s.toLowerCase();
-  const tLower = t.toLowerCase();
+  const tLower = String(t).toLowerCase();
   const candidates = [
-    `data/${s}/${symLower}-${tLower}.csv`,
-    `data/${s}/${symLower}-1d.csv`,
-    `data/${s}/${t}.csv`,
-    `data/${s}/${tLower}.csv`,
-    `data/${s}_${t}.csv`,
-    `data/${s}_${tLower}.csv`,
-    `data/${s}/1D.csv`,
-    `data/${s}/4H.csv`,
-    `data/${s}/1H.csv`,
-    `data/${s}_1D.csv`
+    `data/${s}/${symLower}-${tLower}.csv`
   ];
-  if (t === '1D') {
-    candidates.unshift(`data/${s}/${symLower}-1d.csv`, `data/${s}/1D.csv`);
-  } else if (t === '4H') {
-    candidates.unshift(`data/${s}/${symLower}-4h.csv`, `data/${s}/4H.csv`);
-  } else if (t === '1H') {
-    candidates.unshift(`data/${s}/${symLower}-1h.csv`, `data/${s}/1H.csv`);
-  }
 
   const seen = new Set();
   for (const path of candidates) {
