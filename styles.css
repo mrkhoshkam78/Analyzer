@@ -3230,56 +3230,111 @@ html[data-skin="vector-soft"] .asset-del-btn:hover {
 .fund-stored-item .mono { font-variant-numeric: tabular-nums; }
 .fund-live-summary { margin-top: 10px; font-size: 13px; line-height: 1.5; }
 
-/* ========== Zen Calm skin ========== */
+/* ========== Zen Calm skin (mapped to site design tokens) ========== */
 html[data-skin="zen-calm"] {
   --font: "Vazirmatn", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
   --radius: 16px;
   --radius-sm: 10px;
-  --shadow: 0 8px 28px color-mix(in srgb, #0f172a 12%, transparent);
+  --r: 14px;
+  --r-lg: 18px;
+  --r-sm: 10px;
+  --shadow: 0 10px 32px color-mix(in srgb, #0f172a 14%, transparent);
+  --glass-blur: 14px;
 }
 html[data-skin="zen-calm"][data-theme="dark"],
 html[data-theme="dark"][data-skin="zen-calm"] {
-  --bg: #0c1222;
-  --bg-elev: #141c2e;
-  --card: #161f33;
-  --text: #e8eef7;
-  --muted: #94a3b8;
+  --bg: #0b1220;
+  --bg-elev: #121a2b;
+  --surface: #151e32;
+  --surface-2: #1b2740;
+  --card: #151e32;
+  --text: #e8eef8;
+  --text-2: #9aa8bc;
+  --text-3: #6b7c94;
+  --muted: #9aa8bc;
   --primary: #5b8def;
   --primary-2: #7aa2f7;
+  --accent: #8b9cf7;
+  --buy: #34d399;
+  --sell: #f87171;
+  --hold: #fbbf24;
   --ok: #34d399;
   --danger: #f87171;
-  --border: color-mix(in srgb, #94a3b8 18%, transparent);
-  --accent: #a5b4fc;
+  --line: color-mix(in srgb, #94a3b8 16%, transparent);
+  --line-focus: color-mix(in srgb, #5b8def 45%, transparent);
+  --border: color-mix(in srgb, #94a3b8 16%, transparent);
+  --glass-bg: color-mix(in srgb, #151e32 82%, transparent);
+  --grad: linear-gradient(135deg, #5b8def, #6366f1);
+  --focus: 0 0 0 3px color-mix(in srgb, #5b8def 32%, transparent);
 }
 html[data-skin="zen-calm"][data-theme="light"],
 html[data-theme="light"][data-skin="zen-calm"] {
-  --bg: #f4f6fb;
+  --bg: #f3f5fa;
   --bg-elev: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #eef2f8;
   --card: #ffffff;
   --text: #1e293b;
+  --text-2: #475569;
+  --text-3: #64748b;
   --muted: #64748b;
   --primary: #3b6fd9;
   --primary-2: #4c7cf0;
+  --accent: #6366f1;
+  --buy: #059669;
+  --sell: #dc2626;
+  --hold: #d97706;
   --ok: #059669;
   --danger: #dc2626;
-  --border: color-mix(in srgb, #64748b 16%, transparent);
-  --accent: #6366f1;
+  --line: color-mix(in srgb, #64748b 14%, transparent);
+  --line-focus: color-mix(in srgb, #3b6fd9 40%, transparent);
+  --border: color-mix(in srgb, #64748b 14%, transparent);
+  --glass-bg: color-mix(in srgb, #ffffff 88%, transparent);
+  --grad: linear-gradient(135deg, #3b6fd9, #6366f1);
+  --focus: 0 0 0 3px color-mix(in srgb, #3b6fd9 28%, transparent);
+  --shadow: 0 10px 28px color-mix(in srgb, #0f172a 8%, transparent);
 }
 html[data-skin="zen-calm"] body {
   font-family: var(--font);
   background: var(--bg);
   letter-spacing: 0.01em;
 }
+
 html[data-skin="zen-calm"] .card,
 html[data-skin="zen-calm"] .mpb-card,
 html[data-skin="zen-calm"] .settings-card,
 html[data-skin="zen-calm"] .fund-page-card,
 html[data-skin="zen-calm"] .modal-body {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
   box-shadow: var(--shadow);
 }
+html[data-skin="zen-calm"] .shell.shell-with-sidebar > .sidebar {
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border-inline-end: 1px solid var(--line);
+}
+html[data-skin="zen-calm"] .side-link.active {
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary-2);
+}
+html[data-skin="zen-calm"] .btn-primary {
+  background: var(--grad);
+  border: none;
+  color: #fff;
+}
+html[data-skin="zen-calm"] .input,
+html[data-skin="zen-calm"] select.input,
+html[data-skin="zen-calm"] textarea.input {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+html[data-skin="zen-calm"] .signal-hero.is-buy { --signal: var(--buy); }
+html[data-skin="zen-calm"] .signal-hero.is-sell { --signal: var(--sell); }
+html[data-skin="zen-calm"] .signal-hero.is-hold { --signal: var(--hold); }
+
 html[data-skin="zen-calm"] .btn {
   border-radius: 12px;
   font-weight: 600;

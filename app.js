@@ -2338,9 +2338,103 @@ function wireFundForm() {
       mod.clearFundamentalVar(activeFundSymbol());
       const msg = $('fundFormMsg');
       if (msg) msg.textContent = 'داده‌های نماد پاک شد.';
+      toast('داده‌های بنیادی نماد پاک شد', 'ok');
       refreshFundEditableList();
     });
   }
+
+  const exportBtn = $('fundExportBtn');
+  if (exportBtn && !exportBtn._wired) {
+    exportBtn._wired = true;
+    exportBtn.addEventListener('click', async () => {
+      const mod = await ensureFundModule();
+      if (!mod) { toast('ماژول بنیادی در دسترس نیست', 'err'); return; }
+      const all = mod.loadFundamentalStore() || {};
+      const sym = activeFundSymbol();
+      const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        app: 'Analyzer-v11.6.0',
+        mode: 'all',
+        symbols: all,
+        focusSymbol: sym,
+        focusData: all[sym] || {}
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.href = URL.createObjectURL(blob);
+      a.download = `fundamental-export-${sym || 'ALL'}-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      toast(`خروجی بنیادی ذخیره شد (${Object.keys(all).length} نماد)`, 'ok');
+    });
+  }
+
+  const importBtn = $('fundImportBtn');
+  const importFile = $('fundImportFile');
+  if (importBtn && importFile && !importBtn._wired) {
+    importBtn._wired = true;
+    importBtn.addEventListener('click', () => importFile.click());
+    importFile.addEventListener('change', async () => {
+      const file = importFile.files && importFile.files[0];
+      importFile.value = '';
+      if (!file) return;
+      try {
+        const raw = await file.text();
+        const data = JSON.parse(raw);
+        const mod = await ensureFundModule();
+        if (!mod) { toast('ماژول بنیادی در دسترس نیست', 'err'); return; }
+        let incoming = null;
+        if (data && data.symbols && typeof data.symbols === 'object') {
+          incoming = data.symbols;
+        } else if (data && typeof data === 'object' && !Array.isArray(data)) {
+          const keys = Object.keys(data);
+          const looksLikeStore = keys.some(k => {
+            const v = data[k];
+            return v && typeof v === 'object' && !('actual' in v);
+          });
+          if (looksLikeStore) incoming = data;
+          else incoming = { [activeFundSymbol()]: data };
+        }
+        if (!incoming || !Object.keys(incoming).length) {
+          toast('فایل JSON معتبر نیست', 'err');
+          return;
+        }
+        const current = mod.loadFundamentalStore() || {};
+        const merged = { ...current };
+        let nVars = 0;
+        for (const [sym, vars] of Object.entries(incoming)) {
+          const key = String(sym || '').toUpperCase();
+          if (!vars || typeof vars !== 'object') continue;
+          merged[key] = { ...(merged[key] || {}) };
+          for (const [vid, rec] of Object.entries(vars)) {
+            if (!rec || typeof rec !== 'object') continue;
+            merged[key][vid] = {
+              actual: rec.actual != null && rec.actual !== '' ? Number(rec.actual) : null,
+              forecast: rec.forecast != null && rec.forecast !== '' ? Number(rec.forecast) : null,
+              previous: rec.previous != null && rec.previous !== '' ? Number(rec.previous) : null,
+              date: rec.date || '',
+              change: rec.change != null ? Number(rec.change) : null,
+              surprise: rec.surprise != null ? Number(rec.surprise) : null,
+              updatedAt: rec.updatedAt || Date.now()
+            };
+            nVars++;
+          }
+        }
+        const ok = mod.saveFundamentalStore(merged);
+        if (!ok) { toast('ذخیره آپلود ناموفق (حافظه)', 'err'); return; }
+        toast(`آپلود بنیادی: ${Object.keys(incoming).length} نماد · ${nVars} متغیر`, 'ok');
+        const msg = $('fundFormMsg');
+        if (msg) msg.textContent = `آپلود موفق — ${nVars} متغیر ادغام شد.`;
+        refreshFundEditableList();
+      } catch (e) {
+        toast('خطا در خواندن فایل: ' + (e.message || 'JSON نامعتبر'), 'err');
+      }
+    });
+  }
+
   refreshFundEditableList();
 }
 
@@ -2354,24 +2448,36 @@ function buildForecastCandles(hist, result, nFuture = 3) {
   const close = Number(last.c);
   if (!Number.isFinite(close) || close <= 0) return { hist, future: [] };
 
-  let atr = result?.atr ?? result?.analysis?.atr ?? result?.indicators?.atr;
-  atr = Number(atr);
-  let step = Number.isFinite(atr) && atr > 0 ? atr * 0.55 : null;
-  if (!step || step <= 0) {
+  let atr = Number(result?.atr ?? result?.analysis?.atr ?? result?.indicators?.atr);
+  if (!Number.isFinite(atr) || atr <= 0) {
     const slice = hist.slice(-20);
     const ranges = slice.map(c => Number(c.h) - Number(c.l)).filter(x => Number.isFinite(x) && x > 0);
-    const avg = ranges.length ? ranges.reduce((a, b) => a + b, 0) / ranges.length : close * 0.004;
-    step = Math.max(avg * 0.65, close * 0.001);
+    atr = ranges.length ? ranges.reduce((a, b) => a + b, 0) / ranges.length : close * 0.004;
   }
+  atr = Math.max(atr, close * 0.0008);
 
-  const signal = result?.signal || 'HOLD';
+  const signal = String(result?.signal || 'HOLD').toUpperCase();
   const target = Number(result?.target);
-  const stop = Number(result?.stop);
+  const conf0 = Number.isFinite(result?.confidence) ? Math.max(0.2, Math.min(1, result.confidence)) : 0.5;
+
   let dir = 0;
   if (signal === 'BUY') dir = 1;
   else if (signal === 'SELL') dir = -1;
-  else if (Number.isFinite(target) && target > close) dir = 0.4;
-  else if (Number.isFinite(target) && target < close) dir = -0.4;
+  else if (Number.isFinite(target)) dir = target > close ? 0.35 : target < close ? -0.35 : 0;
+
+  let totalMove;
+  if (Number.isFinite(target) && target !== close && dir !== 0) {
+    const toTarget = target - close;
+    if ((dir > 0 && toTarget < 0) || (dir < 0 && toTarget > 0)) {
+      totalMove = dir * atr * (1.2 + conf0);
+    } else {
+      totalMove = toTarget * (0.45 + 0.4 * conf0);
+    }
+  } else if (dir !== 0) {
+    totalMove = dir * atr * (1.0 + conf0 * 1.2);
+  } else {
+    totalMove = 0;
+  }
 
   const tfMs = (() => {
     const tf = currentTf || '1D';
@@ -2384,29 +2490,27 @@ function buildForecastCandles(hist, result, nFuture = 3) {
   const future = [];
   let px = close;
   const lastTs = Number.isFinite(last.ts) ? last.ts : Date.now();
-  const conf0 = Number.isFinite(result?.confidence) ? result.confidence : 0.5;
 
   for (let i = 1; i <= nFuture; i++) {
     const progress = i / nFuture;
-    let dest = px + dir * step * (1.1 - progress * 0.3);
-    if (Number.isFinite(target) && dir !== 0) {
-      dest = px * (1 - progress * 0.35) + (close + (target - close) * progress * 0.7) * (progress * 0.35 + 0.65);
-      dest = px + (dest - px);
-      dest = px + (target - close) * (0.22 * progress) + dir * step * 0.2 * (1 - progress * 0.4);
-    }
-    // keep path stable (no Math.random) so redraws don't jump
-    const wobble = step * 0.12 * Math.sin(i * 1.7 + conf0);
+    const eased = 1 - Math.pow(1 - progress, 1.35);
+    const dest = close + totalMove * eased;
     const o = px;
-    const c = dest + wobble * 0.15;
-    const wick = step * (0.35 + 0.12 * progress);
-    const h = Math.max(o, c) + wick * 0.4;
-    const l = Math.min(o, c) - wick * 0.4;
+    let c = dest;
+    if (dir > 0 && c < o) c = o + Math.abs(atr) * 0.05;
+    if (dir < 0 && c > o) c = o - Math.abs(atr) * 0.05;
+    if (dir === 0) c = o + atr * 0.08 * Math.sin(i * 2.1);
+    const body = Math.abs(c - o);
+    const wick = Math.max(atr * 0.25, body * 0.35);
+    const h = Math.max(o, c) + wick * 0.55;
+    const l = Math.min(o, c) - wick * 0.55;
     future.push({
       o, h, l, c,
       v: null,
       ts: lastTs + i * tfMs,
       forecast: true,
-      conf: Math.max(0.22, conf0 * (1 - progress * 0.32))
+      conf: Math.max(0.25, conf0 * (1 - progress * 0.28)),
+      dir
     });
     px = c;
   }
