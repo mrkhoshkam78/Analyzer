@@ -56,6 +56,7 @@ function ensembleStrategies(strategies, regimeInfo, riskScore, learningMult, con
   const mtfAgree = mtf?.agreement ?? 0.5;
   const mtfConflict = mtf?.htfLtfConflict === true;
 
+  // Session relevance: neutral unless backtest stats exist (data-driven placeholder = 1.0)
   const sessionMult = 1.0;
 
   let sumW = 0, sumScore = 0;
@@ -64,6 +65,7 @@ function ensembleStrategies(strategies, regimeInfo, riskScore, learningMult, con
 
   for (const s of active) {
     let rw = regimeWeights[s.id] != null ? regimeWeights[s.id] : 1;
+    // Event risk dampens directional strategies more than mean-reversion in reaction
     if (eventRisk >= 0.55 && (s.id === 'breakout' || s.id === 'momentum')) rw *= (1 - eventRisk * 0.35);
     if (mtfConflict && (s.id === 'trendFollowing' || s.id === 'momentum')) rw *= 0.75;
     const w = rw * (s.confidence || 0.4) * (s.dataQuality || 0.5) * histRel * sessionMult;
@@ -86,6 +88,7 @@ function ensembleStrategies(strategies, regimeInfo, riskScore, learningMult, con
   else if (votes.BUY > 0 && votes.SELL > 0) agreementLabel = 'Strong Conflict';
   else agreementLabel = 'Mixed';
 
+  // Risk + event pull toward 50
   const riskNorm = riskScore / 100;
   if (riskNorm >= 0.65 || eventRisk >= 0.55) {
     const pull = Math.max(riskNorm - 0.55, eventRisk - 0.45, 0) * 1.2;
@@ -93,11 +96,13 @@ function ensembleStrategies(strategies, regimeInfo, riskScore, learningMult, con
     finalScore = Math.max(0, Math.min(100, finalScore));
   }
 
+  // MTF alignment nudge
   if (mtf?.ok && mtf.alignment === 'bullish') finalScore = Math.min(100, finalScore + Math.round(3 * mtfAgree));
   if (mtf?.ok && mtf.alignment === 'bearish') finalScore = Math.max(0, finalScore - Math.round(3 * mtfAgree));
   if (mtfConflict) finalScore = Math.round(finalScore * 0.85 + 50 * 0.15);
 
   let signal = 'HOLD';
+  // Raise HOLD threshold under conflict / unclear / high event risk
   let buyTh = CONFIG.buyThreshold;
   let sellTh = CONFIG.sellThreshold;
   if (agreementLabel === 'Strong Conflict' || regimeInfo.regime === 'Unclear' || eventRisk >= 0.6) {
@@ -152,6 +157,13 @@ function ensembleStrategies(strategies, regimeInfo, riskScore, learningMult, con
   };
 }
 
+/**
+ * @param {Array} candles primary TF OHLCV
+ * @param {object} options
+ *   symbol, currentPrice, fundamentalSnapshot, horizonBars, asOfTs, timeframe
+ *   seriesMap?: { '1D': candles[], '1H': ... } for MTF
+ *   calendarEvents?: array (optional; else loaded from store as-of)
+ */
 export function runDecision(candles, options = {}) {
   const symbol = options.symbol || 'UNKNOWN';
   const timeframe = options.timeframe || '1D';
@@ -166,6 +178,7 @@ export function runDecision(candles, options = {}) {
     return { ok: false, error: tech.error, layer: 'technical' };
   }
 
+  // Calendar as-of (no future events beyond window for context; past+near future)
   const calEvents = options.calendarEvents != null
     ? options.calendarEvents
     : getCalendarAsOf(asOfTs);
@@ -197,10 +210,12 @@ export function runDecision(candles, options = {}) {
 
   const regimeInfo = detectRegime(candles, ind);
 
+  // Multi-timeframe (only available series)
   const seriesMap = options.seriesMap || { [timeframe]: candles };
   if (!seriesMap[timeframe]) seriesMap[timeframe] = candles;
   const mtf = runMultiTimeframe(seriesMap, { symbol, asOfTs, primaryTf: timeframe });
 
+  // Risk engine
   let riskScore = 50;
   if (ind.atrPct != null) {
     if (ind.atrPct > CONFIG.highVolPct) riskScore += 22;
@@ -228,6 +243,7 @@ export function runDecision(candles, options = {}) {
   const volRegime = ind.atrPct > CONFIG.highVolPct ? 'high'
     : ind.atrPct < CONFIG.lowVolPct ? 'low' : 'normal';
 
+  // Entry engine V9.01 — multi-scenario EV-aware
   const entry = computeEntry({
     price,
     signal: ens.signal,
@@ -251,6 +267,7 @@ export function runDecision(candles, options = {}) {
     candleCount: candles.length
   });
 
+  // Target/Stop: prefer entry engine levels when valid, else structure+ATR
   let target = entry.target1;
   let stop = entry.stop;
   let rr = entry.rr;
@@ -261,6 +278,7 @@ export function runDecision(candles, options = {}) {
     rr = ts.rr;
   }
 
+  // Directional integrity check
   if (ens.signal === 'BUY' && stop != null && target != null) {
     if (!(stop < price && price < target) && !(entry.preferredEntry && stop < entry.preferredEntry && entry.preferredEntry < target)) {
       const fix = computeTargetStop(entry.preferredEntry || price, 'BUY', support, resistance, atrVal, volRegime);

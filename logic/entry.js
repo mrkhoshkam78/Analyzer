@@ -813,7 +813,7 @@ export function computeEntry(input = {}) {
     version: 'v9.01',
     entryType: best.name,
     direction: best.direction,
-    preferredEntry: best.entry,
+    preferredEntry: best.entry != null ? Math.round(best.entry * 1e4) / 1e4 : null,
     entryZone: best.zone,
     currentPrice: price,
     confirmation: best.confirmation,
