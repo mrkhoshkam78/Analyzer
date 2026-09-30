@@ -100,15 +100,23 @@ export function dayKeyOffset(offsetDays) {
 export function timeBucketKey(tsOrDate, tf) {
   const d = tsOrDate instanceof Date ? tsOrDate : new Date(tsOrDate);
   if (!Number.isFinite(d.getTime())) return null;
-  const meta = getTfMeta(tf);
+  const t = assertTf(tf);
+  const meta = getTfMeta(t);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
+  const hh = d.getHours();
+  const mm = d.getMinutes();
   if (meta.kind === 'day' || meta.kind === 'week') return `${y}-${m}-${day}`;
-  if (meta.kind === 'hour') return `${y}-${m}-${day}T${hh}`;
-  return `${y}-${m}-${day}T${hh}:${mm}`;
+  // 4H: floor hour to 0/4/8/12/16/20 so buckets never collide with 1H bars
+  if (t === '4H') {
+    const h4 = Math.floor(hh / 4) * 4;
+    return `${y}-${m}-${day}T${String(h4).padStart(2, '0')}`;
+  }
+  if (t === '1H' || meta.kind === 'hour') {
+    return `${y}-${m}-${day}T${String(hh).padStart(2, '0')}`;
+  }
+  return `${y}-${m}-${day}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
 export function loadHistorical(symbol, tf = '1D') {
@@ -144,42 +152,102 @@ export function loadHistorical(symbol, tf = '1D') {
 }
 
 /**
- * V10.0.1 — Load OHLCV from project data/ folder (relative paths).
- * Paths: data/{SYM}/{sym}-{tf}.csv , data/{SYM}/{TF}.csv , aliases 1D/4H/1H
- * Safe on file:// (fails silently). Call once per symbol×tf when store is sparse.
+ * Project data map — exact offline CSV per symbol × timeframe.
+ * Only these three TFs have bundled files under data/.
+ */
+export const PROJECT_DATA_FILES = Object.freeze({
+  XAUUSD: {
+    '1D': 'data/XAUUSD/xauusd-1d.csv',
+    '4H': 'data/XAUUSD/xauusd-4h.csv',
+    '1H': 'data/XAUUSD/xauusd-1h.csv'
+  },
+  BRENT: {
+    '1D': 'data/BRENT/brent-1d.csv',
+    '4H': 'data/BRENT/brent-4h.csv',
+    '1H': 'data/BRENT/brent-1h.csv'
+  }
+});
+
+/** Normalize UI / alias TF ids to store keys that have project CSVs. */
+export function normalizeProjectTf(tf) {
+  const raw = String(tf || '1D').trim();
+  const map = {
+    '1D': '1D', D1: '1D', '1d': '1D', daily: '1D', day: '1D',
+    '4H': '4H', H4: '4H', '4h': '4H', '4hour': '4H',
+    '1H': '1H', H1: '1H', '1h': '1H', '1hour': '1H'
+  };
+  return map[raw] || assertTf(raw);
+}
+
+/**
+ * Load OHLCV from project data/ folder for the exact symbol×tf file.
+ * Prefer project CSV over seed / thin localStorage (replace when file is richer).
+ * Safe on file:// (fails silently → keep seed/store).
  */
 export async function ensureProjectData(symbol, tf = '1D') {
   const s = assertSymbol(symbol);
-  const t = assertTf(tf);
+  const t = normalizeProjectTf(tf);
   const existing = loadHistorical(s, t);
-  if (existing && existing.length >= 30) return { ok: true, source: 'store', count: existing.length };
+  const existingCount = existing?.length || 0;
 
-  // Offline-only named files: data/{SYM}/{sym}-{tf}.csv  (xauusd-1d, brent-4h, …)
-  const symLower = s.toLowerCase();
-  const tLower = String(t).toLowerCase();
-  const candidates = [
-    `data/${s}/${symLower}-${tLower}.csv`
-  ];
-
-  const seen = new Set();
-  for (const path of candidates) {
-    if (seen.has(path)) continue;
-    seen.add(path);
-    try {
-      const res = await fetch(path, { cache: 'no-store' });
-      if (!res.ok) continue;
-      const text = await res.text();
-      if (!text || text.length < 40) continue;
-      const result = importHistoricalCsv(s, t, text, 'skip');
-      if (result && result.ok) {
-        const after = loadHistorical(s, t);
-        return { ok: true, source: path, count: after.length, added: result.added || 0 };
-      }
-    } catch {
-      /* file:// or missing — ignore */
-    }
+  const fileMap = PROJECT_DATA_FILES[s];
+  if (!fileMap || !fileMap[t]) {
+    return { ok: existingCount > 0, source: existingCount ? 'store' : null, count: existingCount };
   }
-  return { ok: false, source: null, count: existing?.length || 0 };
+
+  const path = fileMap[t];
+  // Always try project file so seed (short 1D) cannot permanently block real CSV
+  try {
+    const res = await fetch(path, { cache: 'no-store' });
+    if (res.ok) {
+      const csvText = await res.text();
+      if (csvText && csvText.length >= 40) {
+        const parsed = parseOhlcvCsv(csvText, t);
+        if (parsed.ok && parsed.candles.length > 0) {
+          // Replace when project has equal or more bars, or store was empty/seed-thin
+          const shouldReplace =
+            existingCount === 0 ||
+            parsed.candles.length >= existingCount ||
+            (t === '1D' && existingCount < 100); // seed is short; force project 1D
+          if (shouldReplace) {
+            // Full replace: project CSV owns this TF (do not merge with seed)
+            delete cache.hist[cacheKey(s, t)];
+            const n = setHistorical(s, parsed.candles, t);
+            invalidateDayIndex(s, t);
+            return {
+              ok: true,
+              source: path,
+              count: n,
+              added: n,
+              tf: t,
+              replaced: true
+            };
+          } else {
+            return { ok: true, source: 'store', count: existingCount, tf: t, path };
+          }
+        }
+      }
+    }
+  } catch {
+    /* file:// or network — fall through to store/seed */
+  }
+
+  return {
+    ok: existingCount > 0,
+    source: existingCount ? 'store' : null,
+    count: existingCount,
+    tf: t,
+    path
+  };
+}
+
+/** Load all three project TFs (1D / 4H / 1H) for a symbol. */
+export async function ensureAllProjectTimeframes(symbol) {
+  const out = {};
+  for (const tf of ['1D', '4H', '1H']) {
+    out[tf] = await ensureProjectData(symbol, tf);
+  }
+  return out;
 }
 
 export function setHistorical(symbol, candles, tf = '1D') {
