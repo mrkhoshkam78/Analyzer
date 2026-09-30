@@ -225,9 +225,10 @@ async function refreshAssetPanel(symbol) {
   currentTf = $('tf').value || '1D';
   loadHistorical(symbol, currentTf);
   loadManual(symbol, currentTf);
-  // V8.0.2: pull from project data/ when local store is thin
+  // Load exact project CSVs for 1D / 4H / 1H (never mix TFs)
   try {
-    const { ensureProjectData } = await import('./logic/datasets.js');
+    const { ensureAllProjectTimeframes, ensureProjectData } = await import('./logic/datasets.js');
+    await ensureAllProjectTimeframes(symbol);
     await ensureProjectData(symbol, currentTf);
   } catch (_) {}
   refreshDayIndex();
@@ -532,12 +533,15 @@ async function runAnalysis(silent = false) {
     // When analyzing 1D, also fetch 4H so MTF can use daily bias + 4H structure (no fabrication).
     const seriesMap = { [currentTf]: series.candles };
     try {
-      const { loadHistorical, TIMEFRAMES, ensureProjectData } = await import('./logic/datasets.js');
-      if (currentTf === '1D') {
-        try { await ensureProjectData(sym, '4H'); } catch (_) { /* optional */ }
-      }
+      const { loadHistorical, TIMEFRAMES, ensureAllProjectTimeframes, ensureProjectData } = await import('./logic/datasets.js');
+      // Always bind each TF to its own CSV (1D↔1d, 4H↔4h, 1H↔1h)
+      try { await ensureAllProjectTimeframes(sym); } catch (_) { /* optional */ }
+      try { await ensureProjectData(sym, currentTf); } catch (_) {}
       for (const tf of TIMEFRAMES) {
         if (tf.id === currentTf) continue;
+        if (tf.id === '1D' || tf.id === '4H' || tf.id === '1H') {
+          try { await ensureProjectData(sym, tf.id); } catch (_) {}
+        }
         const hist = loadHistorical(sym, tf.id);
         if (hist && hist.length >= 20) seriesMap[tf.id] = hist;
       }
@@ -1793,11 +1797,17 @@ function init() {
   updateSmartDateTimeUI();
 
   $('symbol').addEventListener('change', onSymbolChange);
-  $('tf').addEventListener('change', () => {
-    currentTf = $('tf').value;
+  $('tf').addEventListener('change', async () => {
+    currentTf = $('tf').value || '1D';
     updateHeaderAssetLabel();
     updateSmartDateTimeUI();
-    if (currentSymbol) refreshAssetPanel(currentSymbol);
+    if (currentSymbol) {
+      try {
+        const { ensureProjectData } = await import('./logic/datasets.js');
+        await ensureProjectData(currentSymbol, currentTf);
+      } catch (_) {}
+      refreshAssetPanel(currentSymbol);
+    }
   });
   $('priceForm').addEventListener('submit', saveDailyPrice);
   $('downloadCsvBtn')?.addEventListener('click', downloadMergedCsv);
