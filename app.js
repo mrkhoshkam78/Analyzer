@@ -763,7 +763,6 @@ function showResult(r, symbolId) {
         html += `<details class="entry-limits"><summary>محدودیت‌های مدل</summary><ul class="entry-limit-list">${entry.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>`;
       }
       html += '</div>';
-    }
     } else {
       html += `<div class="ens-active muted">Setup ورود تعریف نشده</div>`;
     }
