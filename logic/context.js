@@ -71,15 +71,51 @@ export function getAssetEconomy(symbol) {
 }
 
 /**
- * Session detection from timestamp (UTC-based windows).
- * Windows are approximate FX session hours in UTC (no hard performance claims).
- * Returns session id + phase; reliability of strategies per session comes from backtest data only.
+ * Valid trading sessions (standard FX / multi-asset convention, UTC windows).
+ * Used for auto-detect and for user override selector.
  */
-export function detectSession(tsOrDate) {
+export const TRADING_SESSIONS = Object.freeze([
+  { id: 'auto', nameFa: 'خودکار (بر اساس زمان)', nameEn: 'Auto (by time)', liquidity: null },
+  { id: 'Asia', nameFa: 'آسیا (توکیو)', nameEn: 'Asia (Tokyo)', liquidity: 'moderate', utcStart: 0, utcEnd: 9 },
+  { id: 'London', nameFa: 'لندن', nameEn: 'London', liquidity: 'normal', utcStart: 7, utcEnd: 16 },
+  { id: 'New York', nameFa: 'نیویورک', nameEn: 'New York', liquidity: 'normal', utcStart: 12, utcEnd: 21 },
+  { id: 'London-New York Overlap', nameFa: 'هم‌پوشانی لندن–نیویورک', nameEn: 'London–NY Overlap', liquidity: 'high', utcStart: 12, utcEnd: 16 },
+  { id: 'Sydney', nameFa: 'سیدنی', nameEn: 'Sydney', liquidity: 'moderate', utcStart: 21, utcEnd: 6 },
+  { id: 'Off-hours', nameFa: 'خارج از سشن', nameEn: 'Off-hours', liquidity: 'low', utcStart: null, utcEnd: null }
+]);
+
+export function getSessionMeta(sessionId) {
+  return TRADING_SESSIONS.find(s => s.id === sessionId) || TRADING_SESSIONS[0];
+}
+
+/**
+ * Session detection from timestamp (UTC-based windows).
+ * @param {number|Date} tsOrDate
+ * @param {string} [overrideSession] - if set and not 'auto', forces that session
+ */
+export function detectSession(tsOrDate, overrideSession = null) {
+  if (overrideSession && overrideSession !== 'auto') {
+    const meta = getSessionMeta(overrideSession);
+    const d = tsOrDate instanceof Date ? tsOrDate : (tsOrDate != null ? new Date(tsOrDate) : new Date());
+    const hour = Number.isFinite(d.getTime()) ? d.getUTCHours() + d.getUTCMinutes() / 60 : null;
+    return {
+      session: meta.id,
+      sessionFa: meta.nameFa,
+      phase: 'manual',
+      hourUtc: hour != null ? Math.round(hour * 100) / 100 : null,
+      overlaps: meta.id === 'London-New York Overlap' ? ['London', 'New York'] : [],
+      liquidity: meta.liquidity || 'normal',
+      timezone: 'UTC',
+      iso: Number.isFinite(d.getTime()) ? d.toISOString() : null,
+      override: true
+    };
+  }
+
   const d = tsOrDate instanceof Date ? tsOrDate : new Date(tsOrDate);
   if (!Number.isFinite(d.getTime())) {
     return {
       session: 'Unknown',
+      sessionFa: 'نامشخص',
       phase: 'unknown',
       hourUtc: null,
       overlaps: [],
@@ -89,10 +125,10 @@ export function detectSession(tsOrDate) {
   }
   const hour = d.getUTCHours() + d.getUTCMinutes() / 60;
 
-  // Approximate UTC session windows (standard FX convention)
   const asia = hour >= 0 && hour < 9;
   const london = hour >= 7 && hour < 16;
   const ny = hour >= 12 && hour < 21;
+  const sydney = hour >= 21 || hour < 6;
 
   let session = 'Off-hours';
   const overlaps = [];
@@ -104,36 +140,38 @@ export function detectSession(tsOrDate) {
     overlaps.push('London', 'New York');
   }
   if (asia && london) overlaps.push('Asia', 'London');
-  if (!asia && !london && !ny) session = 'Off-hours';
+  if (!asia && !london && !ny) {
+    session = sydney ? 'Sydney' : 'Off-hours';
+  }
 
-  // Phase within session
   let phase = 'mid';
   if (session === 'Asia') phase = hour < 3 ? 'open' : hour > 7 ? 'close' : 'mid';
   else if (session === 'London') phase = hour < 9 ? 'open' : hour > 14 ? 'close' : 'mid';
   else if (session === 'New York') phase = hour < 14 ? 'open' : hour > 19 ? 'close' : 'mid';
   else if (session === 'London-New York Overlap') phase = 'overlap';
+  else if (session === 'Sydney') phase = hour >= 21 || hour < 1 ? 'open' : hour > 4 ? 'close' : 'mid';
 
-  // Liquidity context (descriptive only — not a performance claim)
   let liquidity = 'normal';
   if (session === 'London-New York Overlap') liquidity = 'high';
   else if (session === 'Off-hours') liquidity = 'low';
-  else if (session === 'Asia') liquidity = 'moderate';
+  else if (session === 'Asia' || session === 'Sydney') liquidity = 'moderate';
 
+  const meta = getSessionMeta(session);
   return {
     session,
+    sessionFa: meta?.nameFa || session,
     phase,
     hourUtc: Math.round(hour * 100) / 100,
     overlaps,
     liquidity,
     timezone: 'UTC',
-    iso: d.toISOString()
+    iso: d.toISOString(),
+    override: false
   };
 }
 
 /**
  * Event state from calendar items available at asOfTs.
- * events: [{ id, country, currency, importance, scheduledTs, actual, forecast, previous, affectedAssets }]
- * No synthetic events.
  */
 export function computeEventContext(events, asOfTs, symbol) {
   const empty = {
@@ -157,12 +195,10 @@ export function computeEventContext(events, asOfTs, symbol) {
   const economy = getAssetEconomy(sym);
   const relevantCurrencies = new Set(economy.currencies || []);
 
-  // Filter to asset-relevant events with valid scheduled time <= or near now
   const relevant = events.filter(e => {
     if (!e || e.scheduledTs == null) return false;
     if (e.affectedAssets && Array.isArray(e.affectedAssets)) {
       if (!e.affectedAssets.map(a => String(a).toUpperCase()).includes(sym)) {
-        // still allow if currency matches
         if (e.currency && !relevantCurrencies.has(String(e.currency).toUpperCase())) return false;
       }
     } else if (e.currency && !relevantCurrencies.has(String(e.currency).toUpperCase())) {
@@ -175,13 +211,12 @@ export function computeEventContext(events, asOfTs, symbol) {
     return { ...empty, dataAvailable: true, message: 'رویداد مرتبط با این دارایی یافت نشد', state: 'NORMAL', eventRisk: 0.2 };
   }
 
-  // Sort by scheduled time
   relevant.sort((a, b) => a.scheduledTs - b.scheduledTs);
 
-  const PRE_MS = 4 * 3600 * 1000;      // 4h pre window (configurable conceptually)
-  const IMMINENT_MS = 45 * 60 * 1000;  // 45m
-  const REACTION_MS = 90 * 60 * 1000;  // 90m post
-  const POST_MS = 6 * 3600 * 1000;     // 6h post
+  const PRE_MS = 4 * 3600 * 1000;
+  const IMMINENT_MS = 45 * 60 * 1000;
+  const REACTION_MS = 90 * 60 * 1000;
+  const POST_MS = 6 * 3600 * 1000;
 
   let state = 'NORMAL';
   let eventRisk = 0.2;
@@ -208,7 +243,6 @@ export function computeEventContext(events, asOfTs, symbol) {
       activeEvents.push({ ...e, relative: 'reaction', dt });
       state = 'EVENT_REACTION';
       eventRisk = Math.max(eventRisk, 0.6 + importance * 0.3);
-      // Surprise if actual+forecast
       if (isNum(e.actual) && isNum(e.forecast)) {
         const surprise = e.actual - e.forecast;
         recentSurprise = {
@@ -216,7 +250,6 @@ export function computeEventContext(events, asOfTs, symbol) {
           surprise,
           importance,
           currency: e.currency,
-          // asset-aware sign handled by fundamental engine; here we only expose magnitude
           magnitude: Math.abs(surprise)
         };
         eventRisk = Math.min(1, eventRisk + Math.min(0.2, Math.abs(surprise) * 0.02));
@@ -255,9 +288,6 @@ export function computeEventContext(events, asOfTs, symbol) {
   };
 }
 
-/**
- * Aggregate data quality score 0–1 from available inputs.
- */
 export function computeDataQuality(opts = {}) {
   let score = 0;
   let max = 0;
@@ -286,9 +316,6 @@ export function computeDataQuality(opts = {}) {
   };
 }
 
-/**
- * Full context snapshot for a prediction point.
- */
 export function buildMarketContext(options = {}) {
   const {
     symbol,
@@ -297,11 +324,12 @@ export function buildMarketContext(options = {}) {
     fundamentalOk = false,
     calendarEvents = null,
     volumeAvailable = false,
-    timeframe = '1D'
+    timeframe = '1D',
+    sessionOverride = null
   } = options;
 
   const economy = getAssetEconomy(symbol);
-  const session = detectSession(asOfTs);
+  const session = detectSession(asOfTs, sessionOverride);
   const eventCtx = computeEventContext(calendarEvents, asOfTs, symbol);
 
   const last = candles && candles.length ? candles[candles.length - 1] : null;
