@@ -2092,7 +2092,7 @@ init();
 const FUND_ADV_KEY = 'oma_v11_fund_adv';
 
 function getFundAdvancedSettings() {
-  const def = { blendPct: 30, sensitivity: 100, minCoveragePct: 25, requireActual: true };
+  const def = { blendPct: 38, sensitivity: 115, minCoveragePct: 20, requireActual: true };
   try {
     const raw = localStorage.getItem(FUND_ADV_KEY);
     if (!raw) return {
@@ -2203,10 +2203,26 @@ async function refreshFundEditableList() {
       row.querySelectorAll('.fund-inp').forEach(inp => {
         payload[inp.dataset.f] = inp.value;
       });
-      const res = mod2.upsertFundamentalVar(activeFundSymbol(), varId, payload);
+      const symSave = activeFundSymbol();
+      const res = mod2.upsertFundamentalVar(symSave, varId, payload);
       const msg = $('fundFormMsg');
-      if (msg) msg.textContent = res.ok ? `«${row.querySelector('.fund-row-name')?.textContent || varId}» ذخیره شد.` : (res.error || 'خطا');
-      if (res.ok) refreshFundSummaryOnly();
+      const label = row.querySelector('.fund-row-name')?.textContent || varId;
+      if (res.ok) {
+        // Verify persisted in store
+        const stored = mod2.getFundamentalData(symSave) || {};
+        const okPersist = stored[varId] && (
+          (payload.actual === '' || payload.actual == null || Number(stored[varId].actual) === Number(payload.actual)) ||
+          stored[varId].updatedAt
+        );
+        if (msg) msg.textContent = okPersist
+          ? `ذخیره شد: ${label} (${symSave})`
+          : `هشدار: ذخیره ${label} ممکن است در localStorage ثبت نشده باشد.`;
+        toast(okPersist ? `بنیادی ذخیره شد — ${label}` : `خطا در ذخیره‌سازی ${label}`, okPersist ? 'ok' : 'err');
+        refreshFundSummaryOnly();
+      } else {
+        if (msg) msg.textContent = res.error || 'خطا';
+        toast(res.error || 'ذخیره بنیادی ناموفق', 'err');
+      }
     });
   });
 
@@ -2266,7 +2282,7 @@ function wireFundAdvanced() {
   if (reset && !reset._wired) {
     reset._wired = true;
     reset.addEventListener('click', () => {
-      saveFundAdvancedSettings({ blendPct: 30, sensitivity: 100, minCoveragePct: 25, requireActual: true });
+      saveFundAdvancedSettings({ blendPct: 38, sensitivity: 115, minCoveragePct: 20, requireActual: true });
       wireFundAdvanced();
     });
   }
@@ -2290,27 +2306,34 @@ function wireFundForm() {
   refreshFundEditableList();
 }
 
-/* ── Forecast candlestick chart (v11.2) ── */
+
+/* ── Forecast candlestick chart (v11.5) ── */
+let __chartState = null;
+
 function buildForecastCandles(hist, result, nFuture = 3) {
   if (!hist || !hist.length) return { hist: [], future: [] };
   const last = hist[hist.length - 1];
-  const close = last.c;
-  const atr = result?.atr || result?.analysis?.atr || result?.indicators?.atr;
+  const close = Number(last.c);
+  if (!Number.isFinite(close) || close <= 0) return { hist, future: [] };
+
+  let atr = result?.atr ?? result?.analysis?.atr ?? result?.indicators?.atr;
+  atr = Number(atr);
   let step = Number.isFinite(atr) && atr > 0 ? atr * 0.55 : null;
-  if (!step) {
+  if (!step || step <= 0) {
     const slice = hist.slice(-20);
-    const ranges = slice.map(c => c.h - c.l).filter(x => x > 0);
-    const avg = ranges.length ? ranges.reduce((a, b) => a + b, 0) / ranges.length : close * 0.005;
-    step = avg * 0.7;
+    const ranges = slice.map(c => Number(c.h) - Number(c.l)).filter(x => Number.isFinite(x) && x > 0);
+    const avg = ranges.length ? ranges.reduce((a, b) => a + b, 0) / ranges.length : close * 0.004;
+    step = Math.max(avg * 0.65, close * 0.001);
   }
+
   const signal = result?.signal || 'HOLD';
-  const target = result?.target;
-  const stop = result?.stop;
+  const target = Number(result?.target);
+  const stop = Number(result?.stop);
   let dir = 0;
   if (signal === 'BUY') dir = 1;
   else if (signal === 'SELL') dir = -1;
-  else if (Number.isFinite(target) && target > close) dir = 0.35;
-  else if (Number.isFinite(target) && target < close) dir = -0.35;
+  else if (Number.isFinite(target) && target > close) dir = 0.4;
+  else if (Number.isFinite(target) && target < close) dir = -0.4;
 
   const tfMs = (() => {
     const tf = currentTf || '1D';
@@ -2322,74 +2345,69 @@ function buildForecastCandles(hist, result, nFuture = 3) {
 
   const future = [];
   let px = close;
-  const lastTs = last.ts != null ? last.ts : Date.now();
+  const lastTs = Number.isFinite(last.ts) ? last.ts : Date.now();
+  const conf0 = Number.isFinite(result?.confidence) ? result.confidence : 0.5;
+
   for (let i = 1; i <= nFuture; i++) {
     const progress = i / nFuture;
-    let dest = px + dir * step * (1.15 - progress * 0.35);
+    let dest = px + dir * step * (1.1 - progress * 0.3);
     if (Number.isFinite(target) && dir !== 0) {
-      dest = px + (target - close) * (progress * 0.55) + dir * step * 0.15;
+      dest = px * (1 - progress * 0.35) + (close + (target - close) * progress * 0.7) * (progress * 0.35 + 0.65);
+      dest = px + (dest - px);
+      dest = px + (target - close) * (0.22 * progress) + dir * step * 0.2 * (1 - progress * 0.4);
     }
+    // keep path stable (no Math.random) so redraws don't jump
+    const wobble = step * 0.12 * Math.sin(i * 1.7 + conf0);
     const o = px;
-    const c = dest;
-    const w = step * (0.45 + 0.2 * Math.random());
-    const h = Math.max(o, c) + w * 0.35;
-    const l = Math.min(o, c) - w * 0.35;
+    const c = dest + wobble * 0.15;
+    const wick = step * (0.35 + 0.12 * progress);
+    const h = Math.max(o, c) + wick * 0.4;
+    const l = Math.min(o, c) - wick * 0.4;
     future.push({
       o, h, l, c,
+      v: null,
       ts: lastTs + i * tfMs,
       forecast: true,
-      conf: Math.max(0.25, (result?.confidence ?? 0.5) * (1 - progress * 0.35))
+      conf: Math.max(0.22, conf0 * (1 - progress * 0.32))
     });
     px = c;
   }
   return { hist, future };
 }
 
-function renderForecastChart(symbolId, result) {
-  const canvas = $('forecastChart');
-  const status = $('chartStatus');
-  if (!canvas || !canvas.getContext) return;
-  const tf = currentTf || '1D';
-  let hist = [];
-  try {
-    const series = buildAnalysisSeries(symbolId || currentSymbol, tf);
-    hist = (series?.candles || []).slice(-60);
-  } catch (_) {
-    hist = [];
+function formatChartDate(c, tf) {
+  const ts = c?.ts;
+  if (!Number.isFinite(ts)) return c?.day || c?.date || '—';
+  const d = new Date(ts);
+  if (tf === '1D' || tf === '1W') {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
-  if (hist.length < 5) {
-    if (status) status.textContent = 'دادهٔ تاریخی کافی برای نمودار نیست — نماد و فایل data را بررسی کنید.';
-    return;
-  }
-  const conf = result?.confidence ?? 0.5;
-  const nFuture = conf >= 0.65 ? 4 : conf >= 0.4 ? 3 : 2;
-  const { future } = buildForecastCandles(hist, result, nFuture);
-  const all = hist.concat(future);
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:00`;
+}
 
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = canvas.clientWidth || 900;
-  const cssH = 360;
-  canvas.width = Math.floor(cssW * dpr);
-  canvas.height = Math.floor(cssH * dpr);
+function drawForecastChartFrame(state, pulse = 0) {
+  const { canvas, cssW, cssH, pad, hist, future, all, result, tf, showDates, showVolume, splitIndex } = state;
   const ctx = canvas.getContext('2d');
+  const dpr = state.dpr || 1;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
 
-  const pad = { t: 16, r: 16, b: 28, l: 56 };
   const W = cssW - pad.l - pad.r;
-  const H = cssH - pad.t - pad.b;
-  let lo = Math.min(...all.map(c => c.l));
-  let hi = Math.max(...all.map(c => c.h));
-  const mid = (hi + lo) / 2 || 1;
-  const padY = (hi - lo) * 0.08 || mid * 0.01;
+  const volH = showVolume ? 44 : 0;
+  const H = cssH - pad.t - pad.b - volH;
+  let lo = Math.min(...all.map(c => Number(c.l)).filter(Number.isFinite));
+  let hi = Math.max(...all.map(c => Number(c.h)).filter(Number.isFinite));
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) {
+    lo = 0; hi = 1;
+  }
+  const padY = (hi - lo) * 0.08 || Math.abs(hi) * 0.01 || 1;
   lo -= padY; hi += padY;
   const yScale = (p) => pad.t + H * (1 - (p - lo) / (hi - lo));
   const slot = W / Math.max(all.length, 1);
-  const bodyW = Math.max(3, Math.min(14, slot * 0.62));
+  const bodyW = Math.max(3, Math.min(16, slot * 0.62));
 
-  // background
-  ctx.clearRect(0, 0, cssW, cssH);
-  const skin = document.documentElement.getAttribute('data-skin') || '';
-  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#12141a';
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#12141a';
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, cssW, cssH);
 
   // grid
@@ -2400,39 +2418,40 @@ function renderForecastChart(symbolId, result) {
     ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + W, y); ctx.stroke();
   }
 
-  // split line between hist and forecast
-  const splitX = pad.l + hist.length * slot;
-  ctx.strokeStyle = 'rgba(139, 92, 246, 0.45)';
-  ctx.setLineDash([4, 4]);
-  ctx.beginPath(); ctx.moveTo(splitX, pad.t); ctx.lineTo(splitX, pad.t + H); ctx.stroke();
-  ctx.setLineDash([]);
+  const splitX = pad.l + splitIndex * slot;
+  // forecast zone soft fill (non-destructive, drawn under candles)
+  if (future.length) {
+    ctx.fillStyle = `rgba(167, 139, 250, ${0.06 + pulse * 0.08})`;
+    ctx.fillRect(splitX, pad.t, Math.max(0, pad.l + W - splitX), H);
+    ctx.strokeStyle = 'rgba(139, 92, 246, 0.5)';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(splitX, pad.t); ctx.lineTo(splitX, pad.t + H); ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
-  const bull = '#10b981';
-  const bear = '#f43f5e';
-  const fcBull = '#22d3ee';
-  const fcBear = '#a78bfa';
+  const bull = '#10b981', bear = '#f43f5e', fcBull = '#22d3ee', fcBear = '#a78bfa';
 
   function drawCandle(c, i, isFc) {
+    const o = Number(c.o), h = Number(c.h), l = Number(c.l), cl = Number(c.c);
+    if (![o, h, l, cl].every(Number.isFinite)) return;
     const x = pad.l + i * slot + slot / 2;
-    const up = c.c >= c.o;
+    const up = cl >= o;
     const col = isFc ? (up ? fcBull : fcBear) : (up ? bull : bear);
-    ctx.globalAlpha = isFc ? (0.45 + 0.45 * (c.conf || 0.5)) : 1;
+    ctx.globalAlpha = isFc ? (0.5 + 0.45 * (c.conf || 0.5)) : 1;
     ctx.strokeStyle = col;
     ctx.fillStyle = col;
-    ctx.lineWidth = isFc ? 1.5 : 1.25;
-    // wick
+    ctx.lineWidth = isFc ? 1.6 : 1.25;
     ctx.beginPath();
-    ctx.moveTo(x, yScale(c.h));
-    ctx.lineTo(x, yScale(c.l));
+    ctx.moveTo(x, yScale(h));
+    ctx.lineTo(x, yScale(l));
     ctx.stroke();
-    // body
-    const y1 = yScale(Math.max(c.o, c.c));
-    const y2 = yScale(Math.min(c.o, c.c));
+    const y1 = yScale(Math.max(o, cl));
+    const y2 = yScale(Math.min(o, cl));
     const bh = Math.max(1.5, y2 - y1);
     if (isFc) {
-      ctx.globalAlpha = 0.25 + 0.35 * (c.conf || 0.5);
+      ctx.globalAlpha = 0.28 + 0.4 * (c.conf || 0.5);
       ctx.fillRect(x - bodyW / 2, y1, bodyW, bh);
-      ctx.globalAlpha = 0.7;
+      ctx.globalAlpha = 0.85;
       ctx.strokeRect(x - bodyW / 2, y1, bodyW, bh);
     } else {
       ctx.fillRect(x - bodyW / 2, y1, bodyW, bh);
@@ -2443,57 +2462,214 @@ function renderForecastChart(symbolId, result) {
   hist.forEach((c, i) => drawCandle(c, i, false));
   future.forEach((c, i) => drawCandle(c, hist.length + i, true));
 
+  // volume bars
+  if (showVolume) {
+    const vols = hist.map(c => Number(c.v)).filter(v => Number.isFinite(v) && v > 0);
+    const vmax = vols.length ? Math.max(...vols) : 1;
+    const baseY = pad.t + H + 6;
+    hist.forEach((c, i) => {
+      const v = Number(c.v);
+      if (!Number.isFinite(v) || v <= 0) return;
+      const x = pad.l + i * slot + slot / 2;
+      const vh = Math.max(2, (v / vmax) * (volH - 12));
+      const up = Number(c.c) >= Number(c.o);
+      ctx.fillStyle = up ? 'rgba(16,185,129,0.35)' : 'rgba(244,63,94,0.35)';
+      ctx.fillRect(x - bodyW / 2, baseY + (volH - 12) - vh, bodyW, vh);
+    });
+  }
+
   // price labels
   ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-3').trim() || '#94a3b8';
   ctx.font = '11px Vazirmatn, sans-serif';
   ctx.textAlign = 'right';
   for (let g = 0; g < 5; g++) {
-    const p = hi - ((hi - lo) * g) / 4;
+    const pr = hi - ((hi - lo) * g) / 4;
     const y = pad.t + (H * g) / 4;
-    ctx.fillText(p.toFixed(p > 100 ? 1 : 2), pad.l - 6, y + 4);
+    ctx.fillText(pr.toFixed(pr > 100 ? 1 : 2), pad.l - 6, y + 4);
   }
 
-  // target / stop lines
-  if (result?.target != null && Number.isFinite(result.target)) {
-    const y = yScale(result.target);
+  // date labels
+  if (showDates) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(148,163,184,0.85)';
+    ctx.font = '10px Vazirmatn, sans-serif';
+    const step = Math.max(1, Math.floor(all.length / 8));
+    for (let i = 0; i < all.length; i += step) {
+      const x = pad.l + i * slot + slot / 2;
+      const label = formatChartDate(all[i], tf);
+      ctx.fillText(label, x, cssH - 8);
+    }
+    // mark forecast labels
+    future.forEach((c, i) => {
+      const idx = hist.length + i;
+      const x = pad.l + idx * slot + slot / 2;
+      ctx.fillStyle = 'rgba(167,139,250,0.95)';
+      ctx.fillText('P' + (i + 1), x, pad.t + H + (showVolume ? volH - 2 : 14));
+    });
+  }
+
+  // target / stop
+  if (result?.target != null && Number.isFinite(Number(result.target))) {
+    const y = yScale(Number(result.target));
     ctx.strokeStyle = 'rgba(16,185,129,0.55)';
     ctx.setLineDash([6, 4]);
     ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + W, y); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(16,185,129,0.85)';
+    ctx.fillStyle = 'rgba(16,185,129,0.9)';
     ctx.textAlign = 'left';
     ctx.fillText('هدف', pad.l + 4, y - 4);
   }
-  if (result?.stop != null && Number.isFinite(result.stop)) {
-    const y = yScale(result.stop);
+  if (result?.stop != null && Number.isFinite(Number(result.stop))) {
+    const y = yScale(Number(result.stop));
     ctx.strokeStyle = 'rgba(244,63,94,0.5)';
     ctx.setLineDash([6, 4]);
     ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + W, y); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(244,63,94,0.85)';
+    ctx.fillStyle = 'rgba(244,63,94,0.9)';
     ctx.textAlign = 'left';
     ctx.fillText('حد ضرر', pad.l + 4, y - 4);
   }
 
-  if (status) {
-    const sig = result?.signal || '—';
-    status.textContent = `${symbolId || ''} / ${tf} · ${hist.length} کندل واقعی · ${future.length} کندل پیش‌بینی (${sig}) · اطمینان ${result?.confidence != null ? Math.round(result.confidence * 100) + '٪' : '—'}`;
+  // crosshair
+  if (state.cross && state.showCrosshair) {
+    const { x, y, idx } = state.cross;
+    ctx.strokeStyle = 'rgba(148,163,184,0.45)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + W, y); ctx.stroke();
+    ctx.setLineDash([]);
+    if (idx >= 0 && idx < all.length) {
+      const c = all[idx];
+      const price = lo + (1 - (y - pad.t) / H) * (hi - lo);
+      state._hoverPrice = price;
+      state._hoverIdx = idx;
+    }
   }
 
-  // soft glow animation on forecast zone
-  if (canvas._glowRaf) cancelAnimationFrame(canvas._glowRaf);
-  let t0 = performance.now();
-  const animate = (now) => {
-    const pulse = 0.15 + 0.12 * Math.sin((now - t0) / 500);
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = `rgba(167, 139, 250, ${pulse})`;
-    ctx.fillRect(splitX, pad.t, W - (splitX - pad.l), H);
-    ctx.restore();
-    // redraw only forecast candles on top occasionally — skip full redraw to keep simple
-    if (now - t0 < 4000) canvas._glowRaf = requestAnimationFrame(animate);
+  state.yScale = yScale;
+  state.slot = slot;
+  state.lo = lo;
+  state.hi = hi;
+  state.plotH = H;
+}
+
+function renderForecastChart(symbolId, result) {
+  const canvas = $('forecastChart');
+  const status = $('chartStatus');
+  const scroll = $('chartScroll');
+  if (!canvas || !canvas.getContext) return;
+
+  const tf = currentTf || '1D';
+  let hist = [];
+  try {
+    const series = buildAnalysisSeries(symbolId || currentSymbol, tf);
+    hist = (series?.candles || []).filter(c =>
+      [c.o, c.h, c.l, c.c].every(x => Number.isFinite(Number(x)) && Number(x) > 0)
+    ).slice(-80);
+  } catch (_) { hist = []; }
+
+  if (hist.length < 3) {
+    if (status) status.textContent = 'دادهٔ تاریخی کافی برای نمودار نیست — نماد و فایل data را بررسی کنید.';
+    return;
+  }
+
+  const conf = Number.isFinite(result?.confidence) ? result.confidence : 0.5;
+  const nFuture = !result ? 0 : (conf >= 0.65 ? 4 : conf >= 0.4 ? 3 : 2);
+  const built = buildForecastCandles(hist, result, nFuture);
+  const future = built.future || [];
+  const all = hist.concat(future);
+
+  const showDates = $('chartShowDates')?.checked !== false;
+  const showVolume = $('chartShowVolume')?.checked !== false;
+  const showCrosshair = $('chartShowCrosshair')?.checked !== false;
+
+  const slotPx = 14;
+  const pad = { t: 18, r: 18, b: showDates ? 32 : 22, l: 58 };
+  const cssH = 380;
+  const minW = (scroll?.clientWidth || 900);
+  const cssW = Math.max(minW, all.length * slotPx + pad.l + pad.r);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  canvas.width = Math.floor(cssW * dpr);
+  canvas.height = Math.floor(cssH * dpr);
+
+  __chartState = {
+    canvas, cssW, cssH, pad, hist, future, all, result, tf,
+    showDates, showVolume, showCrosshair,
+    splitIndex: hist.length, dpr, cross: null
   };
-  canvas._glowRaf = requestAnimationFrame(animate);
+
+  const paint = (pulse = 0) => drawForecastChartFrame(__chartState, pulse);
+  paint(0);
+
+  if (status) {
+    const sig = result?.signal || '—';
+    status.textContent = `${symbolId || ''} / ${tf} · ${hist.length} واقعی · ${future.length} پیش‌بینی (${sig}) · اطمینان ${result?.confidence != null ? Math.round(result.confidence * 100) + '٪' : '—'} · اسکرول افقی برای دیدن همه کندل‌ها`;
+  }
+
+  // scroll to show last hist + forecast
+  if (scroll) {
+    requestAnimationFrame(() => {
+      scroll.scrollLeft = Math.max(0, scroll.scrollWidth - scroll.clientWidth);
+    });
+  }
+
+  // pulse animation — full redraw (fixes previous overlay bug)
+  if (canvas._glowRaf) cancelAnimationFrame(canvas._glowRaf);
+  if (future.length) {
+    let t0 = performance.now();
+    const animate = (now) => {
+      const pulse = 0.5 + 0.5 * Math.sin((now - t0) / 450);
+      paint(pulse);
+      if (__chartState?.cross) paint(pulse);
+      if (now - t0 < 5000) canvas._glowRaf = requestAnimationFrame(animate);
+    };
+    canvas._glowRaf = requestAnimationFrame(animate);
+  }
+
+  // crosshair + tooltip once
+  if (!canvas._chartWired) {
+    canvas._chartWired = true;
+    const tip = $('chartTooltip');
+    canvas.addEventListener('mousemove', (e) => {
+      if (!__chartState || !$('chartShowCrosshair')?.checked) {
+        if (tip) tip.hidden = true;
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const { pad, slot, all, hist, tf } = __chartState;
+      const idx = Math.min(all.length - 1, Math.max(0, Math.floor((x - pad.l) / slot)));
+      __chartState.cross = { x, y, idx };
+      __chartState.showCrosshair = true;
+      __chartState.showDates = $('chartShowDates')?.checked !== false;
+      __chartState.showVolume = $('chartShowVolume')?.checked !== false;
+      drawForecastChartFrame(__chartState, 0.3);
+      if (tip && all[idx]) {
+        const c = all[idx];
+        const isFc = idx >= hist.length;
+        tip.hidden = false;
+        tip.style.left = Math.min(rect.width - 160, Math.max(8, x + 12)) + 'px';
+        tip.style.top = Math.max(8, y - 10) + 'px';
+        tip.innerHTML = `<strong>${isFc ? 'پیش‌بینی' : 'واقعی'}</strong><br>${formatChartDate(c, tf)}<br>
+          O ${Number(c.o).toFixed(2)} · H ${Number(c.h).toFixed(2)}<br>
+          L ${Number(c.l).toFixed(2)} · C ${Number(c.c).toFixed(2)}` +
+          (c.v != null && Number.isFinite(Number(c.v)) ? `<br>Vol ${Number(c.v).toLocaleString('fa-IR')}` : '');
+      }
+    });
+    canvas.addEventListener('mouseleave', () => {
+      if (__chartState) { __chartState.cross = null; drawForecastChartFrame(__chartState, 0); }
+      if (tip) tip.hidden = true;
+    });
+    ['chartShowDates', 'chartShowVolume', 'chartShowCrosshair'].forEach(id => {
+      $(id)?.addEventListener('change', () => {
+        if (window.__lastAnalysisResult) renderForecastChart(currentSymbol, window.__lastAnalysisResult);
+        else if (currentSymbol) renderForecastChart(currentSymbol, null);
+      });
+    });
+  }
 }
 
 // aliases for symbol change hooks

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="تحلیل‌گر بازار آفلاین — Vector Soft Obsidian Editorial · Terminal Glass">
-  <title>تحلیل‌گر بازار · v11.2.0</title>
+  <title>تحلیل‌گر بازار · v11.5.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -99,7 +99,7 @@
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
           </button>
           <div class="brand-copy">
-            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v11.2.0</span></h1>
+            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v11.5.0</span></h1>
           </div>
         </div>
         <div class="header-center" id="headerAssetSlot">
@@ -331,8 +331,16 @@
             <span class="chart-leg chart-leg-fc">پیش‌بینی</span>
           </div>
         </div>
-        <div class="chart-wrap">
-          <canvas id="forecastChart" width="900" height="360" role="img" aria-label="نمودار کندل تاریخی و پیش‌بینی"></canvas>
+        <div class="chart-toolbar">
+          <label class="chart-tool-label"><input type="checkbox" id="chartShowDates" checked> تاریخ کندل</label>
+          <label class="chart-tool-label"><input type="checkbox" id="chartShowVolume" checked> حجم</label>
+          <label class="chart-tool-label"><input type="checkbox" id="chartShowCrosshair" checked> خط‌کش قیمت</label>
+        </div>
+        <div class="chart-scroll" id="chartScroll">
+          <div class="chart-wrap">
+            <canvas id="forecastChart" width="900" height="380" role="img" aria-label="نمودار کندل تاریخی و پیش‌بینی"></canvas>
+            <div id="chartTooltip" class="chart-tooltip" hidden></div>
+          </div>
         </div>
         <p id="chartStatus" class="status-line muted">پس از انتخاب نماد و اجرای تحلیل، مسیر پیش‌بینی رسم می‌شود.</p>
       </section>
@@ -508,6 +516,118 @@
         </div>
       </section>
 
+<section class="card view-panel anim-in" id="view-backtest" hidden aria-labelledby="bt-title">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">اعتبارسنجی تاریخی</p>
+            <h2 class="card-title" id="bt-title">بک‌تست</h2>
+            <p class="card-desc">آزمایش روی گذشته — بدون تقلب از آینده</p>
+          </div>
+        </div>
+        <div class="section-intro bt-intro-box">
+          <p class="section-intro-lead">بک‌تست یعنی: «اگر همان سیگنال‌ها را دیروز می‌گرفتی، چه می‌شد؟»</p>
+          <p class="muted section-intro-body">
+            مدل فقط با داده‌های قدیمی تصمیم می‌گیرد، بعد نتیجه را با قیمت واقعی همان زمان‌ها مقایسه می‌کنیم.
+            <span class="intro-chip">افق</span> یعنی چند کندل جلوتر را چک کنیم ·
+            <span class="intro-chip">فاصله نمونه‌ها</span> یعنی تست چقدر سریع/متراکم باشد.
+            داده از همان فایل‌ها و ورود دستی خودت خوانده می‌شود.
+          </p>
+        </div>
+        <div class="bt-controls form-grid">
+          <div class="field">
+            <label class="label" for="btHorizon">افق پیش‌بینی</label>
+            <select id="btHorizon" class="input">
+              <option value="3">کوتاه · ۳ کندل</option>
+              <option value="5" selected>متوسط · ۵ کندل</option>
+              <option value="10">بلند · ۱۰ کندل</option>
+              <option value="20">خیلی بلند · ۲۰ کندل</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="btMode">نوع مدل</label>
+            <select id="btMode" class="input">
+              <option value="ensemble" selected>Ensemble چنداستراتژی</option>
+              <option value="tech">فقط تکنیکال</option>
+              <option value="fund">فقط بنیادی</option>
+              <option value="combined">تکنیکال + بنیادی</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="btStep">فاصله نمونه‌ها</label>
+            <select id="btStep" class="input">
+              <option value="1">هر کندل</option>
+              <option value="5" selected>هر ۵ کندل</option>
+              <option value="10">هر ۱۰ کندل</option>
+            </select>
+          </div>
+          <div class="field field-action">
+            <button type="button" class="btn btn-primary" id="btRunBtn">اجرای بک‌تست</button>
+          </div>
+        </div>
+        <div id="btStatus" class="status-line"></div>
+        <div id="btMetrics" class="bt-metrics" hidden></div>
+        <div id="btSamples" class="bt-samples" hidden></div>
+      </section>
+
+<section class="card view-panel anim-in" id="view-settings" hidden aria-labelledby="settings-title">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">شخصی‌سازی</p>
+            <h2 class="card-title" id="settings-title">تنظیمات</h2>
+            <p class="card-desc">تم رنگ، زبان و پوستهٔ طراحی — جدا از یکدیگر</p>
+          </div>
+        </div>
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h3 class="settings-h">تم رنگ</h3>
+            <p class="muted settings-desc">فقط پالت رنگ (روشن / تاریک). روی شکل دکمه‌ها و کادرها اثر ندارد.</p>
+            <div class="settings-row">
+              <label class="settings-option">
+                <input type="radio" name="setTheme" value="dark" id="setThemeDark">
+                <span>تاریک</span>
+              </label>
+              <label class="settings-option">
+                <input type="radio" name="setTheme" value="light" id="setThemeLight">
+                <span>روشن</span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-card">
+            <h3 class="settings-h">زبان رابط</h3>
+            <p class="muted settings-desc">جهت و برچسب‌های اصلی رابط کاربری.</p>
+            <div class="settings-row">
+              <label class="settings-option">
+                <input type="radio" name="setLang" value="fa" id="setLangFa" checked>
+                <span>فارسی (RTL)</span>
+              </label>
+              <label class="settings-option">
+                <input type="radio" name="setLang" value="en" id="setLangEn">
+                <span>English (LTR)</span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-card">
+            <h3 class="settings-h">پوسته (Skin)</h3>
+            <p class="muted settings-desc">پوسته کل طراحی (شعاع گوشه‌ها، شیشه‌ای بودن، دکمه‌ها، کادرها) را تعریف می‌کند؛ جدا از تم رنگ است.</p>
+            <div class="settings-row">
+              <label class="settings-option">
+                <input type="radio" name="setSkin" value="zen-calm" id="setSkinZen">
+                <span>Zen Calm</span>
+              </label>
+              <label class="settings-option">
+                <input type="radio" name="setSkin" value="terminal-glass" id="setSkinTg">
+                <span>Terminal Glass</span>
+              </label>
+              <label class="settings-option">
+                <input type="radio" name="setSkin" value="vector-soft" id="setSkinVs">
+                <span>Vector Soft — Obsidian Editorial</span>
+              </label>
+            </div>
+            <p class="hint">پوستهٔ فعلی: <strong id="skinNameLabel">Terminal Glass</strong></p>
+          </div>
+        </div>
+      </section>
+
       <!-- Auto Debugger -->
       <section class="card view-panel anim-in" id="view-debugger" hidden aria-labelledby="ad-title">
         <div class="card-head">
@@ -554,7 +674,7 @@
     </main>
 
     <footer class="site-footer">
-      <span>نسخه ۸.۰.۵UI · آفلاین</span>
+      <span>نسخه v11.5.0 · آفلاین</span>
       <span class="muted" id="footerSkinLabel">پوسته Terminal Glass · داده محلی</span>
     </footer>
   </div>
