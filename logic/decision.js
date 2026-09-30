@@ -13,34 +13,111 @@ import { getCalendarAsOf } from './calendar.js';
 import { runMultiTimeframe } from './mtf.js';
 import { computeEntry } from './entry.js';
 
-function buildSuggestion(signal, riskLevel, tech, confidence, regime, entry) {
-  const highRisk = riskLevel === 'High';
+function buildSuggestion(signal, riskLevel, tech, confidence, regime, entry, fund) {
+  const highRisk = riskLevel === 'High' || riskLevel === 'high';
   const ind = tech.indicators || {};
-  const nearRes = ind.resistance != null && ind.price > 0 &&
-    (ind.resistance - ind.price) / ind.price < 0.02;
-  const nearSup = ind.support != null && ind.price > 0 &&
-    (ind.price - ind.support) / ind.price < 0.04;
+  const price = ind.price;
+  const nearRes = ind.resistance != null && price > 0 &&
+    (ind.resistance - price) / price < 0.02;
+  const nearSup = ind.support != null && price > 0 &&
+    (price - ind.support) / price < 0.04;
+
+  const parts = [];
+  const noTrade = entry && (entry.direction === 'No Trade' || entry.entryType === 'No Trade' || entry.entryType === 'No Valid Entry');
+
+  if (noTrade) {
+    parts.push(entry.reason || 'شرایط ورود معتبر نیست — فعلاً معامله نکنید.');
+    if (entry.limitations?.length) {
+      parts.push('دلیل: ' + entry.limitations.slice(0, 2).join('؛ '));
+    }
+    if (fund && fund.ok) {
+      const map = {
+        bullish: 'فاندامنتال صعودی', mild_bullish: 'فاندامنتال نسبتاً صعودی',
+        neutral: 'فاندامنتال خنثی', mild_bearish: 'فاندامنتال نسبتاً نزولی', bearish: 'فاندامنتال نزولی'
+      };
+      const conf = fund.confidence != null ? ` (اطمینان ${Math.round(fund.confidence * 100)}٪)` : '';
+      parts.push(`${map[fund.outlook] || 'فاندامنتال'}${conf}.`);
+    }
+    return parts.join(' ');
+  }
 
   if (entry && entry.waitForEntry) {
-    return entry.reason || 'منتظر نقطه ورود مناسب بمانید.';
+    const fmt = (x) => (x != null && Number.isFinite(+x) ? (+x).toPrecision(7).replace(/\.?0+$/, '') : x);
+    const zone = entry.entryZone
+      ? `ناحیه ${fmt(entry.entryZone.low)}–${fmt(entry.entryZone.high)}`
+      : (entry.preferredEntry != null ? `سطح ${fmt(entry.preferredEntry)}` : 'ناحیه هدف');
+    parts.push(`صبر برای ورود: ${entry.entryType || 'سناریوی انتخابی'} در ${zone}.`);
+    if (entry.activation) parts.push(entry.activation);
+    if (entry.evR != null) parts.push(`EV مدل ≈ ${entry.evR}R.`);
+    if (fund && fund.ok) {
+      const map = {
+        bullish: 'فاندامنتال صعودی', mild_bullish: 'فاندامنتال نسبتاً صعودی',
+        neutral: 'فاندامنتال خنثی', mild_bearish: 'فاندامنتال نسبتاً نزولی', bearish: 'فاندامنتال نزولی'
+      };
+      const conf = fund.confidence != null ? ` (اطمینان ${Math.round(fund.confidence * 100)}٪)` : '';
+      parts.push(`${map[fund.outlook] || 'فاندامنتال'}${conf}.`);
+    }
+    return parts.join(' ');
   }
+
+  // Directional advice
   if (signal === 'BUY') {
-    if (highRisk) return 'سیگنال خرید با ریسک بالاست. حجم را محدود و حد ضرر را رعایت کنید.';
-    if (nearRes) return 'روند صعودی است اما قیمت نزدیک مقاومت است. صبر تا شکست مقاومت منطقی‌تر است.';
-    if (confidence < 0.45) return 'خرید با اطمینان پایین؛ تأیید بیشتری لازم است.';
-    if (regime === 'Range') return 'رژیم رنج فعال است؛ خرید ترجیحاً روی حمایت یا شکست مقاومت.';
-    return 'شرایط از خرید حمایت می‌کند. ورود با مدیریت ریسک پیشنهاد می‌شود.';
+    if (highRisk) {
+      parts.push('خرید با ریسک بالا: حجم را کاهش دهید و حد ضرر سخت اعمال کنید.');
+    } else if (nearRes) {
+      parts.push('روند صعودی است اما قیمت نزدیک مقاومت است؛ ورود پس از شکست و تثبیت منطقی‌تر است.');
+    } else if (confidence < 0.45) {
+      parts.push('سیگنال خرید با اطمینان پایین — منتظر هم‌گرایی بیشتر بمانید.');
+    } else if (regime === 'Range') {
+      parts.push('رژیم رنج: خرید ترجیحاً نزدیک حمایت یا پس از شکست مقاومت.');
+    } else {
+      parts.push('شرایط از خرید حمایت می‌کند.');
+    }
+  } else if (signal === 'SELL') {
+    if (highRisk) {
+      parts.push('فروش با ریسک بالا: مدیریت حجم و حد ضرر الزامی است.');
+    } else if (nearSup) {
+      parts.push('فشار نزولی دیده می‌شود؛ نزدیک حمایت عجله نکنید.');
+    } else if (confidence < 0.45) {
+      parts.push('سیگنال فروش با اطمینان پایین — تأیید بیشتری لازم است.');
+    } else {
+      parts.push('شواهد به نفع فروش یا کاهش موقعیت خرید است.');
+    }
+  } else {
+    if (highRisk) parts.push('بازار نامشخص و پرنوسان است — فعلاً صبر کنید.');
+    else if (regime === 'Unclear') parts.push('رژیم بازار نامشخص است؛ HOLD ترجیح داده می‌شود.');
+    else if (nearSup || nearRes) parts.push('سیگنال خنثی و قیمت نزدیک سطح کلیدی است.');
+    else parts.push('شرایط برای تصمیم قطعی کافی نیست. صبر منطقی است.');
   }
-  if (signal === 'SELL') {
-    if (highRisk) return 'سیگنال فروش همراه ریسک بالاست.';
-    if (nearSup) return 'فشار نزولی دیده می‌شود؛ نزدیک حمایت عجله نکنید.';
-    if (confidence < 0.45) return 'فروش با اطمینان پایین؛ منتظر تأیید بیشتر.';
-    return 'شواهد به نفع فروش یا کاهش موقعیت خرید است.';
+
+  // Entry metrics (compact, professional)
+  if (entry && entry.valid && entry.preferredEntry != null) {
+    const bits = [];
+    bits.push(`ورود ${entry.preferredEntry}`);
+    if (entry.stop != null) bits.push(`حدضرر ${entry.stop}`);
+    if (entry.target1 != null) bits.push(`هدف ${entry.target1}`);
+    if (entry.netRR != null) bits.push(`R:R≈${entry.netRR}`);
+    else if (entry.rr != null) bits.push(`R:R≈${entry.rr}`);
+    if (entry.evR != null) bits.push(`EV ${entry.evR}R`);
+    if (entry.modelConfidence != null) bits.push(`اطمینان مدل ${Math.round(entry.modelConfidence * 100)}٪`);
+    parts.push(bits.join(' · '));
   }
-  if (highRisk) return 'بازار نامشخص و پرنوسان است. فعلاً صبر کنید.';
-  if (regime === 'Unclear') return 'رژیم بازار نامشخص است؛ HOLD ترجیح داده می‌شود.';
-  if (nearSup || nearRes) return 'سیگنال خنثی و قیمت نزدیک سطح کلیدی است.';
-  return 'شرایط برای تصمیم قطعی کافی نیست. صبر منطقی است.';
+
+  // Fundamental overlay
+  if (fund && fund.ok) {
+    const map = {
+      bullish: 'فاندامنتال صعودی',
+      mild_bullish: 'فاندامنتال نسبتاً صعودی',
+      neutral: 'فاندامنتال خنثی',
+      mild_bearish: 'فاندامنتال نسبتاً نزولی',
+      bearish: 'فاندامنتال نزولی'
+    };
+    const label = map[fund.outlook] || 'فاندامنتال';
+    const conf = fund.confidence != null ? ` (اطمینان ${Math.round(fund.confidence * 100)}٪)` : '';
+    parts.push(`${label}${conf}.`);
+  }
+
+  return parts.join(' ');
 }
 
 function ensembleStrategies(strategies, regimeInfo, riskScore, learningMult, context, mtf) {
@@ -183,7 +260,12 @@ export function runDecision(candles, options = {}) {
     ? options.calendarEvents
     : getCalendarAsOf(asOfTs);
 
-  const fund = runFundamental(symbol, options.fundamentalSnapshot || null);
+  // Fundamental only when pipeline supplies a non-empty snapshot (toggle ON + data)
+  const fundSnapIn = options.fundamentalSnapshot;
+  const fundEnabled = !!(fundSnapIn && typeof fundSnapIn === 'object' && Object.keys(fundSnapIn).length);
+  let fund = fundEnabled
+    ? runFundamental(symbol, fundSnapIn, { regime: 'Unclear', allowStore: false })
+    : { ok: false, status: 'disabled', message: 'فاندامنتال غیرفعال', factors: [], score: null, coverage: 0, confidence: 0 };
   const volumeAvailable = !!(tech.indicators?.volume?.available);
 
   const context = buildMarketContext({
@@ -193,22 +275,28 @@ export function runDecision(candles, options = {}) {
     fundamentalOk: fund.ok,
     calendarEvents: calEvents,
     volumeAvailable,
-    timeframe,
-    sessionOverride: options.sessionOverride || null
+    timeframe
   });
 
+  // Live analysis: do not as-of-filter fund dates (user-entered offline data is "current").
+  // Backtest/walk-forward should pass fundAsOfTs or backtestMode:true to prevent look-ahead.
   const stratResult = runAllStrategies(candles, {
     symbol,
     currentPrice: options.currentPrice,
     timeframe,
     fundamentalSnapshot: options.fundamentalSnapshot || null,
-    asOfTs,
-    advSettings: options.advSettings || null
+    asOfTs: options.backtestMode ? asOfTs : null,
+    fundAsOfTs: options.fundAsOfTs
   });
   const strategies = stratResult.ok ? stratResult.strategies : [];
   const ind = stratResult.indicators || tech.indicators;
 
   const regimeInfo = detectRegime(candles, ind);
+
+  // Re-score fundamental with detected regime (offline, only if enabled)
+  if (fundEnabled) {
+    fund = runFundamental(symbol, fundSnapIn, { regime: regimeInfo.regime || 'Unclear', allowStore: false });
+  }
 
   // Multi-timeframe (only available series)
   const seriesMap = options.seriesMap || { [timeframe]: candles };
@@ -264,6 +352,10 @@ export function runDecision(candles, options = {}) {
     equity: options.equity ?? null,
     riskPct: options.riskPct ?? CONFIG.defaultRiskPct,
     histSamples: histAcc?.samples || 0,
+    fundScore: fund.ok ? fund.score : null,
+    fundOutlook: fund.ok ? fund.outlook : null,
+    fundConfidence: fund.ok ? (fund.confidence || 0) : 0,
+    mtfAgreement: (mtf && mtf.agreement != null) ? mtf.agreement : null,
     candleCount: candles.length
   });
 
@@ -298,7 +390,7 @@ export function runDecision(candles, options = {}) {
   const activeStrategies = strategies.filter(s => s.active).map(s => s.name);
   const dataQuality = context.dataQuality?.score ?? 0.4;
 
-  const suggestion = buildSuggestion(ens.signal, riskLevel, tech, ens.confidence, regimeInfo.regime, entry);
+  const suggestion = buildSuggestion(ens.signal, riskLevel, tech, ens.confidence, regimeInfo.regime, entry, fund);
 
   return {
     ok: true,
@@ -378,7 +470,7 @@ export function runDecision(candles, options = {}) {
       horizonBars,
       rr: entry.netRR != null ? entry.netRR : rr,
       target2: entry.target2,
-      algoVersion: 'v9.01-entry-ev-ensemble',
+      algoVersion: 'v11.0.1-fund-entry-v10',
       learningNote: learning.note,
       regime: regimeInfo.regime,
       entry: entry.preferredEntry,
@@ -443,10 +535,9 @@ function buildReport(ens, tech, fund, riskLevel, regimeInfo, context, mtf, entry
     ? `امتیاز فاندامنتال: ${fund.score}.`
     : 'داده فاندامنتال کافی نیست.';
   let entryLine = entry?.waitForEntry
-    ? ` ورود: صبر برای نقطه مناسب.`
+    ? ` ورود: صبر (${entry.entryType}).`
     : entry?.preferredEntry != null
-      ? ` ورود پیشنهادی: ${Number(entry.preferredEntry).toFixed(2)}.`
+      ? ` ورود پیشنهادی: ${entry.preferredEntry}.`
       : '';
-  const eventFa = { UNKNOWN: 'نامشخص', QUIET: 'آرام', ACTIVE: 'فعال', HIGH_IMPACT: 'اثر بالا', PRE_EVENT: 'پیش از رویداد', POST_EVENT: 'پس از رویداد' }[eventSt] || eventSt;
-  return `سیگنال ${sigFa} (Ensemble ${ens.score}). روند: ${trendFa}. رژیم: ${regimeFa}. سشن: ${session}. رویداد: ${eventFa}. ریسک: ${riskLevel === 'High' ? 'بالا' : riskLevel === 'Low' ? 'پایین' : 'متوسط'}. MTF: ${mtf?.agreementLabel || '—'}. ${fundLine}${entryLine}`;
+  return `سیگنال ${sigFa} (Ensemble ${ens.score}). روند: ${trendFa}. رژیم: ${regimeFa}. سشن: ${session}. رویداد: ${eventSt}. ریسک: ${riskLevel === 'High' ? 'بالا' : riskLevel === 'Low' ? 'پایین' : 'متوسط'}. MTF: ${mtf?.agreementLabel || '—'}. ${fundLine}${entryLine}`;
 }

@@ -192,9 +192,7 @@ export function analyze(candles, options = {}) {
     horizonBars: options.horizonBars,
     asOfTs,
     seriesMap: options.seriesMap || null,
-    calendarEvents: options.calendarEvents,
-    sessionOverride: options.sessionOverride || null,
-    advSettings: options.advSettings || null
+    calendarEvents: options.calendarEvents
   });
   if (result.ok && options.recordPrediction !== false && options.symbol) {
     try {

@@ -61,9 +61,11 @@ export const CONFIG = Object.freeze({
   // Learning: how much past accuracy shifts confidence
   learningStrength: 0.25,
 
-  // Entry Engine V9.01 gates
-  entryMinRR: 1.15,          // minimum raw R:R (Breakout may pass slightly lower via EV)
-  entryMinEV_R: -0.02,       // reject if expected value in R-units below this
+  // Entry Engine V10.0 gates (stricter EV, confluence-aware)
+  entryMinRR: 1.20,          // minimum raw R:R (Breakout may pass slightly lower via EV)
+  entryMinEV_R: 0.0,         // reject if expected value in R-units below this
   minSamplesForKelly: 30,    // historical closed trades required to enable Kelly
-  defaultRiskPct: 0.01       // 1% equity risk default for position sizing
+  defaultRiskPct: 0.01,      // 1% equity risk default for position sizing
+  entryConfluenceMin: 0.35,  // min structure+agreement+mtf confluence
+  entryEngineVersion: 'v10.0'
 });

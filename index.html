@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl" data-theme="dark" data-skin="zen-calm">
+<html lang="fa" dir="rtl" data-theme="dark" data-skin="terminal-glass">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="تحلیل‌گر بازار آفلاین — Zen Calm Stillness · Vector Soft · Terminal Glass">
-  <title>تحلیل‌گر بازار · v11.0.0</title>
+  <meta name="description" content="تحلیل‌گر بازار آفلاین — Vector Soft Obsidian Editorial · Terminal Glass">
+  <title>تحلیل‌گر بازار · v11.0.1</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -14,14 +14,14 @@
       try {
         var t = localStorage.getItem('oma_theme');
         document.documentElement.setAttribute('data-theme', (t === 'light' || t === 'dark') ? t : 'dark');
-        var skin = localStorage.getItem('oma_skin') || 'zen-calm';
+        var skin = localStorage.getItem('oma_skin') || 'terminal-glass';
         document.documentElement.setAttribute('data-skin', skin);
         var lang = localStorage.getItem('oma_lang') || 'fa';
         document.documentElement.setAttribute('lang', lang);
         document.documentElement.setAttribute('dir', lang === 'en' ? 'ltr' : 'rtl');
       } catch (e) {
         document.documentElement.setAttribute('data-theme', 'dark');
-        document.documentElement.setAttribute('data-skin', 'zen-calm');
+        document.documentElement.setAttribute('data-skin', 'terminal-glass');
       }
     })();
   </script>
@@ -50,16 +50,6 @@
       <path d="M20 70 L40 40 L55 55 L80 25" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="80" cy="25" r="5" fill="currentColor"/>
     </svg>
-  </div>
-  <!-- Zen Calm JPG decorations (visible with data-skin=zen-calm) -->
-  <div class="zen-deco" aria-hidden="true" style="top:-60px;left:-40px;width:320px;height:280px">
-    <img src="assets/zen/soft-sage-bg.jpg" alt="">
-  </div>
-  <div class="zen-deco" aria-hidden="true" style="bottom:5%;right:-50px;width:280px;height:240px">
-    <img src="assets/zen/soft-stone.jpg" alt="">
-  </div>
-  <div class="zen-deco" aria-hidden="true" style="top:38%;left:2%;width:160px;height:160px;opacity:0.16">
-    <img src="assets/zen/soft-water.jpg" alt="">
   </div>
 
   <div class="shell shell-with-sidebar">
@@ -109,7 +99,7 @@
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
           </button>
           <div class="brand-copy">
-            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v11.0.0</span></h1>
+            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v11.0.1</span></h1>
           </div>
         </div>
         <div class="header-center" id="headerAssetSlot">
@@ -156,18 +146,6 @@
               <option value="4H">۴ ساعت</option>
               <option value="1D" selected>روزانه</option>
               <option value="1W">هفتگی</option>
-            </select>
-          </div>
-          <div class="field">
-            <label class="label" for="sessionSelect">سشن معاملاتی</label>
-            <select id="sessionSelect" class="input" title="سشن بر اساس استاندارد FX (UTC)">
-              <option value="auto" selected>خودکار (بر اساس زمان)</option>
-              <option value="Asia">آسیا (توکیو)</option>
-              <option value="London">لندن</option>
-              <option value="New York">نیویورک</option>
-              <option value="London-New York Overlap">هم‌پوشانی لندن–نیویورک</option>
-              <option value="Sydney">سیدنی</option>
-              <option value="Off-hours">خارج از سشن</option>
             </select>
           </div>
           <div class="field">
@@ -237,13 +215,7 @@
             <button type="submit" class="btn btn-primary">ذخیره قیمت</button>
           </div>
         </form>
-        <div class="manual-collapse-wrap">
-          <button type="button" class="collapse-toggle" id="manualToggle" aria-expanded="true" aria-controls="manualList">
-            <span class="manual-toggle-label">رکوردهای دستی</span>
-            <span class="collapse-chevron" aria-hidden="true">▼</span>
-          </button>
-          <div id="manualList" class="manual-list collapse-body"></div>
-        </div>
+        <div id="manualList" class="manual-list"></div>
       </section>
 
       <!-- داده تاریخی -->
@@ -321,37 +293,13 @@
           <div class="score-chip">اطمینان <strong id="confVal">—</strong></div>
         </div>
 
-        <div class="metrics-grid metrics-grid-v11">
-          <div class="metric metric-trend" data-metric="trend">
-            <span class="metric-icon" aria-hidden="true">↗</span>
-            <span class="metric-k">روند</span>
-            <span class="metric-v" id="trend">—</span>
-          </div>
-          <div class="metric metric-risk" data-metric="risk">
-            <span class="metric-icon" aria-hidden="true">⚠</span>
-            <span class="metric-k">ریسک</span>
-            <span class="metric-v" id="risk">—</span>
-          </div>
-          <div class="metric metric-sup" data-metric="support">
-            <span class="metric-icon" aria-hidden="true">▼</span>
-            <span class="metric-k">حمایت</span>
-            <span class="metric-v mono" id="support">—</span>
-          </div>
-          <div class="metric metric-res" data-metric="resistance">
-            <span class="metric-icon" aria-hidden="true">▲</span>
-            <span class="metric-k">مقاومت</span>
-            <span class="metric-v mono" id="resistance">—</span>
-          </div>
-          <div class="metric metric-tgt" data-metric="target">
-            <span class="metric-icon" aria-hidden="true">◎</span>
-            <span class="metric-k">هدف</span>
-            <span class="metric-v mono" id="target">—</span>
-          </div>
-          <div class="metric metric-sl" data-metric="stop">
-            <span class="metric-icon" aria-hidden="true">⊗</span>
-            <span class="metric-k">حد ضرر</span>
-            <span class="metric-v mono" id="stop">—</span>
-          </div>
+        <div class="metrics-grid">
+          <div class="metric"><span class="metric-k">روند</span><span class="metric-v" id="trend">—</span></div>
+          <div class="metric"><span class="metric-k">ریسک</span><span class="metric-v" id="risk">—</span></div>
+          <div class="metric metric-sup"><span class="metric-k">حمایت</span><span class="metric-v mono" id="support">—</span></div>
+          <div class="metric metric-res"><span class="metric-k">مقاومت</span><span class="metric-v mono" id="resistance">—</span></div>
+          <div class="metric metric-tgt"><span class="metric-k">هدف</span><span class="metric-v mono" id="target">—</span></div>
+          <div class="metric metric-sl"><span class="metric-k">حد ضرر</span><span class="metric-v mono" id="stop">—</span></div>
         </div>
 
         <div id="ensembleBox" class="ensemble-box" hidden></div>
@@ -480,25 +428,39 @@
             <h2 class="card-title" id="fund-page-title">تحلیل بنیادی</h2>
           </div>
         </div>
-        <p class="muted mpb-intro">در این صفحه می‌توانید ورود داده‌های بنیادی را برای ترکیب با تحلیل قیمت فعال کنید. اتصال به سرویس خارجی فقط وقتی روشن است انجام می‌شود. بعداً می‌توانید این بخش را گسترش دهید.</p>
+        <p class="muted mpb-intro">موتور فاندامنتال کاملاً آفلاین است. داده‌های ماکرو و محرک‌های اختصاصی هر نماد را دستی وارد کنید؛ هیچ API خارجی لازم نیست.</p>
 
         <div class="fund-page-card">
           <label class="fund-toggle" for="fundTogglePage">
             <input type="checkbox" id="fundTogglePage" />
             <span class="fund-toggle-track" aria-hidden="true"></span>
             <span class="fund-toggle-text">
-              <strong>فعال‌سازی تحلیل بنیادی در پیش‌بینی</strong>
+              <strong>فعال‌سازی ترکیب بنیادی در تصمیم</strong>
               <span id="fundPageHint" class="muted">خاموش — فقط تحلیل قیمت</span>
             </span>
           </label>
           <p id="fundPageStatus" class="status-line" role="status"></p>
           <div id="fundPageBody" class="fund-page-body">
-            <p class="card-desc">وقتی این گزینه روشن باشد، در زمان «اجرای تحلیل» داده‌های بنیادی (در صورت دسترس‌بودن سرور) دریافت و با امتیاز تکنیکال ترکیب می‌شوند.</p>
-            <ul class="mpb-list">
-              <li>خاموش: هیچ درخواست خارجی ارسال نمی‌شود.</li>
-              <li>روشن: نیاز به اجرای Backend محلی و توکن معتبر دارد.</li>
-              <li>نتیجه در کارت نتیجهٔ اصلی و لایه‌های امتیاز نمایش داده می‌شود.</li>
-            </ul>
+            <p class="card-desc">وزن‌ها بر اساس نماد و رژیم بازار تنظیم می‌شوند. تاریخچه Surprise برای Z-Score ذخیره می‌شود.</p>
+            <div id="fundManualForm" class="fund-manual-form">
+              <div class="field">
+                <label for="fundVarSelect">متغیر</label>
+                <select id="fundVarSelect" class="input"></select>
+              </div>
+              <div class="fund-manual-grid">
+                <div class="field"><label for="fundActual">واقعی (Actual)</label><input id="fundActual" class="input mono" type="number" step="any" placeholder="—"></div>
+                <div class="field"><label for="fundForecast">پیش‌بینی</label><input id="fundForecast" class="input mono" type="number" step="any" placeholder="—"></div>
+                <div class="field"><label for="fundPrevious">قبلی</label><input id="fundPrevious" class="input mono" type="number" step="any" placeholder="—"></div>
+                <div class="field"><label for="fundDate">تاریخ</label><input id="fundDate" class="input mono" type="date"></div>
+              </div>
+              <div class="fund-manual-actions">
+                <button type="button" class="btn btn-primary" id="fundSaveBtn">ذخیره متغیر</button>
+                <button type="button" class="btn btn-ghost" id="fundClearBtn">پاک کردن نماد</button>
+              </div>
+              <p id="fundFormMsg" class="status-line" role="status"></p>
+              <div id="fundStoredList" class="fund-stored-list"></div>
+              <div id="fundLiveSummary" class="fund-live-summary muted"></div>
+            </div>
           </div>
         </div>
       </section>
@@ -599,6 +561,10 @@
             <p class="muted settings-desc">پوسته کل طراحی (شعاع گوشه‌ها، شیشه‌ای بودن، دکمه‌ها، کادرها) را تعریف می‌کند؛ جدا از تم رنگ است.</p>
             <div class="settings-row">
               <label class="settings-option">
+                <input type="radio" name="setSkin" value="zen-calm" id="setSkinZen">
+                <span>Zen Calm</span>
+              </label>
+              <label class="settings-option">
                 <input type="radio" name="setSkin" value="terminal-glass" id="setSkinTg">
                 <span>Terminal Glass</span>
               </label>
@@ -606,12 +572,8 @@
                 <input type="radio" name="setSkin" value="vector-soft" id="setSkinVs">
                 <span>Vector Soft — Obsidian Editorial</span>
               </label>
-              <label class="settings-option">
-                <input type="radio" name="setSkin" value="zen-calm" id="setSkinZc" checked>
-                <span>Zen Calm — Stillness</span>
-              </label>
             </div>
-            <p class="hint">پوستهٔ فعلی: <strong id="skinNameLabel">Zen Calm — Stillness</strong></p>
+            <p class="hint">پوستهٔ فعلی: <strong id="skinNameLabel">Terminal Glass</strong></p>
           </div>
         </div>
       </section>
@@ -662,7 +624,7 @@
     </main>
 
     <footer class="site-footer">
-      <span>نسخه ۱۰.۰.۳ · آفلاین</span>
+      <span>نسخه ۸.۰.۵UI · آفلاین</span>
       <span class="muted" id="footerSkinLabel">پوسته Terminal Glass · داده محلی</span>
     </footer>
   </div>

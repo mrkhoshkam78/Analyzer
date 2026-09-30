@@ -1,5 +1,5 @@
 /**
- * Entry Price Engine V9.01
+ * Entry Price Engine V10.0
  * Multi-scenario · EV-aware · structure + volatility · NO TRADE gate
  *
  * Design principles:
@@ -79,7 +79,7 @@ function structureQuality({ support, resistance, price, atr }) {
     const width = (resistance - support) / atrSafe;
     if (width >= 1.0 && width <= 8) q += 0.1; // meaningful range
   }
-  return clamp(q, 0.15, 0.95);
+  return clamp(q, 0.12, 0.98);
 }
 
 /* ─── Conservative prior win rate by scenario × regime ───
@@ -119,7 +119,7 @@ function priorWin(scenario, regime, agreement, structureQ, dataQuality) {
   // data quality dampens extremes toward 0.45
   const dq = clamp(dataQuality ?? 0.5, 0.2, 1);
   p = p * (0.55 + 0.45 * dq) + 0.45 * (1 - (0.55 + 0.45 * dq));
-  return clamp(p, 0.28, 0.62);
+  return clamp(p, 0.26, 0.68);
 }
 
 /* ─── Cost model (spread + slippage as fraction of price) ─── */
@@ -340,8 +340,8 @@ function genPullback(ctx) {
     entry, zoneLow, zoneHigh, stop, target1: t1, target2: t2,
     invalidation: inv,
     activation: isBuy
-      ? `قیمت به ناحیه ${zoneLow}–${zoneHigh} برسد و رد نشود`
-      : `قیمت به ناحیه ${zoneLow}–${zoneHigh} برسد و رد نشود`,
+      ? `قیمت به ناحیه ${roundToTick(zoneLow, symbolId)}–${roundToTick(zoneHigh, symbolId)} برسد و رد نشود`
+      : `قیمت به ناحیه ${roundToTick(zoneLow, symbolId)}–${roundToTick(zoneHigh, symbolId)} برسد و رد نشود`,
     confirmation,
     spaceToObstacle: space,
     ...ctx
@@ -583,7 +583,7 @@ function applyGates(sc, ctx) {
 }
 
 /**
- * Main entry point — V9.01
+ * Main entry point — V10.0
  * @param {object} input
  */
 export function computeEntry(input = {}) {
@@ -607,13 +607,17 @@ export function computeEntry(input = {}) {
     equity = null,
     riskPct = 0.01,
     histSamples = 0,
-    candleCount = 0
+    candleCount = 0,
+    fundScore = null,
+    fundOutlook = null,
+    fundConfidence = 0,
+    mtfAgreement = null
   } = input;
 
   const computedAt = new Date().toISOString();
   const empty = {
     valid: false,
-    version: 'v9.01',
+    version: 'v10.0',
     entryType: 'No Valid Entry',
     direction: 'No Trade',
     preferredEntry: null,
@@ -725,8 +729,8 @@ export function computeEntry(input = {}) {
   ].filter(Boolean);
 
   const gated = raw.map(sc => applyGates(sc, ctx));
-  const alive = gated.filter(sc => sc && !sc.rejected);
-  const rejected = gated.filter(sc => sc && sc.rejected).map(sc => ({
+  let alive = gated.filter(sc => sc && !sc.rejected);
+  let rejected = gated.filter(sc => sc && sc.rejected).map(sc => ({
     id: sc.id,
     name: sc.name,
     reason: sc.rejectReason,
@@ -773,11 +777,66 @@ export function computeEntry(input = {}) {
     };
   }
 
+
+  // ── V10.0: multi-factor confluence (structure + agreement + MTF + fund) ──
+  const mtfA = Number.isFinite(mtfAgreement) ? mtfAgreement
+    : (mtf && Number.isFinite(mtf.agreement) ? mtf.agreement : 0.5);
+  let fundBias = 0; // -1..+1 aligned with trade direction
+  if (Number.isFinite(fundScore) && fundConfidence > 0.15) {
+    const fundNorm = (fundScore - 50) / 50; // -1..+1
+    const dirSign = isBuy ? 1 : -1;
+    fundBias = fundNorm * dirSign * Math.min(1, fundConfidence);
+  }
+  const confluence = clamp(
+    structureQ * 0.35 +
+    agreement * 0.25 +
+    mtfA * 0.20 +
+    (0.5 + fundBias * 0.5) * 0.20,
+    0, 1
+  );
+
+  // Re-score alive scenarios with confluence + diversity penalty
+  const seenFamilies = new Set();
+  for (const sc of alive) {
+    const family = sc.id === 'Market' ? 'market' : (sc.id === 'Breakout' ? 'break' : 'meanrev');
+    let diversityPen = 0;
+    if (seenFamilies.has(family)) diversityPen = 0.08;
+    seenFamilies.add(family);
+    const confBoost = (confluence - 0.5) * 12;
+    const fundBoost = fundBias * 6 * (sc.evR != null && sc.evR > 0 ? 1 : 0.5);
+    sc.score = round2((sc.score || 0) + confBoost + fundBoost - diversityPen * 10);
+    sc.confluence = round2(confluence);
+    sc.fundBias = round2(fundBias);
+  }
+  alive.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+  // Hard confluence gate
+  if (confluence < (CONFIG.entryConfluenceMin || 0.35) && alive.length) {
+    const weak = alive.filter(s => s.id !== 'Market');
+    if (weak.length && confluence < 0.28) {
+      for (const s of weak) {
+        rejected.push({ id: s.id, name: s.name, reason: `هم‌گرایی ناکافی (${round2(confluence)})` });
+      }
+      alive = alive.filter(s => s.id === 'Market' || (s.evR != null && s.evR >= 0.08));
+      if (!alive.length) {
+        return {
+          ...empty,
+          reason: `هم‌گرایی ساختار/MTF/فاندامنتال ضعیف (${round2(confluence)}) — No Trade`,
+          direction: 'No Trade',
+          entryType: 'No Trade',
+          limitations,
+          modelConfidence: round2(confluence * 0.4)
+        };
+      }
+    }
+  }
+
   const best = alive[0];
   // Wait-for-entry if preferred is meaningfully away from market
   const distAtr = Math.abs(price - best.entry) / atrSafe;
+  const waitThresh = volRegime === 'high' ? 0.45 : volRegime === 'low' ? 0.28 : 0.35;
   const waitForEntry =
-    distAtr > 0.35 &&
+    distAtr > waitThresh &&
     (best.id === 'Pullback' || best.id === 'Retest' || best.id === 'Reversal');
 
   const atMarket = Math.abs(price - best.entry) / price < 0.0025;
@@ -810,14 +869,19 @@ export function computeEntry(input = {}) {
 
   return {
     valid: true,
-    version: 'v9.01',
+    version: 'v10.0',
     entryType: best.name,
     direction: best.direction,
-    preferredEntry: best.entry != null ? Math.round(best.entry * 1e4) / 1e4 : null,
+    preferredEntry: best.entry,
     entryZone: best.zone,
     currentPrice: price,
     confirmation: best.confirmation,
     invalidation: best.invalidation,
+    softInvalidation: isBuy
+      ? roundToTick(best.stop + atrSafe * 0.25, symbolId)
+      : roundToTick(best.stop - atrSafe * 0.25, symbolId),
+    confluence: best.confluence ?? confluence,
+    fundBias: best.fundBias ?? fundBias,
     target1: best.target1,
     target2: best.target2,
     stop: best.stop,

@@ -71,53 +71,15 @@ export function getAssetEconomy(symbol) {
 }
 
 /**
- * Valid trading sessions (standard FX / multi-asset convention, UTC windows).
- * Used for auto-detect and for user override selector.
- */
-export const TRADING_SESSIONS = Object.freeze([
-  { id: 'auto', nameFa: 'خودکار (بر اساس زمان)', nameEn: 'Auto (by time)', liquidity: null },
-  { id: 'Asia', nameFa: 'آسیا (توکیو)', nameEn: 'Asia (Tokyo)', liquidity: 'moderate', utcStart: 0, utcEnd: 9 },
-  { id: 'London', nameFa: 'لندن', nameEn: 'London', liquidity: 'normal', utcStart: 7, utcEnd: 16 },
-  { id: 'New York', nameFa: 'نیویورک', nameEn: 'New York', liquidity: 'normal', utcStart: 12, utcEnd: 21 },
-  { id: 'London-New York Overlap', nameFa: 'هم‌پوشانی لندن–نیویورک', nameEn: 'London–NY Overlap', liquidity: 'high', utcStart: 12, utcEnd: 16 },
-  { id: 'Sydney', nameFa: 'سیدنی', nameEn: 'Sydney', liquidity: 'moderate', utcStart: 21, utcEnd: 6 },
-  { id: 'Off-hours', nameFa: 'خارج از سشن', nameEn: 'Off-hours', liquidity: 'low', utcStart: null, utcEnd: null }
-]);
-
-export function getSessionMeta(sessionId) {
-  return TRADING_SESSIONS.find(s => s.id === sessionId) || TRADING_SESSIONS[0];
-}
-
-/**
  * Session detection from timestamp (UTC-based windows).
  * Windows are approximate FX session hours in UTC (no hard performance claims).
  * Returns session id + phase; reliability of strategies per session comes from backtest data only.
- * @param {number|Date} tsOrDate
- * @param {string} [overrideSession] - if set and not 'auto', forces that session
  */
-export function detectSession(tsOrDate, overrideSession = null) {
-  if (overrideSession && overrideSession !== 'auto') {
-    const meta = getSessionMeta(overrideSession);
-    const d = tsOrDate instanceof Date ? tsOrDate : (tsOrDate != null ? new Date(tsOrDate) : new Date());
-    const hour = Number.isFinite(d.getTime()) ? d.getUTCHours() + d.getUTCMinutes() / 60 : null;
-    return {
-      session: meta.id,
-      sessionFa: meta.nameFa,
-      phase: 'manual',
-      hourUtc: hour != null ? Math.round(hour * 100) / 100 : null,
-      overlaps: meta.id === 'London-New York Overlap' ? ['London', 'New York'] : [],
-      liquidity: meta.liquidity || 'normal',
-      timezone: 'UTC',
-      iso: Number.isFinite(d.getTime()) ? d.toISOString() : null,
-      override: true
-    };
-  }
-
+export function detectSession(tsOrDate) {
   const d = tsOrDate instanceof Date ? tsOrDate : new Date(tsOrDate);
   if (!Number.isFinite(d.getTime())) {
     return {
       session: 'Unknown',
-      sessionFa: 'نامشخص',
       phase: 'unknown',
       hourUtc: null,
       overlaps: [],
@@ -131,7 +93,6 @@ export function detectSession(tsOrDate, overrideSession = null) {
   const asia = hour >= 0 && hour < 9;
   const london = hour >= 7 && hour < 16;
   const ny = hour >= 12 && hour < 21;
-  const sydney = hour >= 21 || hour < 6;
 
   let session = 'Off-hours';
   const overlaps = [];
@@ -143,9 +104,7 @@ export function detectSession(tsOrDate, overrideSession = null) {
     overlaps.push('London', 'New York');
   }
   if (asia && london) overlaps.push('Asia', 'London');
-  if (!asia && !london && !ny) {
-    session = sydney ? 'Sydney' : 'Off-hours';
-  }
+  if (!asia && !london && !ny) session = 'Off-hours';
 
   // Phase within session
   let phase = 'mid';
@@ -153,25 +112,21 @@ export function detectSession(tsOrDate, overrideSession = null) {
   else if (session === 'London') phase = hour < 9 ? 'open' : hour > 14 ? 'close' : 'mid';
   else if (session === 'New York') phase = hour < 14 ? 'open' : hour > 19 ? 'close' : 'mid';
   else if (session === 'London-New York Overlap') phase = 'overlap';
-  else if (session === 'Sydney') phase = hour >= 21 || hour < 1 ? 'open' : hour > 4 ? 'close' : 'mid';
 
   // Liquidity context (descriptive only — not a performance claim)
   let liquidity = 'normal';
   if (session === 'London-New York Overlap') liquidity = 'high';
   else if (session === 'Off-hours') liquidity = 'low';
-  else if (session === 'Asia' || session === 'Sydney') liquidity = 'moderate';
+  else if (session === 'Asia') liquidity = 'moderate';
 
-  const meta = getSessionMeta(session);
   return {
     session,
-    sessionFa: meta?.nameFa || session,
     phase,
     hourUtc: Math.round(hour * 100) / 100,
     overlaps,
     liquidity,
     timezone: 'UTC',
-    iso: d.toISOString(),
-    override: false
+    iso: d.toISOString()
   };
 }
 
@@ -342,12 +297,11 @@ export function buildMarketContext(options = {}) {
     fundamentalOk = false,
     calendarEvents = null,
     volumeAvailable = false,
-    timeframe = '1D',
-    sessionOverride = null
+    timeframe = '1D'
   } = options;
 
   const economy = getAssetEconomy(symbol);
-  const session = detectSession(asOfTs, sessionOverride);
+  const session = detectSession(asOfTs);
   const eventCtx = computeEventContext(calendarEvents, asOfTs, symbol);
 
   const last = candles && candles.length ? candles[candles.length - 1] : null;

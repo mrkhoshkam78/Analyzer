@@ -150,99 +150,50 @@ export function macd(closes, periods = null) {
 }
 
 /**
- * Find local swing high/low pivots (N-bar fractal) in lookback window.
- * Returns most recent significant swing high and swing low with order preserved.
- */
-function findSwingPivots(candles, start, n, pivotBars = 2) {
-  const highs = [];
-  const lows = [];
-  for (let i = start + pivotBars; i < n - pivotBars; i++) {
-    const c = candles[i];
-    if (!isNum(c.h) || !isNum(c.l) || c.h <= 0 || c.l <= 0) continue;
-    let isHigh = true, isLow = true;
-    for (let j = 1; j <= pivotBars; j++) {
-      const L = candles[i - j], R = candles[i + j];
-      if (!L || !R || !isNum(L.h) || !isNum(R.h) || !isNum(L.l) || !isNum(R.l)) {
-        isHigh = false; isLow = false; break;
-      }
-      if (c.h < L.h || c.h < R.h) isHigh = false;
-      if (c.l > L.l || c.l > R.l) isLow = false;
-    }
-    if (isHigh) highs.push({ idx: i, price: c.h });
-    if (isLow) lows.push({ idx: i, price: c.l });
-  }
-  // Fallback to global extreme if no pivots found
-  if (!highs.length || !lows.length) {
-    let hi = -Infinity, lo = Infinity, hiIdx = -1, loIdx = -1;
-    for (let i = start; i < n; i++) {
-      const c = candles[i];
-      if (!isNum(c.h) || !isNum(c.l) || c.h <= 0 || c.l <= 0) continue;
-      if (c.h > hi) { hi = c.h; hiIdx = i; }
-      if (c.l < lo) { lo = c.l; loIdx = i; }
-    }
-    return {
-      hi: Number.isFinite(hi) ? hi : null,
-      lo: Number.isFinite(lo) ? lo : null,
-      hiIdx, loIdx
-    };
-  }
-  // Use the most recent significant pair that forms a valid swing range
-  const lastHigh = highs[highs.length - 1];
-  const lastLow = lows[lows.length - 1];
-  // Prefer the pair where the earlier pivot anchors the swing
-  let hi = lastHigh.price, lo = lastLow.price, hiIdx = lastHigh.idx, loIdx = lastLow.idx;
-  // If range is too tight, expand to strongest extremes in window
-  const rangePct = hi > 0 ? (hi - lo) / hi : 0;
-  if (rangePct < 0.003) {
-    for (const h of highs) if (h.price > hi) { hi = h.price; hiIdx = h.idx; }
-    for (const l of lows) if (l.price < lo) { lo = l.price; loIdx = l.idx; }
-  }
-  return { hi, lo, hiIdx, loIdx };
-}
-
-/**
  * Fibonacci Retracement + Extension from swing high/low in lookback window.
- * Uses pivot-based swings (not pure global min/max) for more accurate structure.
  * Uses real High/Low only — never fabricates OHLC.
  * @returns { ok, insufficient, swingHigh, swingLow, retracement, extension, nearest, bias }
  */
 export function fibonacciLevels(candles, options = {}) {
   const lookback = options.lookback || 60;
   const nearPct = options.nearPct != null ? options.nearPct : 0.004;
-  const pivotBars = options.pivotBars != null ? options.pivotBars : 2;
   const empty = {
     ok: false, insufficient: true,
     swingHigh: null, swingLow: null,
     retracement: null, extension: null,
-    nearest: null, bias: 'neutral', upSwing: false
+    nearest: null, bias: 'neutral'
   };
   if (!candles || candles.length < 10) return empty;
 
   const n = candles.length;
   const start = Math.max(0, n - lookback);
-  const piv = findSwingPivots(candles, start, n, pivotBars);
-  const hi = piv.hi, lo = piv.lo, hiIdx = piv.hiIdx, loIdx = piv.loIdx;
-
-  if (!isNum(hi) || !isNum(lo) || hi <= lo || hiIdx < 0 || loIdx < 0) {
+  let hi = -Infinity, lo = Infinity, hiIdx = -1, loIdx = -1;
+  for (let i = start; i < n; i++) {
+    const c = candles[i];
+    if (!isNum(c.h) || !isNum(c.l) || c.h <= 0 || c.l <= 0) continue;
+    if (c.h > hi) { hi = c.h; hiIdx = i; }
+    if (c.l < lo) { lo = c.l; loIdx = i; }
+  }
+  if (!Number.isFinite(hi) || !Number.isFinite(lo) || hi <= lo || hiIdx < 0 || loIdx < 0) {
     return empty;
   }
 
   const range = hi - lo;
   const retLevels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
-  const extLevels = [1.272, 1.618, 2.0];
+  const extLevels = [1.272, 1.618];
 
-  // Direction of swing: low before high → upswing (price rose); else downswing
-  const upSwing = loIdx < hiIdx;
+  // Direction of swing: if low is after high → downtrend retrace from high; else uptrend
+  const upSwing = loIdx < hiIdx; // price rose from low to high
   const retracement = {};
   for (const r of retLevels) {
-    // standard Fib: measure from swing extreme in direction of prior move
+    // standard: from high down for upswing, from low up for downswing
     const price = upSwing ? (hi - range * r) : (lo + range * r);
-    retracement[String(r)] = Math.round(price * 1e8) / 1e8;
+    retracement[String(r)] = price;
   }
   const extension = {};
   for (const e of extLevels) {
     const price = upSwing ? (hi + range * (e - 1)) : (lo - range * (e - 1));
-    extension[String(e)] = Math.round(price * 1e8) / 1e8;
+    extension[String(e)] = price;
   }
 
   const price = isNum(options.price) ? options.price : (isNum(candles[n - 1].c) ? candles[n - 1].c : null);
@@ -264,19 +215,13 @@ export function fibonacciLevels(candles, options = {}) {
 
   let bias = 'neutral';
   if (nearest && nearest.near) {
+    // near support-like fib in upswing (higher ratios near low) → bullish bounce potential
     const lvl = parseFloat(nearest.level);
-    if (nearest.kind === 'ext') {
-      // at extension: continuation bias in swing direction
-      bias = upSwing ? 'bull' : 'bear';
-    } else if (upSwing) {
-      // upswing retrace: deep zone (0.5–0.786) = bounce potential (bull)
-      // shallow near high (0–0.236) = possible rejection (bear)
-      if (lvl >= 0.5 && lvl <= 0.786) bias = 'bull';
-      else if (lvl <= 0.236) bias = 'bear';
+    if (upSwing) {
+      if (lvl >= 0.5) bias = 'bull'; // deep retrace zone
+      else if (lvl <= 0.236) bias = 'bear'; // near highs
     } else {
-      // downswing retrace: deep zone = resistance bounce (bear)
-      // shallow near low = possible bounce (bull)
-      if (lvl >= 0.5 && lvl <= 0.786) bias = 'bear';
+      if (lvl >= 0.5) bias = 'bear';
       else if (lvl <= 0.236) bias = 'bull';
     }
   }
@@ -321,26 +266,11 @@ export function momentum(closes, period = CONFIG.momentumPeriod) {
   const past = closes[closes.length - 1 - period];
   if (!isNum(cur) || !isNum(past) || past === 0) return null;
   const v = ((cur - past) / past) * 100;
-  return Number.isFinite(v) ? Math.round(v * 1e6) / 1e6 : null;
+  return Number.isFinite(v) ? v : null;
 }
 
 export function roc(closes, period = CONFIG.rocPeriod) {
   return momentum(closes, period); // ROC % same form
-}
-
-/**
- * ATR-normalized momentum (in ATR units over period). More comparable across assets.
- */
-export function momentumATR(candles, period = CONFIG.momentumPeriod) {
-  if (!candles || candles.length <= period) return null;
-  const closes = candles.map(c => c.c);
-  const cur = closes[closes.length - 1];
-  const past = closes[closes.length - 1 - period];
-  if (!isNum(cur) || !isNum(past)) return null;
-  const a = atr(candles, CONFIG.atrPeriod);
-  if (!isNum(a) || a <= 0) return null;
-  const v = (cur - past) / a;
-  return Number.isFinite(v) ? Math.round(v * 1e4) / 1e4 : null;
 }
 
 /** Bollinger: middle=SMA, upper/lower = middle ± k*std */
@@ -476,13 +406,8 @@ export function volumeAnalysis(candles, period = CONFIG.volumeAvgPeriod) {
   };
 }
 
-/**
- * Breakout detection with body-close confirmation and optional buffer (ATR fraction).
- * Avoids wick-only false breaks. Returns strength 0–1 when broken.
- */
-export function detectBreakout(candles, lookback = 20, options = {}) {
-  const empty = { up: false, down: false, strength: 0, level: null };
-  if (!candles || candles.length < lookback + 1) return empty;
+export function detectBreakout(candles, lookback = 20) {
+  if (!candles || candles.length < lookback + 1) return { up: false, down: false };
   const prev = candles.slice(-(lookback + 1), -1);
   let high = -Infinity, low = Infinity;
   for (const c of prev) {
@@ -490,34 +415,8 @@ export function detectBreakout(candles, lookback = 20, options = {}) {
     if (isNum(c.l) && c.l < low) low = c.l;
   }
   const lastC = candles[candles.length - 1];
-  if (!isNum(lastC.c) || !Number.isFinite(high) || high <= low) return empty;
-
-  // Prefer body close over wick: use close primarily; require clear breach
-  const bufferPct = options.bufferPct != null ? options.bufferPct : 0.0005; // 0.05%
-  const upLevel = high * (1 + bufferPct);
-  const downLevel = low * (1 - bufferPct);
-  const bodyHigh = Math.max(lastC.o ?? lastC.c, lastC.c);
-  const bodyLow = Math.min(lastC.o ?? lastC.c, lastC.c);
-
-  const up = lastC.c > upLevel && bodyHigh > high;
-  const down = lastC.c < downLevel && bodyLow < low;
-
-  let strength = 0;
-  if (up) {
-    const range = high - low;
-    strength = range > 0 ? Math.min(1, (lastC.c - high) / range) : 0.5;
-  } else if (down) {
-    const range = high - low;
-    strength = range > 0 ? Math.min(1, (low - lastC.c) / range) : 0.5;
-  }
-
-  return {
-    up,
-    down,
-    strength: Number.isFinite(strength) ? strength : 0,
-    level: up ? high : down ? low : null,
-    lookback
-  };
+  if (!isNum(lastC.c) || !Number.isFinite(high)) return { up: false, down: false };
+  return { up: lastC.c > high, down: lastC.c < low };
 }
 
 export function maxDrawdown(closes) {

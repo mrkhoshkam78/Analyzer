@@ -1,5 +1,5 @@
 /**
- * UI Controller V10.0.3 · Obsidian Editorial
+ * UI Controller V10.0.2 · Obsidian Editorial
  * Fundamental is an optional input to Prediction (toggle), not a standalone view.
  */
 import { getSymbol, formatPrice, getAllSymbols, registerCustomAsset, removeCustomAsset } from './logic/symbols.js';
@@ -525,34 +525,49 @@ async function runAnalysis(silent = false) {
     const uiPrice = parseFloat($('current').value);
     const currentPrice = Number.isFinite(uiPrice) && uiPrice > 0 ? uiPrice : series.currentPrice;
 
-    // Optional Fundamental (only when toggle ON — zero EODHD traffic when OFF)
+    // Optional Fundamental — offline store first (no external API required)
     let fundSnap = null;
     let fundMeta = { used: false, mode: 'tech_only' };
     if (isFundToggleOn()) {
-      setProcessing(true, 'در حال دریافت داده فاندامنتال…');
-      setFundFetchStatus('در حال دریافت داده فاندامنتال…', 'is-loading');
-      const fundRes = await fetchFundamentalSnapshot(sym);
-      if (!fundRes.ok) {
-        setProcessing(false);
-        setFundFetchStatus(fundRes.error || 'خطای فاندامنتال', 'is-err');
-        if (!silent) toast(fundRes.error || 'دریافت فاندامنتال ناموفق', 'err');
-        // Stop prediction when Fundamental is explicitly requested but unavailable
-        return;
+      setProcessing(true, 'بارگذاری فاندامنتال آفلاین…');
+      setFundFetchStatus('خواندن داده دستی فاندامنتال…', 'is-loading');
+      try {
+        const fmod = await import('./logic/fundamental.js');
+        const offline = fmod.buildSnapshotFromStore(sym);
+        const hasOffline = offline && Object.keys(offline).length > 0;
+        if (hasOffline) {
+          fundSnap = offline;
+          fundMeta = {
+            used: true,
+            mode: 'with_fundamental',
+            fromCache: true,
+            fetchedAt: new Date().toISOString(),
+            coverage: 'offline',
+            source: 'local_store'
+          };
+          setFundFetchStatus('فاندامنتال از دادهٔ دستی محلی', 'is-ok');
+        } else {
+          // Optional backend only if offline empty — never hard-fail analysis
+          const fundRes = await fetchFundamentalSnapshot(sym);
+          if (fundRes.ok && fundRes.snapshot) {
+            fundSnap = fundRes.snapshot;
+            fundMeta = {
+              used: true,
+              mode: 'with_fundamental',
+              fromCache: fundRes.fromCache,
+              fetchedAt: fundRes.fetchedAt,
+              coverage: fundRes.coverage,
+              source: 'backend'
+            };
+            setFundFetchStatus('فاندامنتال از سرور محلی', 'is-ok');
+          } else {
+            setFundFetchStatus('داده بنیادی دستی خالی است — فقط تکنیکال ادامه یافت', 'is-err');
+            if (!silent) toast('برای ترکیب بنیادی، در صفحه تحلیل بنیادی مقادیر را وارد کنید', 'err');
+          }
+        }
+      } catch (e) {
+        setFundFetchStatus('خطا در بارگذاری فاندامنتال آفلاین', 'is-err');
       }
-      fundSnap = fundRes.snapshot;
-      fundMeta = {
-        used: true,
-        mode: 'with_fundamental',
-        fromCache: fundRes.fromCache,
-        fetchedAt: fundRes.fetchedAt,
-        coverage: fundRes.coverage
-      };
-      setFundFetchStatus(
-        fundRes.fromCache
-          ? `فاندامنتال از Cache (${fundRes.fetchedAt ? new Date(fundRes.fetchedAt).toLocaleString('fa-IR') : '—'})`
-          : `فاندامنتال دریافت شد · پوشش ${fundRes.coverage || '—'}`,
-        'is-ok'
-      );
       setProcessing(true, 'تحلیل ترکیبی…');
     }
 
@@ -571,13 +586,11 @@ async function runAnalysis(silent = false) {
       }
     } catch (_) { /* offline / missing */ }
 
-    const sessionOverride = ($('sessionSelect')?.value) || 'auto';
     const { analyze } = await import('./logic/analysis.js');
     const result = analyze(series.candles, {
       currentPrice, symbol: sym, timeframe: currentTf, recordPrediction: true,
       fundamentalSnapshot: fundSnap,
-      seriesMap,
-      sessionOverride: sessionOverride === 'auto' ? null : sessionOverride
+      seriesMap
     });
     result._fundMeta = fundMeta;
     setProcessing(false);
@@ -663,8 +676,8 @@ function showResult(r, symbolId) {
   if (fundSc != null) report += ` فاندامنتال: ${fundSc}.`;
   if (r.fundamentalApplied) report += ' ترکیب اعمال شد.';
   else report += ' فاندامنتال در ترکیب لحاظ نشد.';
-  if (fundMeta.mode === 'with_fundamental') report += ' [پیش‌بینی با فاندامنتال]';
-  else report += ' [پیش‌بینی بدون فاندامنتال]';
+  if (fundMeta.mode === 'with_fundamental') report += ' [Prediction با Fundamental]';
+  else report += ' [Prediction بدون Fundamental]';
   $('report').textContent = report;
   $('suggestionText').textContent = r.suggestion || '—';
 
@@ -689,7 +702,7 @@ function showResult(r, symbolId) {
     const rr = r.rr ?? r.prediction?.rr;
     const riskSc = r.riskScore ?? r.analysis?.riskScore;
     const ctx = r.context || {};
-    const session = ctx.session?.sessionFa || ctx.session?.session || '—';
+    const session = ctx.session?.session || '—';
     const eventSt = ctx.event?.state || 'UNKNOWN';
     const eventRisk = ctx.event?.eventRisk;
     const economies = (ctx.economy?.economies || ctx.relevantEconomies || []).join(', ') || '—';
@@ -734,54 +747,66 @@ function showResult(r, symbolId) {
     html += '</div>';
 
     // Entry V9.01
-    html += '<div class="ens-section"><div class="ens-sec-title">نقطه ورود · موتور ورود v9.01</div>';
+    html += '<div class="ens-section"><div class="ens-sec-title">نقطه ورود / Entry Engine v9.01</div>';
     if (entry && (entry.entryType || entry.preferredEntry != null || entry.direction === 'No Trade')) {
       const wait = entry.waitForEntry;
       const noTrade = entry.direction === 'No Trade' || entry.entryType === 'No Trade' || entry.entryType === 'No Valid Entry';
-      const dirMap = { Long: 'خرید (لانگ)', Short: 'فروش (شورت)', 'No Trade': 'بدون معامله' };
-      const dirFa = dirMap[entry.direction] || entry.direction || '—';
       const dirCls = noTrade ? 'neu' : (entry.direction === 'Long' ? 'bull' : entry.direction === 'Short' ? 'bear' : 'neu');
-      const statusFa = noTrade ? 'بدون معامله' : wait ? 'منتظر نقطه ورود' : 'ورود معتبر';
-      const fpx = (n) => (n != null && Number.isFinite(Number(n))) ? formatPrice(Number(n), symbolId) : '—';
-      html += `<div class="ens-grid">`;
-      html += `<div class="ens-item"><span class="ens-label">جهت سناریو</span><span class="ens-val ${dirCls}">${dirFa}</span></div>`;
-      html += `<div class="ens-item"><span class="ens-label">نوع / سناریو</span><span class="ens-val">${entry.entryType || '—'}</span></div>`;
-      html += `<div class="ens-item"><span class="ens-label">وضعیت</span><span class="ens-val ${noTrade ? 'bear' : wait ? 'neu' : 'bull'}">${statusFa}</span></div>`;
-      if (entry.preferredEntry != null) html += `<div class="ens-item"><span class="ens-label">ورود پیشنهادی</span><span class="ens-val mono">${fpx(entry.preferredEntry)}</span></div>`;
-      if (entry.entryZone) html += `<div class="ens-item"><span class="ens-label">ناحیه ورود</span><span class="ens-val mono">${fpx(entry.entryZone.low)} – ${fpx(entry.entryZone.high)}</span></div>`;
-      if (entry.activation) html += `<div class="ens-item"><span class="ens-label">شرط فعال‌سازی</span><span class="ens-val">${entry.activation}</span></div>`;
-      if (entry.stop != null) html += `<div class="ens-item"><span class="ens-label">حد ضرر</span><span class="ens-val mono">${fpx(entry.stop)}</span></div>`;
-      if (entry.target1 != null) html += `<div class="ens-item"><span class="ens-label">هدف ۱</span><span class="ens-val mono">${fpx(entry.target1)}</span></div>`;
-      if (entry.target2 != null) html += `<div class="ens-item"><span class="ens-label">هدف ۲</span><span class="ens-val mono">${fpx(entry.target2)}</span></div>`;
-      if (entry.rr != null) html += `<div class="ens-item"><span class="ens-label">R:R خام</span><span class="ens-val mono">${Number(entry.rr).toFixed(2)}</span></div>`;
-      if (entry.netRR != null) html += `<div class="ens-item"><span class="ens-label">R:R خالص (پس از هزینه)</span><span class="ens-val mono">${Number(entry.netRR).toFixed(2)}</span></div>`;
-      if (entry.evR != null) html += `<div class="ens-item"><span class="ens-label">ارزش موردانتظار (R)</span><span class="ens-val mono ${entry.evR >= 0 ? 'bull' : 'bear'}">${Number(entry.evR).toFixed(2)}</span></div>`;
-      if (entry.winP != null) html += `<div class="ens-item"><span class="ens-label">احتمال تخمینی موفقیت</span><span class="ens-val mono">${Math.round(entry.winP * 100)}٪ <span class="muted">(مدل)</span></span></div>`;
-      if (entry.modelConfidence != null) html += `<div class="ens-item"><span class="ens-label">اطمینان مدل</span><span class="ens-val mono">${Math.round(entry.modelConfidence * 100)}٪</span></div>`;
-      if (entry.invalidation != null) html += `<div class="ens-item"><span class="ens-label">ابطال سناریو</span><span class="ens-val mono">${fpx(entry.invalidation)}</span></div>`;
-      if (entry.regime) html += `<div class="ens-item"><span class="ens-label">رژیم بازار</span><span class="ens-val">${entry.regime}</span></div>`;
-      html += `</div>`;
+      const statusLabel = noTrade ? 'بدون معامله' : (wait ? 'صبر برای ورود' : 'آماده اجرا');
+      const statusCls = noTrade ? 'entry-status-no' : (wait ? 'entry-status-wait' : 'entry-status-go');
+
+      html += `<div class="ens-section entry-v10"><div class="ens-sec-title">نقطه ورود <span class="entry-ver">v10</span></div>`;
+      html += `<div class="entry-status-bar ${statusCls}">${statusLabel}</div>`;
+      html += '<div class="ens-grid entry-primary">';
+      html += `<div class="ens-item"><span class="ens-label">جهت</span><span class="ens-val ${dirCls}">${entry.direction || '—'}</span></div>`;
+      html += `<div class="ens-item"><span class="ens-label">سناریو</span><span class="ens-val">${entry.entryType || '—'}</span></div>`;
+      if (entry.preferredEntry != null) html += `<div class="ens-item ens-highlight"><span class="ens-label">ورود</span><span class="ens-val mono">${entry.preferredEntry}</span></div>`;
+      if (entry.entryZone) html += `<div class="ens-item"><span class="ens-label">ناحیه</span><span class="ens-val mono">${entry.entryZone.low} – ${entry.entryZone.high}</span></div>`;
+      if (entry.stop != null) html += `<div class="ens-item"><span class="ens-label">حد ضرر</span><span class="ens-val mono">${entry.stop}</span></div>`;
+      if (entry.target1 != null) html += `<div class="ens-item"><span class="ens-label">هدف ۱</span><span class="ens-val mono">${entry.target1}</span></div>`;
+      if (entry.target2 != null) html += `<div class="ens-item"><span class="ens-label">هدف ۲</span><span class="ens-val mono">${entry.target2}</span></div>`;
+      html += '</div>';
+
+      // Metrics row (compact)
+      html += '<div class="ens-grid entry-metrics">';
+      if (entry.netRR != null) html += `<div class="ens-item"><span class="ens-label">R:R خالص</span><span class="ens-val mono">${entry.netRR}</span></div>`;
+      else if (entry.rr != null) html += `<div class="ens-item"><span class="ens-label">R:R</span><span class="ens-val mono">${entry.rr}</span></div>`;
+      if (entry.evR != null) html += `<div class="ens-item"><span class="ens-label">EV</span><span class="ens-val mono">${entry.evR}R</span></div>`;
+      if (entry.winP != null) html += `<div class="ens-item"><span class="ens-label">P(مدل)</span><span class="ens-val mono">${Math.round(entry.winP * 100)}%</span></div>`;
+      if (entry.modelConfidence != null) html += `<div class="ens-item"><span class="ens-label">اطمینان</span><span class="ens-val mono">${Math.round(entry.modelConfidence * 100)}%</span></div>`;
+      if (entry.confluence != null) html += `<div class="ens-item"><span class="ens-label">هم‌گرایی</span><span class="ens-val mono">${Math.round(entry.confluence * 100)}%</span></div>`;
+      html += '</div>';
+
+      if (entry.activation) html += `<div class="ens-active entry-activation"><span class="ens-label">شرط:</span> ${entry.activation}</div>`;
       if (entry.reason) html += `<div class="ens-active">${entry.reason}</div>`;
-      if (entry.confirmation?.length) html += `<div class="ens-active muted">عوامل مؤثر: ${entry.confirmation.join(' · ')}</div>`;
-      if (entry.scenarios?.length) {
-        html += '<div class="strat-table" style="margin-top:8px"><table><thead><tr><th>سناریو</th><th>ورود</th><th>R:R</th><th>EV(R)</th><th>امتیاز</th></tr></thead><tbody>';
+      if (entry.confirmation?.length) {
+        html += `<div class="entry-tags">${entry.confirmation.slice(0, 4).map(c => `<span class="entry-tag">${c}</span>`).join('')}</div>`;
+      }
+      if (entry.invalidation != null || entry.softInvalidation != null) {
+        html += '<div class="ens-grid entry-inv">';
+        if (entry.softInvalidation != null) html += `<div class="ens-item"><span class="ens-label">هشدار نرم</span><span class="ens-val mono">${entry.softInvalidation}</span></div>`;
+        if (entry.invalidation != null) html += `<div class="ens-item"><span class="ens-label">ابطال</span><span class="ens-val mono">${entry.invalidation}</span></div>`;
+        html += '</div>';
+      }
+      if (entry.scenarios?.length && !noTrade) {
+        html += '<details class="entry-scenarios"><summary>مقایسه سناریوها</summary><div class="strat-table"><table><thead><tr><th>سناریو</th><th>ورود</th><th>R:R</th><th>EV</th><th>امتیاز</th></tr></thead><tbody>';
         for (const s of entry.scenarios) {
-          const sel = s.id === entry.selectedScenario ? ' style="font-weight:700"' : '';
-          html += `<tr${sel}><td>${s.name || s.id}</td><td class="mono">${fpx(s.entry)}</td><td class="mono">${s.netRR != null ? Number(s.netRR).toFixed(2) : (s.rr != null ? Number(s.rr).toFixed(2) : '—')}</td><td class="mono">${s.evR != null ? Number(s.evR).toFixed(2) : '—'}</td><td class="mono">${s.score ?? '—'}</td></tr>`;
+          const sel = s.id === entry.selectedScenario ? ' class="row-selected"' : '';
+          html += `<tr${sel}><td>${s.name || s.id}</td><td class="mono">${s.entry ?? '—'}</td><td class="mono">${s.netRR ?? s.rr ?? '—'}</td><td class="mono">${s.evR ?? '—'}</td><td class="mono">${s.score ?? '—'}</td></tr>`;
         }
-        html += '</tbody></table></div>';
+        html += '</tbody></table></div></details>';
       }
       if (entry.rejectedScenarios?.length) {
-        html += `<div class="ens-active muted">ردشده: ${entry.rejectedScenarios.map(r => `${r.name || r.id} (${r.reason})`).join(' · ')}</div>`;
+        html += `<details class="entry-rejected"><summary>ردشده (${entry.rejectedScenarios.length})</summary><div class="ens-active muted">${entry.rejectedScenarios.map(r => `${r.name || r.id}: ${r.reason}`).join(' · ')}</div></details>`;
       }
       if (entry.position?.note) {
-        html += `<div class="ens-active muted">اندازه موقعیت: ${entry.position.note}${entry.position.units != null ? ` · units≈${entry.position.units}` : ''}</div>`;
+        html += `<div class="ens-active muted">حجم: ${entry.position.note}${entry.position.units != null ? ` · ≈${entry.position.units}` : ''}</div>`;
       }
-      if (entry.costNote) html += `<div class="ens-active muted">${entry.costNote}</div>`;
       if (entry.limitations?.length) {
-        html += `<div class="ens-active muted">محدودیت‌ها: ${entry.limitations.join(' · ')}</div>`;
+        html += `<details class="entry-limits"><summary>محدودیت‌های مدل</summary><ul class="entry-limit-list">${entry.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>`;
       }
-      if (entry.computedAt) html += `<div class="ens-active muted">آخرین محاسبه: ${entry.computedAt}</div>`;
+      html += '</div>';
+    }
     } else {
       html += `<div class="ens-active muted">Setup ورود تعریف نشده</div>`;
     }
@@ -1032,6 +1057,7 @@ function switchView(view) {
       refreshMPBLibrary();
     }
     if (view === 'fundamental') {
+      try { wireFundForm(); } catch (_) {}
       syncFundPageFromToggle();
     }
     if (view === 'settings') {
@@ -1072,7 +1098,7 @@ function syncSettingsUI() {
   document.querySelectorAll('input[name="setSkin"]').forEach(r => {
     r.checked = (r.value === skin);
   });
-  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft — Obsidian Editorial', 'zen-calm': 'Zen Calm — Stillness' };
+  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft — Obsidian Editorial', 'zen-calm': 'Zen Calm' };
   if ($('skinNameLabel')) $('skinNameLabel').textContent = names[skin] || skin;
   if ($('footerSkinLabel')) $('footerSkinLabel').textContent = `پوسته ${names[skin] || skin} · داده محلی`;
 }
@@ -1088,14 +1114,13 @@ function applyLang(lang) {
 }
 
 function applySkin(skin) {
-  const allowed = ['terminal-glass', 'vector-soft', 'zen-calm'];
-  const s = allowed.includes(skin) ? skin : 'terminal-glass';
+  const s = (skin === 'vector-soft' || skin === 'zen-calm') ? skin : 'terminal-glass';
   document.documentElement.setAttribute('data-skin', s);
   // ensure theme+skin combo attributes stay in sync for CSS selectors
   const theme = document.documentElement.getAttribute('data-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', theme);
   try { localStorage.setItem('oma_skin', s); } catch (_) {}
-  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft — Obsidian Editorial', 'zen-calm': 'Zen Calm — Stillness' };
+  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft — Obsidian Editorial', 'zen-calm': 'Zen Calm' };
   if ($('skinNameLabel')) $('skinNameLabel').textContent = names[s] || s;
   if ($('footerSkinLabel')) $('footerSkinLabel').textContent = `پوسته ${names[s] || s} · داده محلی`;
   // force repaint so CSS variables apply immediately
@@ -1912,15 +1937,6 @@ function init() {
       ohlcvBody.hidden = open;
     });
   }
-  const manualToggle = $('manualToggle');
-  const manualList = $('manualList');
-  if (manualToggle && manualList) {
-    manualToggle.addEventListener('click', () => {
-      const open = manualToggle.getAttribute('aria-expanded') === 'true';
-      manualToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
-      manualList.hidden = open;
-    });
-  }
 
     // Smart calendar
   $('calToggle')?.addEventListener('click', () => openSmartCal());
@@ -2079,3 +2095,92 @@ function init() {
 }
 
 init();
+
+
+/* ── Fundamental offline form (v11) ── */
+async function ensureFundModule() {
+  if (window.__fundMod) return window.__fundMod;
+  try {
+    const mod = await import('./logic/fundamental.js');
+    window.__fundMod = mod;
+    return mod;
+  } catch (e) {
+    console.warn('fund module', e);
+    return null;
+  }
+}
+
+async function refreshFundVarSelect() {
+  const sel = $('fundVarSelect');
+  if (!sel) return;
+  const mod = await ensureFundModule();
+  if (!mod) return;
+  const sym = (window.currentSymbol || localStorage.getItem('oma_symbol') || 'XAUUSD').toUpperCase();
+  const schema = mod.getSchemaForSymbol(sym);
+  sel.innerHTML = schema.map(v =>
+    `<option value="${v.id}">${v.nameFa} (${v.unit})</option>`
+  ).join('');
+}
+
+async function refreshFundStoredList() {
+  const box = $('fundStoredList');
+  const sum = $('fundLiveSummary');
+  if (!box) return;
+  const mod = await ensureFundModule();
+  if (!mod) return;
+  const sym = (window.currentSymbol || localStorage.getItem('oma_symbol') || 'XAUUSD').toUpperCase();
+  const data = mod.getFundamentalData(sym);
+  const schema = mod.getSchemaForSymbol(sym);
+  const rows = schema.filter(v => data[v.id]).map(v => {
+    const r = data[v.id];
+    const bits = [];
+    if (r.actual != null) bits.push(`واقعی ${r.actual}`);
+    if (r.forecast != null) bits.push(`پیش‌بینی ${r.forecast}`);
+    if (r.surprise != null) bits.push(`Δ ${r.surprise > 0 ? '+' : ''}${r.surprise}`);
+    if (r.date) bits.push(r.date);
+    return `<div class="fund-stored-item"><span>${v.nameFa}</span><span class="mono">${bits.join(' · ') || '—'}</span></div>`;
+  });
+  box.innerHTML = rows.length ? rows.join('') : '<p class="muted">هنوز متغیری ذخیره نشده.</p>';
+  const fund = mod.runFundamental(sym, undefined, { regime: 'Unclear' });
+  if (sum) sum.textContent = mod.fundamentalSummaryFa(fund);
+}
+
+function wireFundForm() {
+  const saveBtn = $('fundSaveBtn');
+  const clearBtn = $('fundClearBtn');
+  if (saveBtn && !saveBtn._wired) {
+    saveBtn._wired = true;
+    saveBtn.addEventListener('click', async () => {
+      const mod = await ensureFundModule();
+      if (!mod) return;
+      const sym = (window.currentSymbol || localStorage.getItem('oma_symbol') || 'XAUUSD').toUpperCase();
+      const varId = $('fundVarSelect')?.value;
+      const res = mod.upsertFundamentalVar(sym, varId, {
+        actual: $('fundActual')?.value,
+        forecast: $('fundForecast')?.value,
+        previous: $('fundPrevious')?.value,
+        date: $('fundDate')?.value
+      });
+      const msg = $('fundFormMsg');
+      if (msg) msg.textContent = res.ok ? 'ذخیره شد.' : (res.error || 'خطا');
+      if (res.ok) {
+        ['fundActual','fundForecast','fundPrevious'].forEach(id => { if ($(id)) $(id).value = ''; });
+        refreshFundStoredList();
+      }
+    });
+  }
+  if (clearBtn && !clearBtn._wired) {
+    clearBtn._wired = true;
+    clearBtn.addEventListener('click', async () => {
+      const mod = await ensureFundModule();
+      if (!mod) return;
+      const sym = (window.currentSymbol || localStorage.getItem('oma_symbol') || 'XAUUSD').toUpperCase();
+      mod.clearFundamentalVar(sym);
+      const msg = $('fundFormMsg');
+      if (msg) msg.textContent = 'داده‌های نماد پاک شد.';
+      refreshFundStoredList();
+    });
+  }
+  refreshFundVarSelect();
+  refreshFundStoredList();
+}

@@ -152,21 +152,13 @@ export async function ensureProjectData(symbol, tf = '1D') {
   const s = assertSymbol(symbol);
   const t = assertTf(tf);
   const existing = loadHistorical(s, t);
-  const existingCount = existing?.length || 0;
+  if (existing && existing.length >= 30) return { ok: true, source: 'store', count: existing.length };
 
   const symLower = s.toLowerCase();
   const tLower = t.toLowerCase();
-  // Prefer exact project CSV paths first so calendar + analysis use full file data (not thin seed)
-  const candidates = [];
-  if (t === '1D') {
-    candidates.push(`data/${s}/${symLower}-1d.csv`, `data/${s}/1D.csv`);
-  } else if (t === '4H') {
-    candidates.push(`data/${s}/${symLower}-4h.csv`, `data/${s}/4H.csv`);
-  } else if (t === '1H') {
-    candidates.push(`data/${s}/${symLower}-1h.csv`, `data/${s}/1H.csv`);
-  }
-  candidates.push(
+  const candidates = [
     `data/${s}/${symLower}-${tLower}.csv`,
+    `data/${s}/${symLower}-1d.csv`,
     `data/${s}/${t}.csv`,
     `data/${s}/${tLower}.csv`,
     `data/${s}_${t}.csv`,
@@ -175,7 +167,14 @@ export async function ensureProjectData(symbol, tf = '1D') {
     `data/${s}/4H.csv`,
     `data/${s}/1H.csv`,
     `data/${s}_1D.csv`
-  );
+  ];
+  if (t === '1D') {
+    candidates.unshift(`data/${s}/${symLower}-1d.csv`, `data/${s}/1D.csv`);
+  } else if (t === '4H') {
+    candidates.unshift(`data/${s}/${symLower}-4h.csv`, `data/${s}/4H.csv`);
+  } else if (t === '1H') {
+    candidates.unshift(`data/${s}/${symLower}-1h.csv`, `data/${s}/1H.csv`);
+  }
 
   const seen = new Set();
   for (const path of candidates) {
@@ -186,19 +185,16 @@ export async function ensureProjectData(symbol, tf = '1D') {
       if (!res.ok) continue;
       const text = await res.text();
       if (!text || text.length < 40) continue;
-      // Replace store with project CSV so day-index / calendar reflect full 1D series
-      const result = importHistoricalCsv(s, t, text, 'replace');
+      const result = importHistoricalCsv(s, t, text, 'skip');
       if (result && result.ok) {
         const after = loadHistorical(s, t);
-        invalidateDayIndex(s, t);
-        return { ok: true, source: path, count: after.length, added: result.added || 0, replaced: true };
+        return { ok: true, source: path, count: after.length, added: result.added || 0 };
       }
     } catch {
       /* file:// or missing — ignore */
     }
   }
-  if (existingCount >= 30) return { ok: true, source: 'store', count: existingCount };
-  return { ok: false, source: null, count: existingCount };
+  return { ok: false, source: null, count: existing?.length || 0 };
 }
 
 export function setHistorical(symbol, candles, tf = '1D') {

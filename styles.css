@@ -1,12 +1,12 @@
 /* ============================================================
-   Market Analyst V10.0.3 — Performance-first Premium UI
+   Market Analyst V8.0.5 — Performance-first Premium UI
    Skin: Terminal Glass · Theme = color only · Skin = full design
    Financial Terminal · Dark-first · GPU-friendly
    ============================================================ */
 
 :root,
 [data-skin="terminal-glass"] {
-  --font: "Vazirmatn", system-ui, sans-serif;
+  --font: "Vazirmatn", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
 
   --bg: #080b12;
@@ -2224,7 +2224,7 @@ body.sidebar-collapsed .shell.shell-with-sidebar > .sidebar {
 
 
 /* ============================================================
-   Vector Soft — Obsidian Editorial | V10.0.3
+   Vector Soft — Obsidian Editorial | V8.1
    Matte editorial data interface · Independent of Terminal Glass
    Palette: Obsidian #171A20 · Graphite #222731 · Ivory #F2EEE6 · Signal Orange #FF9D45
    Buy/Sell: green/red ONLY for directional market data
@@ -3069,7 +3069,7 @@ html[data-skin="vector-soft"] .loading-line .spinner {
   border-top-color: var(--signal);
 }
 
-/* ===== V10.0.3 — asset delete + section intros (MPB / Backtest) ===== */
+/* ===== V10.0.2 — asset delete + section intros (MPB / Backtest) ===== */
 .asset-btn-wrap {
   position: relative;
   display: flex;
@@ -3094,7 +3094,7 @@ html[data-skin="vector-soft"] .loading-line .spinner {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0.75;
+  opacity: 0.55;
   transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
   z-index: 2;
 }
@@ -3176,708 +3176,137 @@ html[data-skin="vector-soft"] .asset-del-btn:hover {
   background: color-mix(in srgb, var(--sell) 10%, var(--bg));
 }
 
-/* ===== V10.0.3 — Moving pulses for Vector Soft · Obsidian Editorial ===== */
-html[data-skin="vector-soft"] .cal-day .cal-pulse {
-  width: 6px;
-  height: 6px;
-  margin-left: -3px;
-  bottom: 5px;
-  animation: vsCalPulseMove 2.4s ease-in-out infinite;
-  box-shadow: 0 0 0 0 currentColor;
-}
-html[data-skin="vector-soft"] .cal-day .cal-pulse.pulse-up {
-  background: var(--buy) !important;
-  color: var(--buy);
-  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--buy) 45%, transparent);
-}
-html[data-skin="vector-soft"] .cal-day .cal-pulse.pulse-down {
-  background: var(--sell) !important;
-  color: var(--sell);
-  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--sell) 45%, transparent);
-}
-html[data-skin="vector-soft"] .cal-day .cal-pulse.pulse-flat {
-  background: var(--text-3) !important;
-  color: var(--text-3);
-  box-shadow: 0 0 4px 0 color-mix(in srgb, var(--text-3) 30%, transparent);
-}
-html[data-skin="vector-soft"] .cal-day.is-selected .cal-pulse {
-  background: #fff !important;
-  color: #fff;
-  box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.35);
-}
 
-@keyframes vsCalPulseMove {
-  0%   { opacity: 0.95; transform: scale(0.85) translateY(0); }
-  25%  { opacity: 1;    transform: scale(1.15) translateY(-2px); }
-  50%  { opacity: 0.7;  transform: scale(0.9)  translateY(1px); }
-  75%  { opacity: 1;    transform: scale(1.1)  translateY(-1px); }
-  100% { opacity: 0.95; transform: scale(0.85) translateY(0); }
+/* ========== Entry V10 — clean hierarchy ========== */
+.entry-v10 .ens-sec-title { display: flex; align-items: center; gap: 8px; }
+.entry-ver {
+  font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-2) 18%, transparent);
+  color: var(--primary-2);
 }
-
-/* Soft traveling ring (second layer via pseudo) */
-html[data-skin="vector-soft"] .cal-day .cal-pulse::after {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 1.5px solid currentColor;
-  opacity: 0;
-  animation: vsCalRing 2.4s ease-out infinite;
-  pointer-events: none;
+.entry-status-bar {
+  text-align: center; font-weight: 700; font-size: 13px;
+  padding: 8px 12px; border-radius: 10px; margin-bottom: 12px;
+  letter-spacing: 0.02em;
 }
-@keyframes vsCalRing {
-  0%   { opacity: 0.55; transform: scale(0.6); }
-  70%  { opacity: 0;    transform: scale(1.6); }
-  100% { opacity: 0;    transform: scale(1.6); }
+.entry-status-go { background: color-mix(in srgb, var(--ok, #22c55e) 18%, transparent); color: var(--ok, #16a34a); }
+.entry-status-wait { background: color-mix(in srgb, #f59e0b 18%, transparent); color: #d97706; }
+.entry-status-no { background: color-mix(in srgb, var(--danger, #ef4444) 14%, transparent); color: var(--danger, #dc2626); }
+.entry-primary .ens-highlight .ens-val { font-size: 1.15em; font-weight: 800; color: var(--primary-2); }
+.entry-metrics { margin-top: 8px; opacity: 0.95; }
+.entry-activation { font-size: 13px; }
+.entry-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.entry-tag {
+  font-size: 11px; padding: 3px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--muted, #94a3b8);
 }
-
-@media (prefers-reduced-motion: reduce) {
-  html[data-skin="vector-soft"] .cal-day .cal-pulse,
-  html[data-skin="vector-soft"] .cal-day .cal-pulse::after {
-    animation: none !important;
-    opacity: 1;
-    transform: none;
-  }
+.entry-scenarios, .entry-rejected, .entry-limits {
+  margin-top: 10px; font-size: 13px;
 }
+.entry-scenarios summary, .entry-rejected summary, .entry-limits summary {
+  cursor: pointer; font-weight: 600; color: var(--muted);
+  padding: 4px 0;
+}
+.entry-limit-list { margin: 6px 0 0; padding-right: 18px; color: var(--muted); font-size: 12px; }
+.entry-scenarios .row-selected { font-weight: 700; background: color-mix(in srgb, var(--primary-2) 10%, transparent); }
 
-/* ============================================================
-   Skin: Zen Calm — Stillness
-   Inspired by soft nature meditation UI (sage, stone, warm light)
-   Soft rounded cards · diffused light · breathable spacing
-   ============================================================ */
+/* ========== Fundamental manual form ========== */
+.fund-manual-form { margin-top: 12px; }
+.fund-manual-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 12px 0;
+}
+@media (min-width: 720px) {
+  .fund-manual-grid { grid-template-columns: repeat(4, 1fr); }
+}
+.fund-manual-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.fund-stored-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.fund-stored-item {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  font-size: 13px;
+}
+.fund-stored-item .mono { font-variant-numeric: tabular-nums; }
+.fund-live-summary { margin-top: 10px; font-size: 13px; line-height: 1.5; }
 
+/* ========== Zen Calm skin ========== */
 html[data-skin="zen-calm"] {
-  --font: "Vazirmatn", "Segoe UI", system-ui, sans-serif;
-  --mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
-
-  /* Core palette from reference: sage greens, warm stone, soft gold */
-  --sage-deep: #3D4A40;
-  --sage: #5C6B5E;
-  --sage-mid: #6E7F70;
-  --sage-soft: #8A9A8C;
-  --stone: #A8B0A5;
-  --cream: #F0EBE3;
-  --warm-gold: #D4B483;
-  --warm-gold-bright: #E8C99A;
-  --mist: rgba(240, 235, 227, 0.12);
-
-  --buy: #5B9A72;
-  --sell: #C45C5C;
-  --hold: #C9A66B;
-
-  --r: 18px;
-  --r-sm: 12px;
-  --r-lg: 24px;
-  --max: 1080px;
-  --side-w: 72px;
-  --side-w-expanded: 228px;
-  --glass-bg: color-mix(in srgb, var(--surface) 72%, transparent);
-  --glass-blur: 18px;
-  --grad: linear-gradient(145deg, var(--warm-gold), #C9A06A);
-  --shadow: 0 12px 40px rgba(20, 28, 22, 0.28);
-  --focus: 0 0 0 3px color-mix(in srgb, var(--warm-gold) 35%, transparent);
+  --font: "Vazirmatn", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 8px 28px color-mix(in srgb, #0f172a 12%, transparent);
 }
-
-/* Dark — deep sage stillness */
 html[data-skin="zen-calm"][data-theme="dark"],
 html[data-theme="dark"][data-skin="zen-calm"] {
-  --bg: #2A332C;
-  --bg-elev: #323C34;
-  --surface: #3A463E;
-  --surface-2: #445048;
-  --line: rgba(240, 235, 227, 0.09);
-  --line-strong: rgba(240, 235, 227, 0.16);
-  --line-focus: rgba(212, 180, 131, 0.45);
-  --text: #F0EBE3;
-  --text-2: rgba(240, 235, 227, 0.78);
-  --text-3: rgba(240, 235, 227, 0.5);
-  --primary: #D4B483;
-  --primary-2: #E8C99A;
-  --accent: #D4B483;
-  --muted: rgba(240, 235, 227, 0.5);
+  --bg: #0c1222;
+  --bg-elev: #141c2e;
+  --card: #161f33;
+  --text: #e8eef7;
+  --muted: #94a3b8;
+  --primary: #5b8def;
+  --primary-2: #7aa2f7;
+  --ok: #34d399;
+  --danger: #f87171;
+  --border: color-mix(in srgb, #94a3b8 18%, transparent);
+  --accent: #a5b4fc;
 }
-
-/* Light — soft morning mist */
 html[data-skin="zen-calm"][data-theme="light"],
 html[data-theme="light"][data-skin="zen-calm"] {
-  --bg: #E6EBE4;
-  --bg-elev: #F0F4EE;
-  --surface: #F7F9F5;
-  --surface-2: #E9EEE7;
-  --line: rgba(45, 55, 48, 0.1);
-  --line-strong: rgba(45, 55, 48, 0.16);
-  --line-focus: rgba(180, 140, 70, 0.45);
-  --text: #2A332C;
-  --text-2: rgba(42, 51, 44, 0.78);
-  --text-3: rgba(42, 51, 44, 0.52);
-  --primary: #A67C3A;
-  --primary-2: #C49A4E;
-  --accent: #A67C3A;
-  --muted: rgba(42, 51, 44, 0.52);
-  --warm-gold: #A67C3A;
-  --warm-gold-bright: #C49A4E;
-  --shadow: 0 12px 36px rgba(42, 51, 44, 0.1);
+  --bg: #f4f6fb;
+  --bg-elev: #ffffff;
+  --card: #ffffff;
+  --text: #1e293b;
+  --muted: #64748b;
+  --primary: #3b6fd9;
+  --primary-2: #4c7cf0;
+  --ok: #059669;
+  --danger: #dc2626;
+  --border: color-mix(in srgb, #64748b 16%, transparent);
+  --accent: #6366f1;
 }
-
-/* Foundation */
 html[data-skin="zen-calm"] body {
+  font-family: var(--font);
   background: var(--bg);
-  color: var(--text);
-  letter-spacing: 0.015em;
+  letter-spacing: 0.01em;
 }
-
-html[data-skin="zen-calm"] .bg-layer {
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(ellipse 90% 60% at 15% -5%, rgba(212, 180, 131, 0.16), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 95% 85%, rgba(90, 110, 95, 0.22), transparent 50%),
-    linear-gradient(165deg, color-mix(in srgb, var(--bg) 85%, transparent) 0%, color-mix(in srgb, var(--bg) 70%, #3D4A40) 100%),
-    url("assets/zen/soft-sage-bg.jpg");
-  background-size: auto, auto, auto, cover;
-  background-position: center, center, center, center;
-  background-repeat: no-repeat;
-  background-blend-mode: normal, normal, normal, soft-light;
-  opacity: 1;
-}
-html[data-skin="zen-calm"][data-theme="light"] .bg-layer {
-  background-image:
-    radial-gradient(ellipse 90% 55% at 20% 0%, rgba(232, 201, 154, 0.2), transparent 50%),
-    linear-gradient(180deg, #F0F4EE 0%, #E6EBE4 100%),
-    url("assets/zen/warm-light.jpg");
-  background-size: auto, auto, cover;
-  background-position: center, center, center;
-  background-blend-mode: normal, normal, soft-light;
-}
-
-html[data-skin="zen-calm"] .bg-wave {
-  display: block !important;
-  color: var(--sage-soft);
-  opacity: 0.07;
-}
-
-html[data-skin="zen-calm"] .bg-illustrations {
-  display: block !important;
-  opacity: 0.08;
-}
-html[data-skin="zen-calm"] .bg-illustrations svg {
-  color: var(--cream) !important;
-  opacity: 0.35 !important;
-}
-html[data-skin="zen-calm"][data-theme="light"] .bg-illustrations svg {
-  color: var(--sage-deep) !important;
-  opacity: 0.12 !important;
-}
-
-/* Shell & Sidebar */
-html[data-skin="zen-calm"] .shell.shell-with-sidebar {
-  grid-template-columns: var(--side-w-expanded) minmax(0, 1fr) !important;
-  background: transparent;
-}
-html[data-skin="zen-calm"] body.sidebar-collapsed .shell.shell-with-sidebar {
-  grid-template-columns: var(--side-w) minmax(0, 1fr) !important;
-}
-
-html[data-skin="zen-calm"] .shell.shell-with-sidebar > .sidebar {
-  width: var(--side-w-expanded) !important;
-  max-width: var(--side-w-expanded) !important;
-  background: color-mix(in srgb, var(--bg-elev) 88%, transparent) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-inline-end: 1px solid var(--line) !important;
-  box-shadow: none !important;
-  padding: 1.1rem 0.7rem 1.4rem !important;
-  border-radius: 0;
-}
-html[data-skin="zen-calm"] body.sidebar-collapsed .shell.shell-with-sidebar > .sidebar {
-  width: var(--side-w) !important;
-  max-width: var(--side-w) !important;
-  padding: 1rem 0.4rem !important;
-}
-
-html[data-skin="zen-calm"] .sidebar-brand {
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 0.9rem;
-  padding: 0.3rem 0.55rem 0.95rem;
-}
-html[data-skin="zen-calm"] .sidebar-title {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-2);
-}
-html[data-skin="zen-calm"] .sidebar-logo-svg {
-  color: var(--warm-gold) !important;
-}
-
-html[data-skin="zen-calm"] .side-link {
-  border-radius: var(--r-sm);
-  padding: 0.7rem 0.85rem !important;
-  color: var(--text-2);
-  transition: background 0.22s ease, color 0.22s ease, transform 0.18s ease;
-}
-html[data-skin="zen-calm"] .side-link:hover {
-  background: color-mix(in srgb, var(--warm-gold) 12%, transparent);
-  color: var(--text);
-}
-html[data-skin="zen-calm"] .side-link.active {
-  background: color-mix(in srgb, var(--warm-gold) 18%, transparent);
-  color: var(--warm-gold-bright);
-  font-weight: 600;
-}
-html[data-skin="zen-calm"] .side-link svg {
-  color: inherit;
-  opacity: 0.9;
-}
-
-/* Header */
-html[data-skin="zen-calm"] .site-header {
-  background: color-mix(in srgb, var(--bg-elev) 82%, transparent);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-bottom: 1px solid var(--line);
-}
-html[data-skin="zen-calm"] .site-header::before {
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--warm-gold), transparent);
-  opacity: 0.55;
-}
-
-/* Cards — soft rounded, gentle elevation */
 html[data-skin="zen-calm"] .card,
 html[data-skin="zen-calm"] .mpb-card,
 html[data-skin="zen-calm"] .settings-card,
 html[data-skin="zen-calm"] .fund-page-card,
-html[data-skin="zen-calm"] .mpb-lib-item,
-html[data-skin="zen-calm"] .ad-hero,
 html[data-skin="zen-calm"] .modal-body {
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
-
-html[data-skin="zen-calm"] .card {
-  padding: 1.25rem 1.35rem;
-}
-
-html[data-skin="zen-calm"] .card-head {
-  margin-bottom: 1rem;
-}
-
-html[data-skin="zen-calm"] .eyebrow {
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--warm-gold);
-  font-weight: 600;
-}
-
-html[data-skin="zen-calm"] .card-title {
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text);
-}
-
-html[data-skin="zen-calm"] .card-desc {
-  color: var(--text-3);
-  font-size: 0.9rem;
-}
-
-/* Buttons */
 html[data-skin="zen-calm"] .btn {
-  border-radius: 999px;
+  border-radius: 12px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  transition: transform 0.18s ease, box-shadow 0.22s ease, background 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-html[data-skin="zen-calm"] .btn:active {
-  transform: scale(0.97);
-}
-html[data-skin="zen-calm"] .btn-primary {
-  background: linear-gradient(145deg, var(--warm-gold), color-mix(in srgb, var(--warm-gold) 75%, #8B6B3A));
-  color: #1E241F;
-  border: none;
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--warm-gold) 35%, transparent);
-}
-html[data-skin="zen-calm"] .btn-primary:hover {
-  box-shadow: 0 8px 28px color-mix(in srgb, var(--warm-gold) 45%, transparent);
-  filter: brightness(1.05);
-}
-html[data-skin="zen-calm"] .btn-ghost,
-html[data-skin="zen-calm"] .btn-secondary {
-  background: color-mix(in srgb, var(--surface-2) 80%, transparent);
-  border: 1px solid var(--line);
-  color: var(--text-2);
-}
-html[data-skin="zen-calm"] .btn-ghost:hover,
-html[data-skin="zen-calm"] .btn-secondary:hover {
-  background: color-mix(in srgb, var(--warm-gold) 12%, transparent);
-  color: var(--text);
-  border-color: color-mix(in srgb, var(--warm-gold) 30%, transparent);
-}
-
-/* Inputs */
+html[data-skin="zen-calm"] .btn:active { transform: scale(0.97); }
 html[data-skin="zen-calm"] .input,
 html[data-skin="zen-calm"] select.input,
 html[data-skin="zen-calm"] textarea.input {
-  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-html[data-skin="zen-calm"] .input:focus,
-html[data-skin="zen-calm"] select.input:focus,
-html[data-skin="zen-calm"] textarea.input:focus {
-  border-color: color-mix(in srgb, var(--warm-gold) 55%, transparent);
-  box-shadow: var(--focus);
-  outline: none;
-}
-
-/* Pills & badges */
-html[data-skin="zen-calm"] .header-status-pill,
-html[data-skin="zen-calm"] .header-asset-pill,
-html[data-skin="zen-calm"] .meta-chip,
-html[data-skin="zen-calm"] .badge,
-html[data-skin="zen-calm"] .status-pill,
-html[data-skin="zen-calm"] .ver-badge {
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-2) 85%, transparent);
-  border: 1px solid var(--line);
-  color: var(--text-2);
-  font-weight: 500;
-}
-
-html[data-skin="zen-calm"] .icon-btn {
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
-  border: 1px solid var(--line);
-  color: var(--text-2);
-  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
-}
-html[data-skin="zen-calm"] .icon-btn:hover {
-  background: color-mix(in srgb, var(--warm-gold) 15%, transparent);
-  color: var(--warm-gold);
-  transform: scale(1.05);
-}
-
-/* Tables & data */
-html[data-skin="zen-calm"] table,
-html[data-skin="zen-calm"] .data-table {
-  border-radius: var(--r);
-  overflow: hidden;
-}
-html[data-skin="zen-calm"] th {
-  background: color-mix(in srgb, var(--surface-2) 90%, transparent);
-  color: var(--text-3);
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-}
-html[data-skin="zen-calm"] td {
-  border-bottom: 1px solid var(--line);
-}
-
-/* Progress / bars */
-html[data-skin="zen-calm"] .progress-bar,
-html[data-skin="zen-calm"] .bar-track {
-  background: color-mix(in srgb, var(--surface-2) 80%, transparent);
-  border-radius: 999px;
-  overflow: hidden;
-}
-html[data-skin="zen-calm"] .progress-fill,
-html[data-skin="zen-calm"] .bar-fill {
-  background: linear-gradient(90deg, var(--warm-gold), var(--warm-gold-bright));
-  border-radius: 999px;
-}
-
-/* Symbol cards / list items */
-html[data-skin="zen-calm"] .symbol-card,
-html[data-skin="zen-calm"] .list-item,
-html[data-skin="zen-calm"] .recent-item {
-  border-radius: var(--r);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  border: 1px solid var(--line);
-  transition: transform 0.2s ease, box-shadow 0.22s ease, border-color 0.2s ease;
-}
-html[data-skin="zen-calm"] .symbol-card:hover,
-html[data-skin="zen-calm"] .list-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 28px rgba(20, 28, 22, 0.22);
-  border-color: color-mix(in srgb, var(--warm-gold) 25%, transparent);
-}
-
-/* Buy / Sell / Hold emphasis */
-html[data-skin="zen-calm"] .signal-buy,
-html[data-skin="zen-calm"] .pos-buy { color: var(--buy); }
-html[data-skin="zen-calm"] .signal-sell,
-html[data-skin="zen-calm"] .pos-sell { color: var(--sell); }
-html[data-skin="zen-calm"] .signal-hold { color: var(--hold); }
-
-/* Calendar pulses adapted for zen */
-html[data-skin="zen-calm"] .cal-day .cal-pulse {
-  background: color-mix(in srgb, var(--warm-gold) 55%, transparent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--warm-gold) 40%, transparent);
-}
-html[data-skin="zen-calm"] .cal-day .cal-pulse::after {
-  border-color: var(--warm-gold);
-}
-
-/* Modal */
-html[data-skin="zen-calm"] .modal-overlay {
-  background: rgba(20, 28, 22, 0.55);
-  backdrop-filter: blur(8px);
-}
-html[data-skin="zen-calm"] .modal-body {
-  border-radius: var(--r-lg);
-}
-
-/* Footer */
-html[data-skin="zen-calm"] .site-footer,
-html[data-skin="zen-calm"] .footer {
-  color: var(--text-3);
-  border-top: 1px solid var(--line);
-  background: transparent;
-}
-
-/* Subtle soft focus on interactive elements */
-html[data-skin="zen-calm"] a:focus-visible,
-html[data-skin="zen-calm"] button:focus-visible,
-html[data-skin="zen-calm"] input:focus-visible,
-html[data-skin="zen-calm"] select:focus-visible {
-  outline: none;
-  box-shadow: var(--focus);
-}
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  html[data-skin="zen-calm"] .btn,
-  html[data-skin="zen-calm"] .side-link,
-  html[data-skin="zen-calm"] .symbol-card,
-  html[data-skin="zen-calm"] .icon-btn {
-    transition: none !important;
-  }
-}
-
-/* —— Zen Calm: JPG nature assets connected to template —— */
-html[data-skin="zen-calm"] .card,
-html[data-skin="zen-calm"] .mpb-card,
-html[data-skin="zen-calm"] .settings-card,
-html[data-skin="zen-calm"] .result-card {
-  background-color: color-mix(in srgb, var(--surface) 90%, transparent);
-  background-image:
-    linear-gradient(155deg, color-mix(in srgb, var(--surface) 92%, transparent), color-mix(in srgb, var(--surface) 78%, transparent)),
-    url("assets/zen/soft-stone.jpg");
-  background-size: auto, 220% auto;
-  background-position: center, 40% 30%;
-  background-repeat: no-repeat;
-  background-blend-mode: normal, soft-light;
-}
-
-html[data-skin="zen-calm"] .ad-hero {
-  background-color: color-mix(in srgb, var(--surface) 88%, transparent);
-  background-image:
-    linear-gradient(145deg, color-mix(in srgb, var(--surface) 85%, transparent), color-mix(in srgb, var(--surface) 65%, transparent)),
-    url("assets/zen/soft-water.jpg");
-  background-size: auto, cover;
-  background-position: center, center;
-  background-blend-mode: normal, soft-light;
-}
-
-html[data-skin="zen-calm"] .btn-primary {
-  background-color: var(--warm-gold);
-  background-image:
-    linear-gradient(145deg, var(--warm-gold), color-mix(in srgb, var(--warm-gold) 75%, #8B6B3A)),
-    url("assets/zen/soft-accent.jpg");
-  background-size: auto, 180% 180%;
-  background-position: center, center;
-  background-blend-mode: normal, soft-light;
-}
-
-/* Decorative image layer — hidden unless Zen Calm */
-.zen-deco {
-  display: none;
-}
-html[data-skin="zen-calm"] .zen-deco {
-  display: block;
-  position: fixed;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.22;
-  border-radius: 24px;
-  overflow: hidden;
-}
-html[data-skin="zen-calm"] .zen-deco img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-html[data-skin="zen-calm"][data-theme="light"] .zen-deco {
-  opacity: 0.14;
-}
-
-/* ─── v11.0.0 Metric cards upgrade ─────────────────────────────────────── */
-.metrics-grid-v11 {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.65rem;
-  margin-top: 0.85rem;
-}
-.metrics-grid-v11 .metric {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.85rem 0.9rem 0.75rem;
   border-radius: 12px;
-  border: 1px solid var(--border, rgba(255,255,255,0.08));
-  background: var(--card-bg, rgba(34, 39, 49, 0.85));
-  overflow: hidden;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-  animation: metricPop 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
 }
-.metrics-grid-v11 .metric:nth-child(1) { animation-delay: 0.04s; }
-.metrics-grid-v11 .metric:nth-child(2) { animation-delay: 0.08s; }
-.metrics-grid-v11 .metric:nth-child(3) { animation-delay: 0.12s; }
-.metrics-grid-v11 .metric:nth-child(4) { animation-delay: 0.16s; }
-.metrics-grid-v11 .metric:nth-child(5) { animation-delay: 0.2s; }
-.metrics-grid-v11 .metric:nth-child(6) { animation-delay: 0.24s; }
-.metrics-grid-v11 .metric:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+html[data-skin="zen-calm"] .sidebar {
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  border-inline-end: 1px solid var(--border);
 }
-.metrics-grid-v11 .metric-icon {
-  position: absolute;
-  top: 0.55rem;
-  left: 0.65rem;
-  font-size: 0.85rem;
-  opacity: 0.45;
-  line-height: 1;
+html[data-skin="zen-calm"] .advice-box {
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary-2) 8%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--primary-2) 22%, transparent);
+  padding: 14px 16px;
 }
-html[dir="rtl"] .metrics-grid-v11 .metric-icon {
-  left: auto;
-  right: 0.65rem;
-}
-.metrics-grid-v11 .metric-k {
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  opacity: 0.7;
-  font-weight: 500;
-}
-.metrics-grid-v11 .metric-v {
-  font-size: 1.05rem;
-  font-weight: 700;
-  line-height: 1.25;
-}
-.metrics-grid-v11 .metric-trend {
-  border-color: rgba(255, 157, 69, 0.25);
-  background: linear-gradient(145deg, rgba(255,157,69,0.08), transparent 60%);
-}
-.metrics-grid-v11 .metric-risk {
-  border-color: rgba(255, 100, 100, 0.22);
-  background: linear-gradient(145deg, rgba(255,100,100,0.07), transparent 60%);
-}
-.metrics-grid-v11 .metric-sup {
-  border-color: rgba(80, 200, 140, 0.28);
-  background: linear-gradient(145deg, rgba(80,200,140,0.1), transparent 60%);
-}
-.metrics-grid-v11 .metric-res {
-  border-color: rgba(255, 120, 90, 0.28);
-  background: linear-gradient(145deg, rgba(255,120,90,0.1), transparent 60%);
-}
-.metrics-grid-v11 .metric-tgt {
-  border-color: rgba(100, 180, 255, 0.28);
-  background: linear-gradient(145deg, rgba(100,180,255,0.1), transparent 60%);
-}
-.metrics-grid-v11 .metric-sl {
-  border-color: rgba(220, 80, 100, 0.28);
-  background: linear-gradient(145deg, rgba(220,80,100,0.1), transparent 60%);
-}
-
-/* Manual records collapse */
-.manual-collapse-wrap {
-  margin-top: 0.75rem;
-}
-.manual-collapse-wrap .collapse-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.55rem 0.75rem;
-  background: transparent;
-  border: 1px solid var(--border, rgba(255,255,255,0.08));
-  border-radius: 10px;
-  cursor: pointer;
-  color: inherit;
-  font: inherit;
-}
-.manual-collapse-wrap .manual-toggle-label {
-  font-size: 0.85rem;
+html[data-skin="zen-calm"] .advice-v {
   font-weight: 600;
-  opacity: 0.85;
+  line-height: 1.65;
+  font-size: 14px;
 }
-.manual-collapse-wrap .manual-list.collapse-body[hidden] {
-  display: none !important;
-}
-.manual-collapse-wrap .manual-list:not([hidden]) {
-  margin-top: 0.5rem;
-  animation: slideFadeIn 0.35s ease both;
-}
-
-/* ─── v11.0.0 New animations (5) ───────────────────────────────────────── */
-@keyframes metricPop {
-  from { opacity: 0; transform: translateY(10px) scale(0.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-@keyframes slideFadeIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes softGlow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 157, 69, 0); }
-  50% { box-shadow: 0 0 18px 2px rgba(255, 157, 69, 0.22); }
-}
-@keyframes signalPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
-}
-@keyframes shimmerLine {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-.anim-in {
-  animation: slideFadeIn 0.4s ease both;
-}
-.signal-value.signal-buy,
-.signal-value.signal-sell {
-  animation: signalPulse 2.2s ease-in-out infinite;
-}
-.score-bar i {
-  background-size: 200% 100%;
-  animation: shimmerLine 2.8s linear infinite;
-}
-.ver-badge {
-  animation: softGlow 3.5s ease-in-out infinite;
-}
-.card.card-focus {
-  animation: metricPop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .metrics-grid-v11 .metric,
-  .anim-in,
-  .signal-value.signal-buy,
-  .signal-value.signal-sell,
-  .score-bar i,
-  .ver-badge,
-  .card.card-focus,
-  .manual-collapse-wrap .manual-list {
-    animation: none !important;
-  }
-}
+html[data-skin="zen-calm"] .bg-wave { opacity: 0.35; }
+html[data-skin="zen-calm"] .entry-status-bar { border-radius: 12px; }

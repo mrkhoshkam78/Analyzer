@@ -7,45 +7,13 @@ import { CONFIG } from './config.js';
 import {
   ema, rsi, macd, atr, momentum, roc, bollinger, stochastic, adx,
   supportResistance, volumeAnalysis, detectBreakout, fibonacciLevels,
-  momentumATR, isNum, last
+  isNum, last
 } from './indicators.js';
 import { getMacdConfig, getFibConfig } from './indicatorConfig.js';
 import { runFundamental } from './fundamental.js';
 
 const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
-
-/** Default advanced strategy settings (overridable via options.advSettings) */
-export const DEFAULT_ADV_SETTINGS = Object.freeze({
-  trend: {
-    emaFast: CONFIG.smaFast,
-    emaSlow: CONFIG.smaSlow,
-    adxMin: 25,
-    scoreEmaAlign: 22,
-    scoreAdx: 12,
-    scoreMacdCross: 14
-  },
-  momentum: {
-    period: CONFIG.momentumPeriod,
-    strongPct: 3,
-    mildPct: 1,
-    useAtrNorm: true,
-    atrStrong: 1.5,
-    scoreStrong: 18,
-    scoreMild: 8
-  },
-  breakout: {
-    lookback: 20,
-    bufferPct: 0.0005,
-    volConfirmBonus: 12,
-    nearSrPct: 0.08
-  },
-  fib: {
-    pivotBars: 2,
-    nearScore: 18,
-    structureScore: 12
-  }
-});
 
 /**
  * Shared indicator bundle — computed once, passed to strategies to avoid duplicate calc.
@@ -58,49 +26,40 @@ export function computeSharedIndicators(candles, options = {}) {
   const timeframe = options.timeframe || '1D';
   const macdCfg = getMacdConfig(symbol, timeframe);
   const fibCfg = getFibConfig(symbol, timeframe);
-  const adv = { ...DEFAULT_ADV_SETTINGS, ...(options.advSettings || {}) };
-  const tAdv = { ...DEFAULT_ADV_SETTINGS.trend, ...(adv.trend || {}) };
-  const mAdv = { ...DEFAULT_ADV_SETTINGS.momentum, ...(adv.momentum || {}) };
-  const bAdv = { ...DEFAULT_ADV_SETTINGS.breakout, ...(adv.breakout || {}) };
-  const fAdv = { ...DEFAULT_ADV_SETTINGS.fib, ...(adv.fib || {}) };
-
   const closes = candles.map(c => c.c);
   const price = isNum(options.currentPrice) && options.currentPrice > 0
     ? options.currentPrice
     : last(closes);
 
-  const atrVal = atr(candles);
   return {
     ok: true,
     price,
     closes,
     candles,
-    e20: ema(closes, tAdv.emaFast || CONFIG.smaFast),
-    e50: ema(closes, tAdv.emaSlow || CONFIG.smaSlow),
+    e20: ema(closes, CONFIG.smaFast),
+    e50: ema(closes, CONFIG.smaSlow),
     r: rsi(closes),
     m: macd(closes, macdCfg),
-    a: atrVal,
-    mom: momentum(closes, mAdv.period || CONFIG.momentumPeriod),
-    momAtr: momentumATR(candles, mAdv.period || CONFIG.momentumPeriod),
-    rocVal: roc(closes, CONFIG.rocPeriod),
+    a: atr(candles),
+    mom: momentum(closes),
+    rocVal: roc(closes),
     bb: bollinger(closes),
     stoch: stochastic(candles),
     adxRes: adx(candles),
     sr: supportResistance(candles),
     volA: volumeAnalysis(candles),
-    brk: detectBreakout(candles, bAdv.lookback || 20, { bufferPct: bAdv.bufferPct }),
+    brk: detectBreakout(candles),
     fib: fibonacciLevels(candles, {
       lookback: fibCfg.lookback,
       nearPct: fibCfg.nearPct,
-      pivotBars: fAdv.pivotBars || 2,
       price
     }),
     volPct: (() => {
-      return atrVal != null && price > 0 ? (atrVal / price) * 100 : null;
+      const a = atr(candles);
+      return a != null && price > 0 ? (a / price) * 100 : null;
     })(),
     macdCfg,
-    fibCfg,
-    adv: { trend: tAdv, momentum: mAdv, breakout: bAdv, fib: fAdv }
+    fibCfg
   };
 }
 
@@ -209,76 +168,61 @@ function confFromConviction(score, dataQuality, agreementBoost = 0) {
 // ─── Strategy 1: Trend Following (EMA + ADX + MACD) ─────────────────────────
 export function strategyTrendFollowing(shared) {
   const id = 'trendFollowing';
-  const name = 'دنبال‌کننده روند';
+  const name = 'Trend Following';
   if (!shared.ok) return emptyStrategy(id, name);
 
   const { price, e20, e50, m, adxRes } = shared;
-  const adv = shared.adv?.trend || DEFAULT_ADV_SETTINGS.trend;
   const reasoning = [];
   let score = 50;
   let dq = 0.5;
-  const emaFastLabel = adv.emaFast || 20;
-  const emaSlowLabel = adv.emaSlow || 50;
-  const adxMin = adv.adxMin != null ? adv.adxMin : 25;
-  const sAlign = adv.scoreEmaAlign != null ? adv.scoreEmaAlign : 22;
-  const sAdx = adv.scoreAdx != null ? adv.scoreAdx : 12;
-  const sMacd = adv.scoreMacdCross != null ? adv.scoreMacdCross : 14;
 
-  if (e20 != null && e50 != null && isNum(price)) {
+  if (e20 != null && e50 != null) {
     dq += 0.15;
-    // Require clear alignment: price and both EMAs in order
     if (price > e20 && e20 > e50) {
-      score += sAlign;
-      reasoning.push(`قیمت بالای EMA${emaFastLabel} و EMA${emaFastLabel} بالای EMA${emaSlowLabel} — روند صعودی هم‌راستا`);
+      score += 22;
+      reasoning.push('قیمت بالای EMA20 و EMA20 بالای EMA50 (روند صعودی)');
     } else if (price < e20 && e20 < e50) {
-      score -= sAlign;
-      reasoning.push(`قیمت زیر EMA${emaFastLabel} و EMA${emaFastLabel} زیر EMA${emaSlowLabel} — روند نزولی هم‌راستا`);
-    } else if (price > e50 && e20 > e50) {
-      score += Math.round(sAlign * 0.45);
-      reasoning.push(`قیمت و EMA${emaFastLabel} بالای EMA${emaSlowLabel} — تمایل صعودی ضعیف‌تر`);
-    } else if (price < e50 && e20 < e50) {
-      score -= Math.round(sAlign * 0.45);
-      reasoning.push(`قیمت و EMA${emaFastLabel} زیر EMA${emaSlowLabel} — تمایل نزولی ضعیف‌تر`);
+      score -= 22;
+      reasoning.push('قیمت زیر EMA20 و EMA20 زیر EMA50 (روند نزولی)');
     } else if (price > e50) {
-      score += Math.round(sAlign * 0.35);
-      reasoning.push(`قیمت بالای EMA${emaSlowLabel}`);
+      score += 10;
+      reasoning.push('قیمت بالای EMA50');
     } else if (price < e50) {
-      score -= Math.round(sAlign * 0.35);
-      reasoning.push(`قیمت زیر EMA${emaSlowLabel}`);
+      score -= 10;
+      reasoning.push('قیمت زیر EMA50');
     }
   }
 
   if (adxRes?.adx != null) {
     dq += 0.15;
-    if (adxRes.adx >= adxMin) {
+    if (adxRes.adx >= 25) {
       if (adxRes.plusDI > adxRes.minusDI) {
-        score += sAdx;
-        reasoning.push(`ADX=${adxRes.adx.toFixed(1)} (≥${adxMin}) — قدرت روند صعودی (+DI غالب)`);
+        score += 12;
+        reasoning.push(`ADX=${adxRes.adx.toFixed(1)} قدرت روند صعودی`);
       } else {
-        score -= sAdx;
-        reasoning.push(`ADX=${adxRes.adx.toFixed(1)} (≥${adxMin}) — قدرت روند نزولی (−DI غالب)`);
+        score -= 12;
+        reasoning.push(`ADX=${adxRes.adx.toFixed(1)} قدرت روند نزولی`);
       }
     } else {
-      // Soft pull to neutral — avoid aggressive signal in chop
-      score = score * 0.65 + 50 * 0.35;
-      reasoning.push(`ADX=${adxRes.adx.toFixed(1)} < ${adxMin} — روند ضعیف / بازار رنج`);
+      score = score * 0.7 + 50 * 0.3; // pull toward neutral when weak trend
+      reasoning.push(`ADX=${adxRes.adx.toFixed(1)} روند ضعیف`);
     }
   }
 
   if (m?.macd != null && !m.insufficient) {
     dq += 0.15;
     if (m.crossover === 'bullish') {
-      score += sMacd;
-      reasoning.push('تقاطع صعودی MACD (هیستوگرام از منفی به مثبت)');
+      score += 14;
+      reasoning.push('تقاطع صعودی MACD');
     } else if (m.crossover === 'bearish') {
-      score -= sMacd;
-      reasoning.push('تقاطع نزولی MACD (هیستوگرام از مثبت به منفی)');
+      score -= 14;
+      reasoning.push('تقاطع نزولی MACD');
     } else if (m.momentumDir === 'bull') {
-      score += Math.round(sMacd * 0.4);
-      reasoning.push('هیستوگرام MACD مثبت — مومنتوم صعودی');
+      score += 6;
+      reasoning.push('هیستوگرام MACD مثبت');
     } else if (m.momentumDir === 'bear') {
-      score -= Math.round(sMacd * 0.4);
-      reasoning.push('هیستوگرام MACD منفی — مومنتوم نزولی');
+      score -= 6;
+      reasoning.push('هیستوگرام MACD منفی');
     }
   }
 
@@ -303,7 +247,7 @@ export function strategyTrendFollowing(shared) {
 // ─── Strategy 2: Mean Reversion (RSI + BB + Stochastic) ─────────────────────
 export function strategyMeanReversion(shared) {
   const id = 'meanReversion';
-  const name = 'بازگشت به میانگین';
+  const name = 'Mean Reversion';
   if (!shared.ok) return emptyStrategy(id, name);
 
   const { price, r, bb, stoch } = shared;
@@ -375,62 +319,35 @@ export function strategyMeanReversion(shared) {
 // ─── Strategy 3: Momentum (ROC/Momentum + MACD Hist + Volume) ────────────────
 export function strategyMomentum(shared) {
   const id = 'momentum';
-  const name = 'مومنتوم';
+  const name = 'Momentum';
   if (!shared.ok) return emptyStrategy(id, name);
 
-  const { price, mom, momAtr, rocVal, m, volA } = shared;
-  const adv = shared.adv?.momentum || DEFAULT_ADV_SETTINGS.momentum;
+  const { price, mom, rocVal, m, volA } = shared;
   const reasoning = [];
   let score = 50;
   let dq = 0.4;
-  const strongPct = adv.strongPct != null ? adv.strongPct : 3;
-  const mildPct = adv.mildPct != null ? adv.mildPct : 1;
-  const sStrong = adv.scoreStrong != null ? adv.scoreStrong : 18;
-  const sMild = adv.scoreMild != null ? adv.scoreMild : 8;
-  const useAtr = adv.useAtrNorm !== false;
-  const atrStrong = adv.atrStrong != null ? adv.atrStrong : 1.5;
 
-  // Prefer ATR-normalized momentum when available (comparable across assets)
-  const primaryMom = useAtr && momAtr != null ? momAtr : mom;
-  const isAtrUnit = useAtr && momAtr != null;
-
-  if (primaryMom != null) {
+  if (mom != null) {
     dq += 0.2;
-    if (isAtrUnit) {
-      if (primaryMom > atrStrong) {
-        score += sStrong;
-        reasoning.push(`مومنتوم نرمال‌شده با ATR=${primaryMom.toFixed(2)} — حرکت قوی صعودی (>${atrStrong} ATR)`);
-      } else if (primaryMom < -atrStrong) {
-        score -= sStrong;
-        reasoning.push(`مومنتوم نرمال‌شده با ATR=${primaryMom.toFixed(2)} — حرکت قوی نزولی (<-${atrStrong} ATR)`);
-      } else if (primaryMom > atrStrong * 0.4) {
-        score += sMild;
-        reasoning.push(`مومنتوم ATR مثبت (${primaryMom.toFixed(2)})`);
-      } else if (primaryMom < -atrStrong * 0.4) {
-        score -= sMild;
-        reasoning.push(`مومنتوم ATR منفی (${primaryMom.toFixed(2)})`);
-      }
-    } else if (mom != null) {
-      if (mom > strongPct) {
-        score += sStrong;
-        reasoning.push(`مومنتوم=${mom.toFixed(2)}٪ — قوی صعودی`);
-      } else if (mom < -strongPct) {
-        score -= sStrong;
-        reasoning.push(`مومنتوم=${mom.toFixed(2)}٪ — قوی نزولی`);
-      } else if (mom > mildPct) {
-        score += sMild;
-        reasoning.push(`مومنتوم مثبت (${mom.toFixed(2)}٪)`);
-      } else if (mom < -mildPct) {
-        score -= sMild;
-        reasoning.push(`مومنتوم منفی (${mom.toFixed(2)}٪)`);
-      }
+    if (mom > 3) {
+      score += 18;
+      reasoning.push(`مومنتوم=${mom.toFixed(1)}٪ قوی صعودی`);
+    } else if (mom < -3) {
+      score -= 18;
+      reasoning.push(`مومنتوم=${mom.toFixed(1)}٪ قوی نزولی`);
+    } else if (mom > 1) {
+      score += 8;
+      reasoning.push('مومنتوم مثبت');
+    } else if (mom < -1) {
+      score -= 8;
+      reasoning.push('مومنتوم منفی');
     }
   }
 
-  if (rocVal != null && mom != null && Math.abs(rocVal - mom) > 0.15) {
+  if (rocVal != null && rocVal !== mom) {
     dq += 0.1;
-    if (rocVal > mildPct * 2) score += 6;
-    else if (rocVal < -mildPct * 2) score -= 6;
+    if (rocVal > 2) score += 6;
+    else if (rocVal < -2) score -= 6;
   }
 
   if (m?.hist != null && !m.insufficient) {
@@ -447,12 +364,13 @@ export function strategyMomentum(shared) {
   if (volA?.available) {
     dq += 0.15;
     if (volA.spike) {
+      // volume confirms momentum direction
       if (score > 55) {
         score += 8;
-        reasoning.push('حجم بالا — تأیید مومنتوم صعودی');
+        reasoning.push('حجم بالا تأیید مومنتوم صعودی');
       } else if (score < 45) {
         score -= 8;
-        reasoning.push('حجم بالا — تأیید مومنتوم نزولی');
+        reasoning.push('حجم بالا تأیید مومنتوم نزولی');
       }
     } else if (volA.weak) {
       score = score * 0.85 + 50 * 0.15;
@@ -481,28 +399,22 @@ export function strategyMomentum(shared) {
 // ─── Strategy 4: Breakout (S/R + ATR + Volume + Confirmation) ────────────────
 export function strategyBreakout(shared) {
   const id = 'breakout';
-  const name = 'شکست سطح';
+  const name = 'Breakout';
   if (!shared.ok) return emptyStrategy(id, name);
 
   const { price, brk, sr, volA, a, volPct } = shared;
-  const adv = shared.adv?.breakout || DEFAULT_ADV_SETTINGS.breakout;
   const reasoning = [];
   let score = 50;
   let dq = 0.35;
-  const nearSr = adv.nearSrPct != null ? adv.nearSrPct : 0.08;
-  const volBonus = adv.volConfirmBonus != null ? adv.volConfirmBonus : 12;
 
   if (brk) {
     dq += 0.2;
-    const strengthBoost = Math.round((brk.strength || 0) * 8);
     if (brk.up) {
-      score += 18 + strengthBoost;
-      const lvl = brk.level != null ? brk.level.toFixed(2) : '—';
-      reasoning.push(`شکست صعودی تأییدشده با بسته شدن بدنه بالای مقاومت (${lvl})`);
+      score += 20;
+      reasoning.push('شکست صعودی از مقاومت اخیر');
     } else if (brk.down) {
-      score -= (18 + strengthBoost);
-      const lvl = brk.level != null ? brk.level.toFixed(2) : '—';
-      reasoning.push(`شکست نزولی تأییدشده با بسته شدن بدنه زیر حمایت (${lvl})`);
+      score -= 20;
+      reasoning.push('شکست نزولی از حمایت اخیر');
     }
   }
 
@@ -510,10 +422,10 @@ export function strategyBreakout(shared) {
     dq += 0.15;
     const range = sr.resistance - sr.support;
     const pos = range > 0 ? (price - sr.support) / range : 0.5;
-    if (pos > (1 - nearSr)) {
+    if (pos > 0.92) {
       score += 8;
       reasoning.push('قیمت نزدیک مقاومت — آمادگی شکست صعودی');
-    } else if (pos < nearSr) {
+    } else if (pos < 0.08) {
       score -= 8;
       reasoning.push('قیمت نزدیک حمایت — آمادگی شکست نزولی');
     }
@@ -522,22 +434,18 @@ export function strategyBreakout(shared) {
   if (volA?.available) {
     dq += 0.2;
     if (volA.spike && (brk?.up || brk?.down)) {
-      score = score > 50 ? score + volBonus : score - volBonus;
-      reasoning.push('حجم بالا — تأیید شکست واقعی');
+      score = score > 50 ? score + 12 : score - 12;
+      reasoning.push('حجم بالا تأیید شکست');
     } else if (volA.weak && (brk?.up || brk?.down)) {
-      // Strong penalty for volume-less break (false breakout filter)
-      score = score * 0.55 + 50 * 0.45;
-      reasoning.push('حجم ضعیف — احتمال شکست جعلی (فیک بریک‌اوت)');
-    } else if (!volA.spike && (brk?.up || brk?.down)) {
-      score = score * 0.85 + 50 * 0.15;
-      reasoning.push('حجم متوسط — شکست نیاز به تأیید بیشتر دارد');
+      score = score * 0.7 + 50 * 0.3;
+      reasoning.push('حجم ضعیف — شکست مشکوک (false breakout؟)');
     }
   }
 
   // ATR expansion supports genuine breakout
   if (volPct != null && volPct > CONFIG.highVolPct * 0.8 && (brk?.up || brk?.down)) {
     score = score > 50 ? Math.min(100, score + 6) : Math.max(0, score - 6);
-    reasoning.push('نوسان بالا همراه شکست — اعتبار بیشتر');
+    reasoning.push('نوسان بالا همراه شکست');
   }
 
   score = clamp(Math.round(score));
@@ -561,57 +469,50 @@ export function strategyBreakout(shared) {
 // ─── Strategy 5: Fibonacci / Market Structure ────────────────────────────────
 export function strategyFibStructure(shared) {
   const id = 'fibStructure';
-  const name = 'فیبوناچی / ساختار';
+  const name = 'Fibonacci / Structure';
   if (!shared.ok) return emptyStrategy(id, name);
 
   const { price, fib, sr, a, volPct } = shared;
-  const adv = shared.adv?.fib || DEFAULT_ADV_SETTINGS.fib;
   const reasoning = [];
   let score = 50;
   let dq = 0.35;
-  const nearScore = adv.nearScore != null ? adv.nearScore : 18;
-  const structScore = adv.structureScore != null ? adv.structureScore : 12;
 
   if (fib?.ok && !fib.insufficient) {
     dq += 0.3;
     if (fib.nearest?.near) {
-      const lvlLabel = fib.nearest.level;
-      const kindFa = fib.nearest.kind === 'ext' ? 'اکستنشن' : 'ریتریسمنت';
       if (fib.bias === 'bull') {
-        score += nearScore;
-        reasoning.push(`نزدیک سطح فیبوناچی ${kindFa} ${lvlLabel} — بایاس صعودی (احتمال برگشت/ادامه صعودی)`);
+        score += 18;
+        reasoning.push(`نزدیک سطح فیبوناچی ${fib.nearest.level} (بایاس صعودی)`);
       } else if (fib.bias === 'bear') {
-        score -= nearScore;
-        reasoning.push(`نزدیک سطح فیبوناچی ${kindFa} ${lvlLabel} — بایاس نزولی (احتمال برگشت/ادامه نزولی)`);
+        score -= 18;
+        reasoning.push(`نزدیک سطح فیبوناچی ${fib.nearest.level} (بایاس نزولی)`);
       } else {
-        reasoning.push(`نزدیک سطح فیبوناچی ${kindFa} ${lvlLabel} — بدون بایاس قوی`);
+        reasoning.push(`نزدیک سطح فیبوناچی ${fib.nearest.level}`);
       }
-    } else if (fib.nearest) {
-      reasoning.push(`نزدیک‌ترین سطح فیب: ${fib.nearest.level} (فاصله ${fib.nearest.distancePct?.toFixed(2) ?? '—'}٪)`);
     }
     if (fib.upSwing) {
       score += 4;
-      reasoning.push('ساختار سوئینگ صعودی (کف قبل از سقف در بازه)');
+      reasoning.push('ساختار سوئینگ صعودی');
     } else {
       score -= 4;
-      reasoning.push('ساختار سوئینگ نزولی (سقف قبل از کف در بازه)');
+      reasoning.push('ساختار سوئینگ نزولی');
     }
   }
 
-  if (sr?.support != null && isNum(price) && price > 0) {
+  if (sr?.support != null && price > 0) {
     dq += 0.15;
     const distSup = (price - sr.support) / price;
     if (distSup < 0.015) {
-      score += structScore;
-      reasoning.push('نزدیک حمایت ساختاری — احتمال حمایت');
+      score += 12;
+      reasoning.push('نزدیک حمایت ساختاری');
     }
   }
-  if (sr?.resistance != null && isNum(price) && price > 0) {
+  if (sr?.resistance != null && price > 0) {
     dq += 0.1;
     const distRes = (sr.resistance - price) / price;
     if (distRes < 0.015) {
-      score -= structScore;
-      reasoning.push('نزدیک مقاومت ساختاری — احتمال مقاومت');
+      score -= 12;
+      reasoning.push('نزدیک مقاومت ساختاری');
     }
   }
 
@@ -636,16 +537,36 @@ export function strategyFibStructure(shared) {
 // ─── Strategy 6: Fundamental / Macro (only if valid data) ────────────────────
 export function strategyFundamental(symbol, fundSnapshot, asOfTs = null) {
   const id = 'fundamental';
-  const name = 'فاندامنتال / کلان';
+  const name = 'Fundamental / Macro';
   const empty = emptyStrategy(id, name);
+
+  // Pipeline must pass an explicit snapshot when toggle is ON.
+  // null / undefined → strategy inactive (no silent store load).
+  if (fundSnapshot == null || (typeof fundSnapshot === 'object' && !Object.keys(fundSnapshot).length)) {
+    return {
+      ...empty,
+      reasoning: ['فاندامنتال غیرفعال یا بدون داده ورودی'],
+      dataQuality: 0.1,
+      active: false
+    };
+  }
 
   // Filter snapshot by timestamp if provided (no look-ahead)
   let snap = fundSnapshot;
-  if (snap && asOfTs != null && typeof asOfTs === 'number') {
+  if (asOfTs != null && typeof asOfTs === 'number') {
     snap = filterFundByTimestamp(snap, asOfTs);
+    if (!snap || !Object.keys(snap).length) {
+      return {
+        ...empty,
+        reasoning: ['داده فاندامنتال در افق زمانی as-of موجود نیست'],
+        dataQuality: 0.1,
+        active: false
+      };
+    }
   }
 
-  const fund = runFundamental(symbol, snap || null);
+  // Pass explicit snapshot only — never fall back to store inside strategy
+  const fund = runFundamental(symbol, snap, { allowStore: false });
   if (!fund.ok || fund.score == null) {
     return {
       ...empty,
@@ -657,16 +578,29 @@ export function strategyFundamental(symbol, fundSnapshot, asOfTs = null) {
 
   const score = clamp(Math.round(fund.score));
   const signal = scoreToSignal(score);
-  const dq = fund.coverage != null ? clamp01(fund.coverage) : 0.5;
+  const dq = fund.coverage != null
+    ? clamp01(fund.coverage * (fund.confidence != null ? 0.5 + 0.5 * fund.confidence : 1))
+    : 0.5;
   const conf = confFromConviction(score, dq);
-  const reasoning = (fund.factors || []).map(f => f.text || f).slice(0, 5);
+  const reasoning = (fund.factors || [])
+    .slice()
+    .sort((a, b) => Math.abs(b.contribution || 0) - Math.abs(a.contribution || 0))
+    .slice(0, 5)
+    .map(f => {
+      if (typeof f === 'string') return f;
+      const dirFa = f.dir === 'bull' ? 'مثبت' : f.dir === 'bear' ? 'منفی' : 'خنثی';
+      const z = f.surpriseZ != null ? ` Z=${f.surpriseZ}` : '';
+      return `${f.nameFa || f.key}: ${dirFa}${z}`;
+    });
   if (!reasoning.length) {
     reasoning.push(`امتیاز فاندامنتال: ${score} (${fund.outlook || 'neutral'})`);
+  } else {
+    reasoning.unshift(`امتیاز ${score} · ${fund.outlook || 'neutral'} · اطمینان ${Math.round((fund.confidence || 0) * 100)}٪`);
   }
 
   return {
     id, name, signal, score, confidence: conf,
-    target: null, stop: null, rr: null, // levels set by structure strategies
+    target: null, stop: null, rr: null,
     reasoning, dataQuality: dq, active: true,
     outlook: fund.outlook
   };
@@ -719,7 +653,7 @@ export function runAllStrategies(candles, options = {}) {
     strategyFundamental(
       options.symbol,
       options.fundamentalSnapshot,
-      options.asOfTs ?? null
+      options.fundAsOfTs ?? options.asOfTs ?? null
     )
   ];
 
