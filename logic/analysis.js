@@ -192,7 +192,10 @@ export function analyze(candles, options = {}) {
     horizonBars: options.horizonBars,
     asOfTs,
     seriesMap: options.seriesMap || null,
-    calendarEvents: options.calendarEvents
+    calendarEvents: options.calendarEvents,
+    fundWeightMult: options.fundWeightMult,
+    fundMinCoverage: options.fundMinCoverage,
+    fundSensitivity: options.fundSensitivity
   });
   if (result.ok && options.recordPrediction !== false && options.symbol) {
     try {

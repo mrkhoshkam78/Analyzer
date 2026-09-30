@@ -120,7 +120,7 @@ function buildSuggestion(signal, riskLevel, tech, confidence, regime, entry, fun
   return parts.join(' ');
 }
 
-function ensembleStrategies(strategies, regimeInfo, riskScore, learningMult, context, mtf) {
+function ensembleStrategies(strategies, regimeInfo, riskScore, learningMult, context, mtf, fundOpts = {}) {
   const regimeWeights = regimeInfo.weights || {};
   const active = strategies.filter(s => s.active !== false);
   if (!active.length) {
@@ -132,6 +132,8 @@ function ensembleStrategies(strategies, regimeInfo, riskScore, learningMult, con
   const sessionLiq = context?.session?.liquidity || 'normal';
   const mtfAgree = mtf?.agreement ?? 0.5;
   const mtfConflict = mtf?.htfLtfConflict === true;
+  // Advanced fund blend: relative weight of fundamental strategy (default 1.0)
+  const fundWeightMult = Number.isFinite(fundOpts.fundWeightMult) ? Math.max(0, Math.min(3, fundOpts.fundWeightMult)) : 1;
 
   // Session relevance: neutral unless backtest stats exist (data-driven placeholder = 1.0)
   const sessionMult = 1.0;
@@ -142,6 +144,7 @@ function ensembleStrategies(strategies, regimeInfo, riskScore, learningMult, con
 
   for (const s of active) {
     let rw = regimeWeights[s.id] != null ? regimeWeights[s.id] : 1;
+    if (s.id === 'fundamental') rw *= fundWeightMult;
     // Event risk dampens directional strategies more than mean-reversion in reaction
     if (eventRisk >= 0.55 && (s.id === 'breakout' || s.id === 'momentum')) rw *= (1 - eventRisk * 0.35);
     if (mtfConflict && (s.id === 'trendFollowing' || s.id === 'momentum')) rw *= 0.75;
@@ -322,7 +325,18 @@ export function runDecision(candles, options = {}) {
   const learning = getLearningAdjustment(symbol);
   const histAcc = getAccuracy(symbol);
 
-  const ens = ensembleStrategies(strategies, regimeInfo, riskScore, learning.multiplier, context, mtf);
+  const fundOpts = {
+    fundWeightMult: options.fundWeightMult != null ? options.fundWeightMult : 1,
+    fundMinCoverage: options.fundMinCoverage
+  };
+  // Drop fund strategy if coverage below advanced minimum
+  let stratForEns = strategies;
+  if (fundEnabled && fund.coverage != null && fundOpts.fundMinCoverage != null) {
+    if (fund.coverage < fundOpts.fundMinCoverage) {
+      stratForEns = strategies.map(s => s.id === 'fundamental' ? { ...s, active: false } : s);
+    }
+  }
+  const ens = ensembleStrategies(stratForEns, regimeInfo, riskScore, learning.multiplier, context, mtf, fundOpts);
 
   const price = ind.price;
   const support = ind.support;
