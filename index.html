@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="تحلیل‌گر بازار آفلاین — Zen Calm Stillness · Vector Soft · Terminal Glass">
-  <title>تحلیل‌گر بازار · v10.0.4</title>
+  <title>تحلیل‌گر بازار · v11.0.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -109,7 +109,7 @@
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
           </button>
           <div class="brand-copy">
-            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v10.0.3</span></h1>
+            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v11.0.0</span></h1>
           </div>
         </div>
         <div class="header-center" id="headerAssetSlot">
@@ -156,6 +156,18 @@
               <option value="4H">۴ ساعت</option>
               <option value="1D" selected>روزانه</option>
               <option value="1W">هفتگی</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="sessionSelect">سشن معاملاتی</label>
+            <select id="sessionSelect" class="input" title="سشن بر اساس استاندارد FX (UTC)">
+              <option value="auto" selected>خودکار (بر اساس زمان)</option>
+              <option value="Asia">آسیا (توکیو)</option>
+              <option value="London">لندن</option>
+              <option value="New York">نیویورک</option>
+              <option value="London-New York Overlap">هم‌پوشانی لندن–نیویورک</option>
+              <option value="Sydney">سیدنی</option>
+              <option value="Off-hours">خارج از سشن</option>
             </select>
           </div>
           <div class="field">
@@ -225,7 +237,13 @@
             <button type="submit" class="btn btn-primary">ذخیره قیمت</button>
           </div>
         </form>
-        <div id="manualList" class="manual-list"></div>
+        <div class="manual-collapse-wrap">
+          <button type="button" class="collapse-toggle" id="manualToggle" aria-expanded="true" aria-controls="manualList">
+            <span class="manual-toggle-label">رکوردهای دستی</span>
+            <span class="collapse-chevron" aria-hidden="true">▼</span>
+          </button>
+          <div id="manualList" class="manual-list collapse-body"></div>
+        </div>
       </section>
 
       <!-- داده تاریخی -->
@@ -303,13 +321,37 @@
           <div class="score-chip">اطمینان <strong id="confVal">—</strong></div>
         </div>
 
-        <div class="metrics-grid">
-          <div class="metric"><span class="metric-k">روند</span><span class="metric-v" id="trend">—</span></div>
-          <div class="metric"><span class="metric-k">ریسک</span><span class="metric-v" id="risk">—</span></div>
-          <div class="metric metric-sup"><span class="metric-k">حمایت</span><span class="metric-v mono" id="support">—</span></div>
-          <div class="metric metric-res"><span class="metric-k">مقاومت</span><span class="metric-v mono" id="resistance">—</span></div>
-          <div class="metric metric-tgt"><span class="metric-k">هدف</span><span class="metric-v mono" id="target">—</span></div>
-          <div class="metric metric-sl"><span class="metric-k">حد ضرر</span><span class="metric-v mono" id="stop">—</span></div>
+        <div class="metrics-grid metrics-grid-v11">
+          <div class="metric metric-trend" data-metric="trend">
+            <span class="metric-icon" aria-hidden="true">↗</span>
+            <span class="metric-k">روند</span>
+            <span class="metric-v" id="trend">—</span>
+          </div>
+          <div class="metric metric-risk" data-metric="risk">
+            <span class="metric-icon" aria-hidden="true">⚠</span>
+            <span class="metric-k">ریسک</span>
+            <span class="metric-v" id="risk">—</span>
+          </div>
+          <div class="metric metric-sup" data-metric="support">
+            <span class="metric-icon" aria-hidden="true">▼</span>
+            <span class="metric-k">حمایت</span>
+            <span class="metric-v mono" id="support">—</span>
+          </div>
+          <div class="metric metric-res" data-metric="resistance">
+            <span class="metric-icon" aria-hidden="true">▲</span>
+            <span class="metric-k">مقاومت</span>
+            <span class="metric-v mono" id="resistance">—</span>
+          </div>
+          <div class="metric metric-tgt" data-metric="target">
+            <span class="metric-icon" aria-hidden="true">◎</span>
+            <span class="metric-k">هدف</span>
+            <span class="metric-v mono" id="target">—</span>
+          </div>
+          <div class="metric metric-sl" data-metric="stop">
+            <span class="metric-icon" aria-hidden="true">⊗</span>
+            <span class="metric-k">حد ضرر</span>
+            <span class="metric-v mono" id="stop">—</span>
+          </div>
         </div>
 
         <div id="ensembleBox" class="ensemble-box" hidden></div>

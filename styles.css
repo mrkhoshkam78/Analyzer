@@ -3720,3 +3720,164 @@ html[data-skin="zen-calm"] .zen-deco img {
 html[data-skin="zen-calm"][data-theme="light"] .zen-deco {
   opacity: 0.14;
 }
+
+/* ─── v11.0.0 Metric cards upgrade ─────────────────────────────────────── */
+.metrics-grid-v11 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+.metrics-grid-v11 .metric {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.85rem 0.9rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  background: var(--card-bg, rgba(34, 39, 49, 0.85));
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  animation: metricPop 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.metrics-grid-v11 .metric:nth-child(1) { animation-delay: 0.04s; }
+.metrics-grid-v11 .metric:nth-child(2) { animation-delay: 0.08s; }
+.metrics-grid-v11 .metric:nth-child(3) { animation-delay: 0.12s; }
+.metrics-grid-v11 .metric:nth-child(4) { animation-delay: 0.16s; }
+.metrics-grid-v11 .metric:nth-child(5) { animation-delay: 0.2s; }
+.metrics-grid-v11 .metric:nth-child(6) { animation-delay: 0.24s; }
+.metrics-grid-v11 .metric:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+.metrics-grid-v11 .metric-icon {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.65rem;
+  font-size: 0.85rem;
+  opacity: 0.45;
+  line-height: 1;
+}
+html[dir="rtl"] .metrics-grid-v11 .metric-icon {
+  left: auto;
+  right: 0.65rem;
+}
+.metrics-grid-v11 .metric-k {
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  opacity: 0.7;
+  font-weight: 500;
+}
+.metrics-grid-v11 .metric-v {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.metrics-grid-v11 .metric-trend {
+  border-color: rgba(255, 157, 69, 0.25);
+  background: linear-gradient(145deg, rgba(255,157,69,0.08), transparent 60%);
+}
+.metrics-grid-v11 .metric-risk {
+  border-color: rgba(255, 100, 100, 0.22);
+  background: linear-gradient(145deg, rgba(255,100,100,0.07), transparent 60%);
+}
+.metrics-grid-v11 .metric-sup {
+  border-color: rgba(80, 200, 140, 0.28);
+  background: linear-gradient(145deg, rgba(80,200,140,0.1), transparent 60%);
+}
+.metrics-grid-v11 .metric-res {
+  border-color: rgba(255, 120, 90, 0.28);
+  background: linear-gradient(145deg, rgba(255,120,90,0.1), transparent 60%);
+}
+.metrics-grid-v11 .metric-tgt {
+  border-color: rgba(100, 180, 255, 0.28);
+  background: linear-gradient(145deg, rgba(100,180,255,0.1), transparent 60%);
+}
+.metrics-grid-v11 .metric-sl {
+  border-color: rgba(220, 80, 100, 0.28);
+  background: linear-gradient(145deg, rgba(220,80,100,0.1), transparent 60%);
+}
+
+/* Manual records collapse */
+.manual-collapse-wrap {
+  margin-top: 0.75rem;
+}
+.manual-collapse-wrap .collapse-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 10px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.manual-collapse-wrap .manual-toggle-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+.manual-collapse-wrap .manual-list.collapse-body[hidden] {
+  display: none !important;
+}
+.manual-collapse-wrap .manual-list:not([hidden]) {
+  margin-top: 0.5rem;
+  animation: slideFadeIn 0.35s ease both;
+}
+
+/* ─── v11.0.0 New animations (5) ───────────────────────────────────────── */
+@keyframes metricPop {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes slideFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes softGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 157, 69, 0); }
+  50% { box-shadow: 0 0 18px 2px rgba(255, 157, 69, 0.22); }
+}
+@keyframes signalPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+@keyframes shimmerLine {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.anim-in {
+  animation: slideFadeIn 0.4s ease both;
+}
+.signal-value.signal-buy,
+.signal-value.signal-sell {
+  animation: signalPulse 2.2s ease-in-out infinite;
+}
+.score-bar i {
+  background-size: 200% 100%;
+  animation: shimmerLine 2.8s linear infinite;
+}
+.ver-badge {
+  animation: softGlow 3.5s ease-in-out infinite;
+}
+.card.card-focus {
+  animation: metricPop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .metrics-grid-v11 .metric,
+  .anim-in,
+  .signal-value.signal-buy,
+  .signal-value.signal-sell,
+  .score-bar i,
+  .ver-badge,
+  .card.card-focus,
+  .manual-collapse-wrap .manual-list {
+    animation: none !important;
+  }
+}
