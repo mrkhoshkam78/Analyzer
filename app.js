@@ -46,12 +46,22 @@ function tickClock() {
 
 function toast(msg, kind = 'ok') {
   const el = $('toast');
-  if (!el) return;
+  if (!el) {
+    try { console.log('[toast]', kind, msg); } catch (_) {}
+    return;
+  }
   el.hidden = false;
-  el.textContent = msg;
-  el.className = 'toast show is-' + kind;
+  el.removeAttribute('hidden');
+  el.textContent = String(msg || '');
+  el.className = 'toast show is-' + (kind === 'err' ? 'err' : 'ok');
+  el.style.opacity = '1';
+  el.style.pointerEvents = 'auto';
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => { el.classList.remove('show'); setTimeout(() => { el.hidden = true; }, 250); }, 2800);
+  const ms = kind === 'err' ? 4200 : 3200;
+  toast._t = setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => { el.hidden = true; el.style.opacity = ''; }, 280);
+  }, ms);
 }
 
 function setHeaderData(text) {
@@ -2090,31 +2100,46 @@ init();
 
 /* ── Fundamental offline form (v11.2) — inline list + advanced blend ── */
 const FUND_ADV_KEY = 'oma_v11_fund_adv';
+const FUND_ADV_VER_KEY = 'oma_v11_fund_adv_ver';
+const FUND_ADV_VER = 2; // bump forces professional defaults once
 
 function getFundAdvancedSettings() {
+  // Professional defaults (macro/data-analyst style blend)
   const def = { blendPct: 38, sensitivity: 115, minCoveragePct: 20, requireActual: true };
   try {
+    const ver = Number(localStorage.getItem(FUND_ADV_VER_KEY) || 0);
+    if (ver < FUND_ADV_VER) {
+      localStorage.setItem(FUND_ADV_KEY, JSON.stringify(def));
+      localStorage.setItem(FUND_ADV_VER_KEY, String(FUND_ADV_VER));
+    }
     const raw = localStorage.getItem(FUND_ADV_KEY);
-    if (!raw) return {
-      blendPct: def.blendPct,
-      sensitivity: def.sensitivity,
-      minCoveragePct: def.minCoveragePct,
-      requireActual: def.requireActual,
-      weightMult: def.blendPct / 30,
-      minCoverage: def.minCoveragePct / 100
-    };
+    if (!raw) {
+      localStorage.setItem(FUND_ADV_KEY, JSON.stringify(def));
+      localStorage.setItem(FUND_ADV_VER_KEY, String(FUND_ADV_VER));
+      return {
+        ...def,
+        weightMult: def.blendPct / 30,
+        minCoverage: def.minCoveragePct / 100
+      };
+    }
     const o = JSON.parse(raw);
-    const blendPct = Math.max(0, Math.min(70, Number(o.blendPct) || 30));
-    const sensitivity = Math.max(50, Math.min(150, Number(o.sensitivity) || 100));
-    const minCoveragePct = Math.max(10, Math.min(80, Number(o.minCoveragePct) || 25));
+    const blendPct = Math.max(0, Math.min(70, Number(o.blendPct)));
+    const sensitivity = Math.max(50, Math.min(150, Number(o.sensitivity)));
+    const minCoveragePct = Math.max(10, Math.min(80, Number(o.minCoveragePct)));
     const requireActual = o.requireActual !== false;
+    const safe = {
+      blendPct: Number.isFinite(blendPct) ? blendPct : def.blendPct,
+      sensitivity: Number.isFinite(sensitivity) ? sensitivity : def.sensitivity,
+      minCoveragePct: Number.isFinite(minCoveragePct) ? minCoveragePct : def.minCoveragePct,
+      requireActual
+    };
     return {
-      blendPct, sensitivity, minCoveragePct, requireActual,
-      weightMult: blendPct / 30,
-      minCoverage: minCoveragePct / 100
+      ...safe,
+      weightMult: safe.blendPct / 30,
+      minCoverage: safe.minCoveragePct / 100
     };
   } catch {
-    return { ...def, weightMult: 1, minCoverage: 0.25 };
+    return { ...def, weightMult: def.blendPct / 30, minCoverage: def.minCoveragePct / 100 };
   }
 }
 
@@ -2204,23 +2229,36 @@ async function refreshFundEditableList() {
         payload[inp.dataset.f] = inp.value;
       });
       const symSave = activeFundSymbol();
+      if (!symSave) {
+        toast('ابتدا نماد را انتخاب کنید', 'err');
+        return;
+      }
       const res = mod2.upsertFundamentalVar(symSave, varId, payload);
       const msg = $('fundFormMsg');
       const label = row.querySelector('.fund-row-name')?.textContent || varId;
       if (res.ok) {
-        // Verify persisted in store
         const stored = mod2.getFundamentalData(symSave) || {};
-        const okPersist = stored[varId] && (
-          (payload.actual === '' || payload.actual == null || Number(stored[varId].actual) === Number(payload.actual)) ||
-          stored[varId].updatedAt
-        );
-        if (msg) msg.textContent = okPersist
-          ? `ذخیره شد: ${label} (${symSave})`
-          : `هشدار: ذخیره ${label} ممکن است در localStorage ثبت نشده باشد.`;
-        toast(okPersist ? `بنیادی ذخیره شد — ${label}` : `خطا در ذخیره‌سازی ${label}`, okPersist ? 'ok' : 'err');
-        refreshFundSummaryOnly();
+        const rec = stored[varId];
+        const okPersist = !!(rec && rec.updatedAt);
+        // Mirror key for debugging / recovery
+        try {
+          localStorage.setItem('oma_fund_last_save', JSON.stringify({
+            symbol: symSave, varId, at: Date.now(), record: rec || res.record
+          }));
+        } catch (_) {}
+        if (msg) {
+          msg.textContent = okPersist
+            ? `✓ ذخیره شد: ${label} · ${symSave}`
+            : `هشدار: ${label} در حافظه تأیید نشد`;
+          msg.className = 'status-line ' + (okPersist ? 'is-ok' : 'is-err');
+        }
+        toast(okPersist ? `ذخیره بنیادی: ${label}` : `خطا در ذخیره ${label}`, okPersist ? 'ok' : 'err');
+        if (okPersist) await refreshFundSummaryOnly();
       } else {
-        if (msg) msg.textContent = res.error || 'خطا';
+        if (msg) {
+          msg.textContent = res.error || 'خطا در ذخیره';
+          msg.className = 'status-line is-err';
+        }
         toast(res.error || 'ذخیره بنیادی ناموفق', 'err');
       }
     });
@@ -2574,7 +2612,13 @@ function renderForecastChart(symbolId, result) {
   }
 
   const conf = Number.isFinite(result?.confidence) ? result.confidence : 0.5;
-  const nFuture = !result ? 0 : (conf >= 0.65 ? 4 : conf >= 0.4 ? 3 : 2);
+  // Always show forecast path after analysis (min 3 bars when signal exists)
+  let nFuture = 0;
+  if (result && result.ok !== false) {
+    if (result.signal === 'HOLD' && conf < 0.35) nFuture = 2;
+    else if (conf >= 0.65) nFuture = 4;
+    else nFuture = 3;
+  }
   const built = buildForecastCandles(hist, result, nFuture);
   const future = built.future || [];
   const all = hist.concat(future);
@@ -2583,16 +2627,22 @@ function renderForecastChart(symbolId, result) {
   const showVolume = $('chartShowVolume')?.checked !== false;
   const showCrosshair = $('chartShowCrosshair')?.checked !== false;
 
-  const slotPx = 14;
-  const pad = { t: 18, r: 18, b: showDates ? 32 : 22, l: 58 };
+  const slotPx = 18; // wider candles — easier to see forecast bars
+  const pad = { t: 18, r: 24, b: showDates ? 36 : 24, l: 58 };
   const cssH = 380;
-  const minW = (scroll?.clientWidth || 900);
-  const cssW = Math.max(minW, all.length * slotPx + pad.l + pad.r);
-  const dpr = window.devicePixelRatio || 1;
+  const minW = Math.max(320, (scroll?.clientWidth || window.innerWidth || 900) - 8);
+  const cssW = Math.max(minW, Math.ceil(all.length * slotPx + pad.l + pad.r + 40));
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.style.width = cssW + 'px';
   canvas.style.height = cssH + 'px';
+  canvas.style.maxWidth = 'none';
+  canvas.setAttribute('width', String(Math.floor(cssW * dpr)));
+  canvas.setAttribute('height', String(Math.floor(cssH * dpr)));
   canvas.width = Math.floor(cssW * dpr);
   canvas.height = Math.floor(cssH * dpr);
+  if (scroll) {
+    scroll.style.overflowX = 'auto';
+  }
 
   __chartState = {
     canvas, cssW, cssH, pad, hist, future, all, result, tf,
@@ -2610,9 +2660,11 @@ function renderForecastChart(symbolId, result) {
 
   // scroll to show last hist + forecast
   if (scroll) {
-    requestAnimationFrame(() => {
+    const jump = () => {
       scroll.scrollLeft = Math.max(0, scroll.scrollWidth - scroll.clientWidth);
-    });
+    };
+    requestAnimationFrame(() => { jump(); requestAnimationFrame(jump); });
+    setTimeout(jump, 50);
   }
 
   // pulse animation — full redraw (fixes previous overlay bug)

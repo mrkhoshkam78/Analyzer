@@ -3488,16 +3488,16 @@ html[data-skin="zen-calm"] .card.anim-in {
 /* ── Forecast chart card ── */
 .chart-card { margin-top: 1rem; }
 .chart-wrap {
-  width: 100%;
-  overflow: hidden;
+  /* width/overflow controlled by .chart-scroll child rules — do not clip */
   border-radius: 12px;
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--bg) 70%, var(--card));
 }
 #forecastChart {
   display: block;
-  width: 100%;
-  height: 360px;
+  /* width set inline by JS for horizontal scroll */
+  height: 380px;
+  max-width: none;
 }
 .chart-legend {
   display: flex;
@@ -3548,22 +3548,32 @@ html[data-skin="zen-calm"] .chart-wrap {
 }
 .chart-scroll {
   width: 100%;
-  overflow-x: auto;
+  max-width: 100%;
+  overflow-x: auto !important;
   overflow-y: hidden;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--bg) 70%, var(--card));
   -webkit-overflow-scrolling: touch;
-  scrollbar-color: color-mix(in srgb, var(--primary, #5b8def) 50%, transparent) transparent;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary, #5b8def) 55%, transparent) transparent;
 }
 .chart-scroll .chart-wrap {
   position: relative;
-  border: 0;
+  display: inline-block;
+  border: 0 !important;
   border-radius: 0;
   min-width: 100%;
-  width: max-content;
+  width: max-content !important;
+  max-width: none !important;
+  overflow: visible !important;
 }
-#forecastChart { display: block; height: 380px; }
+.chart-scroll #forecastChart {
+  display: block;
+  height: 380px;
+  width: auto !important;
+  max-width: none !important;
+}
 .chart-tooltip {
   position: absolute;
   z-index: 5;
