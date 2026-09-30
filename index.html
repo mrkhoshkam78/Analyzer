@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl" data-theme="dark" data-skin="terminal-glass">
+<html lang="fa" dir="rtl" data-theme="dark" data-skin="zen-calm">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="تحلیل‌گر بازار آفلاین — Vector Soft Obsidian Editorial · Terminal Glass">
-  <title>تحلیل‌گر بازار · v10.0.3</title>
+  <meta name="description" content="تحلیل‌گر بازار آفلاین — Zen Calm Stillness · Vector Soft · Terminal Glass">
+  <title>تحلیل‌گر بازار · v10.0.4</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -14,14 +14,14 @@
       try {
         var t = localStorage.getItem('oma_theme');
         document.documentElement.setAttribute('data-theme', (t === 'light' || t === 'dark') ? t : 'dark');
-        var skin = localStorage.getItem('oma_skin') || 'terminal-glass';
+        var skin = localStorage.getItem('oma_skin') || 'zen-calm';
         document.documentElement.setAttribute('data-skin', skin);
         var lang = localStorage.getItem('oma_lang') || 'fa';
         document.documentElement.setAttribute('lang', lang);
         document.documentElement.setAttribute('dir', lang === 'en' ? 'ltr' : 'rtl');
       } catch (e) {
         document.documentElement.setAttribute('data-theme', 'dark');
-        document.documentElement.setAttribute('data-skin', 'terminal-glass');
+        document.documentElement.setAttribute('data-skin', 'zen-calm');
       }
     })();
   </script>
@@ -554,8 +554,12 @@
                 <input type="radio" name="setSkin" value="vector-soft" id="setSkinVs">
                 <span>Vector Soft — Obsidian Editorial</span>
               </label>
+              <label class="settings-option">
+                <input type="radio" name="setSkin" value="zen-calm" id="setSkinZc" checked>
+                <span>Zen Calm — Stillness</span>
+              </label>
             </div>
-            <p class="hint">پوستهٔ فعلی: <strong id="skinNameLabel">Terminal Glass</strong></p>
+            <p class="hint">پوستهٔ فعلی: <strong id="skinNameLabel">Zen Calm — Stillness</strong></p>
           </div>
         </div>
       </section>

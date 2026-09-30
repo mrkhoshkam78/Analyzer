@@ -1066,7 +1066,7 @@ function syncSettingsUI() {
   document.querySelectorAll('input[name="setSkin"]').forEach(r => {
     r.checked = (r.value === skin);
   });
-  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft — Obsidian Editorial' };
+  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft — Obsidian Editorial', 'zen-calm': 'Zen Calm — Stillness' };
   if ($('skinNameLabel')) $('skinNameLabel').textContent = names[skin] || skin;
   if ($('footerSkinLabel')) $('footerSkinLabel').textContent = `پوسته ${names[skin] || skin} · داده محلی`;
 }
@@ -1082,13 +1082,14 @@ function applyLang(lang) {
 }
 
 function applySkin(skin) {
-  const s = skin === 'vector-soft' ? 'vector-soft' : 'terminal-glass';
+  const allowed = ['terminal-glass', 'vector-soft', 'zen-calm'];
+  const s = allowed.includes(skin) ? skin : 'terminal-glass';
   document.documentElement.setAttribute('data-skin', s);
   // ensure theme+skin combo attributes stay in sync for CSS selectors
   const theme = document.documentElement.getAttribute('data-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', theme);
   try { localStorage.setItem('oma_skin', s); } catch (_) {}
-  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft — Obsidian Editorial' };
+  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft — Obsidian Editorial', 'zen-calm': 'Zen Calm — Stillness' };
   if ($('skinNameLabel')) $('skinNameLabel').textContent = names[s] || s;
   if ($('footerSkinLabel')) $('footerSkinLabel').textContent = `پوسته ${names[s] || s} · داده محلی`;
   // force repaint so CSS variables apply immediately
