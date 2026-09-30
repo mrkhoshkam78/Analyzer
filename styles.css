@@ -3327,11 +3327,26 @@ html[data-skin="zen-calm"] body {
 }
 
 html[data-skin="zen-calm"] .bg-layer {
-  background:
-    radial-gradient(ellipse 90% 60% at 15% -5%, rgba(212, 180, 131, 0.12), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 95% 85%, rgba(90, 110, 95, 0.25), transparent 50%),
-    linear-gradient(165deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 88%, #3D4A40) 100%);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 15% -5%, rgba(212, 180, 131, 0.16), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 95% 85%, rgba(90, 110, 95, 0.22), transparent 50%),
+    linear-gradient(165deg, color-mix(in srgb, var(--bg) 85%, transparent) 0%, color-mix(in srgb, var(--bg) 70%, #3D4A40) 100%),
+    url("assets/zen/soft-sage-bg.jpg");
+  background-size: auto, auto, auto, cover;
+  background-position: center, center, center, center;
+  background-repeat: no-repeat;
+  background-blend-mode: normal, normal, normal, soft-light;
   opacity: 1;
+}
+html[data-skin="zen-calm"][data-theme="light"] .bg-layer {
+  background-image:
+    radial-gradient(ellipse 90% 55% at 20% 0%, rgba(232, 201, 154, 0.2), transparent 50%),
+    linear-gradient(180deg, #F0F4EE 0%, #E6EBE4 100%),
+    url("assets/zen/warm-light.jpg");
+  background-size: auto, auto, cover;
+  background-position: center, center, center;
+  background-blend-mode: normal, normal, soft-light;
 }
 
 html[data-skin="zen-calm"] .bg-wave {
@@ -3648,59 +3663,60 @@ html[data-skin="zen-calm"] select:focus-visible {
   }
 }
 
-/* —— Zen Calm: JPG nature assets (assets/zen/) —— */
-html[data-skin="zen-calm"] .bg-layer {
+/* —— Zen Calm: JPG nature assets connected to template —— */
+html[data-skin="zen-calm"] .card,
+html[data-skin="zen-calm"] .mpb-card,
+html[data-skin="zen-calm"] .settings-card,
+html[data-skin="zen-calm"] .result-card {
+  background-color: color-mix(in srgb, var(--surface) 90%, transparent);
   background-image:
-    radial-gradient(ellipse 90% 60% at 15% -5%, rgba(212, 180, 131, 0.14), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 95% 85%, rgba(90, 110, 95, 0.22), transparent 50%),
-    linear-gradient(165deg, color-mix(in srgb, var(--bg) 92%, transparent) 0%, color-mix(in srgb, var(--bg) 75%, #3D4A40) 100%),
-    url("assets/zen/soft-sage-bg.jpg");
-  background-size: auto, auto, auto, cover;
-  background-position: center, center, center, center;
-  background-blend-mode: normal, normal, normal, soft-light;
-  opacity: 1;
-}
-
-html[data-skin="zen-calm"][data-theme="light"] .bg-layer {
-  background-image:
-    radial-gradient(ellipse 90% 55% at 20% 0%, rgba(232, 201, 154, 0.18), transparent 50%),
-    linear-gradient(180deg, #F0F4EE 0%, #E6EBE4 100%),
-    url("assets/zen/warm-light.jpg");
-  background-size: auto, auto, cover;
-  background-blend-mode: normal, normal, soft-light;
-}
-
-/* Subtle stone texture on selected cards / hero areas */
-html[data-skin="zen-calm"] .ad-hero,
-html[data-skin="zen-calm"] .mpb-card:first-of-type {
-  background-image:
-    linear-gradient(145deg, color-mix(in srgb, var(--surface) 88%, transparent), color-mix(in srgb, var(--surface) 70%, transparent)),
+    linear-gradient(155deg, color-mix(in srgb, var(--surface) 92%, transparent), color-mix(in srgb, var(--surface) 78%, transparent)),
     url("assets/zen/soft-stone.jpg");
-  background-size: auto, 180% auto;
-  background-position: center, 30% 40%;
+  background-size: auto, 220% auto;
+  background-position: center, 40% 30%;
+  background-repeat: no-repeat;
   background-blend-mode: normal, soft-light;
 }
 
-/* Soft water/reflection accent for recent / list style blocks */
-html[data-skin="zen-calm"] .card.view-panel:not([hidden]) .card-head {
-  position: relative;
-}
-html[data-skin="zen-calm"] .symbol-card,
-html[data-skin="zen-calm"] .list-item {
+html[data-skin="zen-calm"] .ad-hero {
+  background-color: color-mix(in srgb, var(--surface) 88%, transparent);
   background-image:
-    linear-gradient(to bottom, color-mix(in srgb, var(--surface) 94%, transparent), color-mix(in srgb, var(--surface) 88%, transparent)),
+    linear-gradient(145deg, color-mix(in srgb, var(--surface) 85%, transparent), color-mix(in srgb, var(--surface) 65%, transparent)),
     url("assets/zen/soft-water.jpg");
   background-size: auto, cover;
   background-position: center, center;
   background-blend-mode: normal, soft-light;
 }
 
-/* Small warm accent for primary CTA hover / decorative chips */
 html[data-skin="zen-calm"] .btn-primary {
+  background-color: var(--warm-gold);
   background-image:
     linear-gradient(145deg, var(--warm-gold), color-mix(in srgb, var(--warm-gold) 75%, #8B6B3A)),
     url("assets/zen/soft-accent.jpg");
-  background-size: auto, 200% 200%;
+  background-size: auto, 180% 180%;
   background-position: center, center;
   background-blend-mode: normal, soft-light;
+}
+
+/* Decorative image layer — hidden unless Zen Calm */
+.zen-deco {
+  display: none;
+}
+html[data-skin="zen-calm"] .zen-deco {
+  display: block;
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.22;
+  border-radius: 24px;
+  overflow: hidden;
+}
+html[data-skin="zen-calm"] .zen-deco img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+html[data-skin="zen-calm"][data-theme="light"] .zen-deco {
+  opacity: 0.14;
 }
