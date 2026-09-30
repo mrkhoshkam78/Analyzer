@@ -62,8 +62,8 @@ export const CONFIG = Object.freeze({
   learningStrength: 0.25,
 
   // Entry Engine V10.0 gates (stricter EV, confluence-aware)
-  entryMinRR: 1.20,          // minimum raw R:R (Breakout may pass slightly lower via EV)
-  entryMinEV_R: 0.0,         // reject if expected value in R-units below this
+  entryMinRR: 1.05,          // minimum raw R:R (Breakout may pass slightly lower via EV)
+  entryMinEV_R: -0.08,         // reject if expected value in R-units below this
   minSamplesForKelly: 30,    // historical closed trades required to enable Kelly
   defaultRiskPct: 0.01,      // 1% equity risk default for position sizing
   entryConfluenceMin: 0.35,  // min structure+agreement+mtf confluence

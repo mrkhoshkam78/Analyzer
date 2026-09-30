@@ -556,26 +556,36 @@ function genMarket(ctx) {
 function applyGates(sc, ctx) {
   if (!sc) return null;
   const { riskScore, agreement, eventState, dataQuality, timeframe } = ctx;
+  const soft = ctx.softGates === true;
 
   if (eventState === 'IMMINENT_EVENT' || eventState === 'EVENT_REACTION') {
-    return reject(sc, `ریسک رویداد (${eventState})`);
+    // soft path: demote, do not hard-kill directional Market
+    if (!(soft && sc.id === 'Market')) {
+      return reject(sc, `ریسک رویداد (${eventState})`);
+    }
+    sc.confirmation = [...(sc.confirmation || []), 'ریسک رویداد — ورود محتاط'];
+    sc.score = round2((sc.score || 0) - 12);
   }
-  if (riskScore >= 80 && agreement < 0.4) {
-    return reject(sc, 'ریسک بالا و توافق استراتژی پایین');
+  if (riskScore >= 85 && agreement < 0.35) {
+    if (!(soft && sc.id === 'Market')) {
+      return reject(sc, 'ریسک بالا و توافق استراتژی پایین');
+    }
+    sc.score = round2((sc.score || 0) - 10);
   }
-  if (sc.rr != null && sc.rr < CONFIG.entryMinRR && sc.id !== 'Breakout') {
-    return reject(sc, `R:R خام ${sc.rr} < ${CONFIG.entryMinRR}`);
+  const minRR = soft ? Math.min(CONFIG.entryMinRR, 0.95) : CONFIG.entryMinRR;
+  if (sc.rr != null && sc.rr < minRR && sc.id !== 'Breakout' && !(soft && sc.id === 'Market')) {
+    return reject(sc, `R:R خام ${sc.rr} < ${minRR}`);
   }
-  if (sc.evR != null && sc.evR < CONFIG.entryMinEV_R) {
+  const minEV = soft ? Math.min(CONFIG.entryMinEV_R, -0.15) : CONFIG.entryMinEV_R;
+  if (sc.evR != null && sc.evR < minEV && !(soft && sc.id === 'Market')) {
     return reject(sc, `EV خالص منفی/ضعیف (${sc.evR}R)`);
   }
-  if (sc.structureQ < 0.25 && sc.id !== 'Market') {
+  if (sc.structureQ < 0.22 && sc.id !== 'Market') {
     return reject(sc, 'کیفیت ساختار ناکافی');
   }
-  if ((dataQuality ?? 0.5) < 0.25) {
+  if ((dataQuality ?? 0.5) < 0.2) {
     return reject(sc, 'کیفیت داده بسیار پایین');
   }
-  // Daily data disclaimer flag (not hard reject)
   if (timeframe === '1D' || timeframe === 'D' || timeframe === '1d') {
     sc.confirmation = [...(sc.confirmation || []), 'داده روزانه: ورود سوئینگ — نه اسکالپ درون‌روزی'];
   }
@@ -764,7 +774,54 @@ export function computeEntry(input = {}) {
 
   alive.sort((a, b) => b.score - a.score);
 
+  if (!alive.length && (signal === 'BUY' || signal === 'SELL')) {
+    // Soft fallback: re-run Market with softGates so directional signals still get an entry suggestion
+    const softCtx = { ...ctx, softGates: true };
+    const softMarket = applyGates(genMarket(softCtx), softCtx);
+    if (softMarket && !softMarket.rejected) {
+      softMarket.confirmation = [...(softMarket.confirmation || []), 'پیشنهاد نرم (گیت‌ها سخت بودند)'];
+      softMarket.score = round2(Math.max(softMarket.score || 40, 42));
+      alive = [softMarket];
+      limitations.push('سناریوی نرم: هیچ کاندید سخت‌گیرانه قبول نشد — ورود محتاطانه');
+    }
+  }
+
   if (!alive.length) {
+    // Last resort: if directional signal, still propose market levels without hard No Trade
+    if (signal === 'BUY' || signal === 'SELL') {
+      const isBuy = signal === 'BUY';
+      const atrSafe2 = isNum(atr) && atr > 0 ? atr : price * 0.01;
+      const entry = price;
+      const stop = isBuy ? price - atrSafe2 * 1.1 : price + atrSafe2 * 1.1;
+      const target1 = isBuy ? price + atrSafe2 * 1.8 : price - atrSafe2 * 1.8;
+      const risk = Math.abs(entry - stop) || atrSafe2;
+      const rr = Math.abs(target1 - entry) / risk;
+      return {
+        ...empty,
+        direction: isBuy ? 'Long' : 'Short',
+        entryType: 'بازار (پیشنهاد پایه)',
+        preferredEntry: roundToTick(entry, symbolId),
+        entryZone: {
+          low: roundToTick(isBuy ? entry - atrSafe2 * 0.15 : entry - atrSafe2 * 0.2, symbolId),
+          high: roundToTick(isBuy ? entry + atrSafe2 * 0.2 : entry + atrSafe2 * 0.15, symbolId)
+        },
+        stop: roundToTick(stop, symbolId),
+        target1: roundToTick(target1, symbolId),
+        target2: roundToTick(isBuy ? target1 + atrSafe2 : target1 - atrSafe2, symbolId),
+        invalidation: roundToTick(isBuy ? stop - atrSafe2 * 0.15 : stop + atrSafe2 * 0.15, symbolId),
+        rr: round2(rr),
+        netRR: round2(rr * 0.9),
+        winP: 0.48,
+        evR: round2(0.48 * rr - 0.52),
+        modelConfidence: clamp(0.28 + agreement * 0.2, 0.25, 0.55),
+        waitForEntry: false,
+        reason: 'پیشنهاد پایه بازار — کاندیدهای ساختاری رد شدند',
+        scenarios: [],
+        rejectedScenarios: rejected,
+        limitations: limitations.concat(['پیشنهاد پایه: فقط جهت سیگنال + ATR']),
+        selectedScenario: 'Market-Base'
+      };
+    }
     return {
       ...empty,
       reason: 'هیچ سناریوی معتبری از دروازه‌های EV/R:R/ساختار عبور نکرد — No Trade',
