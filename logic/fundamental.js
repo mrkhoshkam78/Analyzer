@@ -361,9 +361,17 @@ export function upsertFundamentalVar(symbolId, varId, payload) {
     updatedAt: Date.now()
   };
   store[key][varId] = record;
-  saveFundamentalStore(store);
+  const saved = saveFundamentalStore(store);
+  if (!saved) {
+    return { ok: false, error: 'localStorage پر است یا در دسترس نیست — ذخیره نشد.' };
+  }
   pushHistory(key, varId, record);
-  return { ok: true, record };
+  // re-read to confirm
+  const verify = getFundamentalData(key)[varId];
+  if (!verify) {
+    return { ok: false, error: 'ذخیره تأیید نشد. حافظه مرورگر را بررسی کنید.' };
+  }
+  return { ok: true, record: verify };
 }
 
 export function clearFundamentalVar(symbolId, varId = null) {
