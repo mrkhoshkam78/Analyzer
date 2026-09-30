@@ -212,7 +212,7 @@ function onSymbolChange() {
   if ($('assetChip')) $('assetChip').hidden = false;
   updateHeaderAssetLabel();
   refreshAssetPanel(id);
-  try { refreshFundVarSelect(); refreshFundStoredList(); } catch (_) {}
+  try { refreshFundEditableList(); } catch (_) {}
 }
 
 async function refreshAssetPanel(symbol) {
@@ -247,6 +247,12 @@ async function refreshAssetPanel(symbol) {
   }
   if ($('priceOpen')) $('priceOpen').value = '';
   if ($('priceClose')) $('priceClose').value = '';
+  try {
+    if (window.__lastAnalysisResult && window.__lastAnalysisResult.ok)
+      renderForecastChart(symbol, window.__lastAnalysisResult);
+    else
+      renderForecastChart(symbol, null);
+  } catch (_) {}
 }
 
 function fillPriceFormFromRecord(rec) {
@@ -548,10 +554,14 @@ async function runAnalysis(silent = false) {
     } catch (_) { /* offline / missing */ }
 
     const { analyze } = await import('./logic/analysis.js');
+    const fset = getFundAdvancedSettings();
     const result = analyze(series.candles, {
       currentPrice, symbol: sym, timeframe: currentTf, recordPrediction: true,
       fundamentalSnapshot: fundSnap,
-      seriesMap
+      seriesMap,
+      fundWeightMult: fset.weightMult,
+      fundMinCoverage: fset.minCoverage,
+      fundSensitivity: fset.sensitivity
     });
     result._fundMeta = fundMeta;
     setProcessing(false);
@@ -829,6 +839,7 @@ function showResult(r, symbolId) {
   $('resultClock').textContent = formatNow().full;
   $('result').hidden = false;
   if ($('scoreLayers')) $('scoreLayers').hidden = false;
+  try { renderForecastChart(symbolId, r); } catch (e) { console.warn('chart', e); }
 }
 
 function clearAll() {
@@ -2077,7 +2088,50 @@ function init() {
 init();
 
 
-/* ── Fundamental offline form (v11) ── */
+/* ── Fundamental offline form (v11.2) — inline list + advanced blend ── */
+const FUND_ADV_KEY = 'oma_v11_fund_adv';
+
+function getFundAdvancedSettings() {
+  const def = { blendPct: 30, sensitivity: 100, minCoveragePct: 25, requireActual: true };
+  try {
+    const raw = localStorage.getItem(FUND_ADV_KEY);
+    if (!raw) return {
+      blendPct: def.blendPct,
+      sensitivity: def.sensitivity,
+      minCoveragePct: def.minCoveragePct,
+      requireActual: def.requireActual,
+      weightMult: def.blendPct / 30,
+      minCoverage: def.minCoveragePct / 100
+    };
+    const o = JSON.parse(raw);
+    const blendPct = Math.max(0, Math.min(70, Number(o.blendPct) || 30));
+    const sensitivity = Math.max(50, Math.min(150, Number(o.sensitivity) || 100));
+    const minCoveragePct = Math.max(10, Math.min(80, Number(o.minCoveragePct) || 25));
+    const requireActual = o.requireActual !== false;
+    return {
+      blendPct, sensitivity, minCoveragePct, requireActual,
+      weightMult: blendPct / 30,
+      minCoverage: minCoveragePct / 100
+    };
+  } catch {
+    return { ...def, weightMult: 1, minCoverage: 0.25 };
+  }
+}
+
+function saveFundAdvancedSettings(partial) {
+  const cur = getFundAdvancedSettings();
+  const next = { ...cur, ...partial };
+  try {
+    localStorage.setItem(FUND_ADV_KEY, JSON.stringify({
+      blendPct: next.blendPct,
+      sensitivity: next.sensitivity,
+      minCoveragePct: next.minCoveragePct,
+      requireActual: next.requireActual
+    }));
+  } catch (_) {}
+  return getFundAdvancedSettings();
+}
+
 async function ensureFundModule() {
   if (window.__fundMod) return window.__fundMod;
   try {
@@ -2098,105 +2152,350 @@ function activeFundSymbol() {
   return String(fromMod || fromWin || fromLs || fromSel || 'XAUUSD').toUpperCase();
 }
 
-async function refreshFundVarSelect() {
-  const sel = $('fundVarSelect');
-  const list = $('fundVarList');
+async function refreshFundEditableList() {
+  const list = $('fundEditableList');
+  const sum = $('fundLiveSummary');
+  if (!list) return;
   const mod = await ensureFundModule();
   if (!mod) {
-    if (sel) sel.innerHTML = '<option value="">— ماژول بنیادی بارگذاری نشد —</option>';
-    if (list) list.innerHTML = '<p class="muted">ماژول بنیادی در دسترس نیست.</p>';
+    list.innerHTML = '<p class="muted">ماژول بنیادی در دسترس نیست.</p>';
     return;
   }
   const sym = activeFundSymbol();
-  const schema = mod.getSchemaForSymbol(sym) || [];
-  if (sel) {
-    sel.innerHTML = schema.length
-      ? schema.map(v => `<option value="${v.id}">${v.nameFa} (${v.unit})</option>`).join('')
-      : '<option value="">— متغیری تعریف نشده —</option>';
+  const schema = (mod.getSchemaForSymbol(sym) || []).slice(0, 8);
+  const data = mod.getFundamentalData(sym) || {};
+  if (!schema.length) {
+    list.innerHTML = '<p class="muted">متغیری برای این نماد تعریف نشده.</p>';
+    return;
   }
-  if (list) {
-    if (!schema.length) {
-      list.innerHTML = '<p class="muted">متغیری برای این نماد تعریف نشده.</p>';
-    } else {
-      list.innerHTML = schema.map(v => {
-        const dir = v.bullWhen === 'higher' ? '↑ صعودی با افزایش' : (v.bullWhen === 'lower' ? '↓ صعودی با کاهش' : '');
-        return `<button type="button" class="fund-var-chip" data-var="${v.id}" title="${v.id}">
-          <span class="fund-var-name">${v.nameFa}</span>
-          <span class="fund-var-meta mono">${v.unit}${dir ? ' · ' + dir : ''}</span>
-        </button>`;
-      }).join('');
-      list.querySelectorAll('.fund-var-chip').forEach(btn => {
-        btn.addEventListener('click', () => {
-          if (sel) {
-            sel.value = btn.dataset.var;
-            sel.dispatchEvent(new Event('change'));
-          }
-          list.querySelectorAll('.fund-var-chip').forEach(b => b.classList.toggle('is-active', b === btn));
-        });
+  list.innerHTML = schema.map(v => {
+    const r = data[v.id] || {};
+    const act = r.actual != null ? r.actual : '';
+    const fc = r.forecast != null ? r.forecast : '';
+    const pr = r.previous != null ? r.previous : '';
+    const dt = r.date || '';
+    return `<div class="fund-row" data-var="${v.id}" role="listitem">
+      <div class="fund-row-head">
+        <span class="fund-row-name">${v.nameFa}</span>
+        <span class="fund-row-meta mono">${v.unit || ''}</span>
+      </div>
+      <div class="fund-row-fields">
+        <label>واقعی<input class="input mono fund-inp" data-f="actual" type="number" step="any" value="${act}" placeholder="—"></label>
+        <label>پیش‌بینی<input class="input mono fund-inp" data-f="forecast" type="number" step="any" value="${fc}" placeholder="—"></label>
+        <label>قبلی<input class="input mono fund-inp" data-f="previous" type="number" step="any" value="${pr}" placeholder="—"></label>
+        <label>تاریخ<input class="input mono fund-inp" data-f="date" type="date" value="${dt}"></label>
+      </div>
+      <div class="fund-row-actions">
+        <button type="button" class="btn btn-primary btn-sm fund-save-row">ذخیره</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.fund-row').forEach(row => {
+    const btn = row.querySelector('.fund-save-row');
+    if (!btn || btn._wired) return;
+    btn._wired = true;
+    btn.addEventListener('click', async () => {
+      const mod2 = await ensureFundModule();
+      if (!mod2) return;
+      const varId = row.dataset.var;
+      const payload = {};
+      row.querySelectorAll('.fund-inp').forEach(inp => {
+        payload[inp.dataset.f] = inp.value;
       });
-    }
-  }
+      const res = mod2.upsertFundamentalVar(activeFundSymbol(), varId, payload);
+      const msg = $('fundFormMsg');
+      if (msg) msg.textContent = res.ok ? `«${row.querySelector('.fund-row-name')?.textContent || varId}» ذخیره شد.` : (res.error || 'خطا');
+      if (res.ok) refreshFundSummaryOnly();
+    });
+  });
+
+  await refreshFundSummaryOnly();
 }
 
-async function refreshFundStoredList() {
-  const box = $('fundStoredList');
+async function refreshFundSummaryOnly() {
   const sum = $('fundLiveSummary');
-  if (!box) return;
   const mod = await ensureFundModule();
-  if (!mod) return;
-  const sym = activeFundSymbol();
-  const data = mod.getFundamentalData(sym);
-  const schema = mod.getSchemaForSymbol(sym);
-  const rows = schema.filter(v => data[v.id]).map(v => {
-    const r = data[v.id];
-    const bits = [];
-    if (r.actual != null) bits.push(`واقعی ${r.actual}`);
-    if (r.forecast != null) bits.push(`پیش‌بینی ${r.forecast}`);
-    if (r.surprise != null) bits.push(`Δ ${r.surprise > 0 ? '+' : ''}${r.surprise}`);
-    if (r.date) bits.push(r.date);
-    return `<div class="fund-stored-item"><span>${v.nameFa}</span><span class="mono">${bits.join(' · ') || '—'}</span></div>`;
-  });
-  box.innerHTML = rows.length ? rows.join('') : '<p class="muted">هنوز متغیری ذخیره نشده.</p>';
-  const fund = mod.runFundamental(sym, undefined, { regime: 'Unclear' });
-  if (sum) sum.textContent = mod.fundamentalSummaryFa(fund);
+  if (!mod || !sum) return;
+  const fund = mod.runFundamental(activeFundSymbol(), undefined, { regime: 'Unclear' });
+  sum.textContent = mod.fundamentalSummaryFa(fund);
+}
+
+function wireFundAdvanced() {
+  const toggle = $('fundAdvToggle');
+  const panel = $('fundAdvPanel');
+  if (toggle && !toggle._wired) {
+    toggle._wired = true;
+    toggle.addEventListener('click', () => {
+      const open = panel && !panel.hidden;
+      if (panel) panel.hidden = open;
+      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+    });
+  }
+  const s = getFundAdvancedSettings();
+  const setVal = (id, v, labelId, suffix) => {
+    const el = $(id);
+    const lab = $(labelId);
+    if (el) el.value = String(v);
+    if (lab) lab.textContent = (Number(v).toLocaleString('fa-IR')) + (suffix || '');
+  };
+  setVal('fundBlendPct', s.blendPct, 'fundBlendPctVal', '٪');
+  setVal('fundSensPct', s.sensitivity, 'fundSensPctVal', '٪');
+  setVal('fundMinCoverage', s.minCoveragePct, 'fundMinCoverageVal', '٪');
+  if ($('fundRequireActual')) $('fundRequireActual').checked = s.requireActual;
+
+  const bindRange = (id, key, labelId) => {
+    const el = $(id);
+    if (!el || el._wired) return;
+    el._wired = true;
+    el.addEventListener('input', () => {
+      const v = Number(el.value);
+      if ($(labelId)) $(labelId).textContent = v.toLocaleString('fa-IR') + '٪';
+      saveFundAdvancedSettings({ [key]: v });
+    });
+  };
+  bindRange('fundBlendPct', 'blendPct', 'fundBlendPctVal');
+  bindRange('fundSensPct', 'sensitivity', 'fundSensPctVal');
+  bindRange('fundMinCoverage', 'minCoveragePct', 'fundMinCoverageVal');
+  const req = $('fundRequireActual');
+  if (req && !req._wired) {
+    req._wired = true;
+    req.addEventListener('change', () => saveFundAdvancedSettings({ requireActual: !!req.checked }));
+  }
+  const reset = $('fundAdvReset');
+  if (reset && !reset._wired) {
+    reset._wired = true;
+    reset.addEventListener('click', () => {
+      saveFundAdvancedSettings({ blendPct: 30, sensitivity: 100, minCoveragePct: 25, requireActual: true });
+      wireFundAdvanced();
+    });
+  }
 }
 
 function wireFundForm() {
-  const saveBtn = $('fundSaveBtn');
-  const clearBtn = $('fundClearBtn');
-  if (saveBtn && !saveBtn._wired) {
-    saveBtn._wired = true;
-    saveBtn.addEventListener('click', async () => {
+  wireFundAdvanced();
+  const clearAll = $('fundClearAllBtn');
+  if (clearAll && !clearAll._wired) {
+    clearAll._wired = true;
+    clearAll.addEventListener('click', async () => {
+      if (!window.confirm('همه داده‌های بنیادی این نماد پاک شود؟')) return;
       const mod = await ensureFundModule();
       if (!mod) return;
-      const sym = activeFundSymbol();
-      const varId = $('fundVarSelect')?.value;
-      const res = mod.upsertFundamentalVar(sym, varId, {
-        actual: $('fundActual')?.value,
-        forecast: $('fundForecast')?.value,
-        previous: $('fundPrevious')?.value,
-        date: $('fundDate')?.value
-      });
-      const msg = $('fundFormMsg');
-      if (msg) msg.textContent = res.ok ? 'ذخیره شد.' : (res.error || 'خطا');
-      if (res.ok) {
-        ['fundActual','fundForecast','fundPrevious'].forEach(id => { if ($(id)) $(id).value = ''; });
-        refreshFundStoredList();
-      }
-    });
-  }
-  if (clearBtn && !clearBtn._wired) {
-    clearBtn._wired = true;
-    clearBtn.addEventListener('click', async () => {
-      const mod = await ensureFundModule();
-      if (!mod) return;
-      const sym = activeFundSymbol();
-      mod.clearFundamentalVar(sym);
+      mod.clearFundamentalVar(activeFundSymbol());
       const msg = $('fundFormMsg');
       if (msg) msg.textContent = 'داده‌های نماد پاک شد.';
-      refreshFundStoredList();
+      refreshFundEditableList();
     });
   }
-  refreshFundVarSelect();
-  refreshFundStoredList();
+  refreshFundEditableList();
 }
+
+/* ── Forecast candlestick chart (v11.2) ── */
+function buildForecastCandles(hist, result, nFuture = 3) {
+  if (!hist || !hist.length) return { hist: [], future: [] };
+  const last = hist[hist.length - 1];
+  const close = last.c;
+  const atr = result?.atr || result?.analysis?.atr || result?.indicators?.atr;
+  let step = Number.isFinite(atr) && atr > 0 ? atr * 0.55 : null;
+  if (!step) {
+    const slice = hist.slice(-20);
+    const ranges = slice.map(c => c.h - c.l).filter(x => x > 0);
+    const avg = ranges.length ? ranges.reduce((a, b) => a + b, 0) / ranges.length : close * 0.005;
+    step = avg * 0.7;
+  }
+  const signal = result?.signal || 'HOLD';
+  const target = result?.target;
+  const stop = result?.stop;
+  let dir = 0;
+  if (signal === 'BUY') dir = 1;
+  else if (signal === 'SELL') dir = -1;
+  else if (Number.isFinite(target) && target > close) dir = 0.35;
+  else if (Number.isFinite(target) && target < close) dir = -0.35;
+
+  const tfMs = (() => {
+    const tf = currentTf || '1D';
+    if (tf === '1H') return 3600000;
+    if (tf === '4H') return 4 * 3600000;
+    if (tf === '1W') return 7 * 86400000;
+    return 86400000;
+  })();
+
+  const future = [];
+  let px = close;
+  const lastTs = last.ts != null ? last.ts : Date.now();
+  for (let i = 1; i <= nFuture; i++) {
+    const progress = i / nFuture;
+    let dest = px + dir * step * (1.15 - progress * 0.35);
+    if (Number.isFinite(target) && dir !== 0) {
+      dest = px + (target - close) * (progress * 0.55) + dir * step * 0.15;
+    }
+    const o = px;
+    const c = dest;
+    const w = step * (0.45 + 0.2 * Math.random());
+    const h = Math.max(o, c) + w * 0.35;
+    const l = Math.min(o, c) - w * 0.35;
+    future.push({
+      o, h, l, c,
+      ts: lastTs + i * tfMs,
+      forecast: true,
+      conf: Math.max(0.25, (result?.confidence ?? 0.5) * (1 - progress * 0.35))
+    });
+    px = c;
+  }
+  return { hist, future };
+}
+
+function renderForecastChart(symbolId, result) {
+  const canvas = $('forecastChart');
+  const status = $('chartStatus');
+  if (!canvas || !canvas.getContext) return;
+  const tf = currentTf || '1D';
+  let hist = [];
+  try {
+    const series = buildAnalysisSeries(symbolId || currentSymbol, tf);
+    hist = (series?.candles || []).slice(-60);
+  } catch (_) {
+    hist = [];
+  }
+  if (hist.length < 5) {
+    if (status) status.textContent = 'دادهٔ تاریخی کافی برای نمودار نیست — نماد و فایل data را بررسی کنید.';
+    return;
+  }
+  const conf = result?.confidence ?? 0.5;
+  const nFuture = conf >= 0.65 ? 4 : conf >= 0.4 ? 3 : 2;
+  const { future } = buildForecastCandles(hist, result, nFuture);
+  const all = hist.concat(future);
+
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 900;
+  const cssH = 360;
+  canvas.width = Math.floor(cssW * dpr);
+  canvas.height = Math.floor(cssH * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const pad = { t: 16, r: 16, b: 28, l: 56 };
+  const W = cssW - pad.l - pad.r;
+  const H = cssH - pad.t - pad.b;
+  let lo = Math.min(...all.map(c => c.l));
+  let hi = Math.max(...all.map(c => c.h));
+  const mid = (hi + lo) / 2 || 1;
+  const padY = (hi - lo) * 0.08 || mid * 0.01;
+  lo -= padY; hi += padY;
+  const yScale = (p) => pad.t + H * (1 - (p - lo) / (hi - lo));
+  const slot = W / Math.max(all.length, 1);
+  const bodyW = Math.max(3, Math.min(14, slot * 0.62));
+
+  // background
+  ctx.clearRect(0, 0, cssW, cssH);
+  const skin = document.documentElement.getAttribute('data-skin') || '';
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#12141a';
+  ctx.fillRect(0, 0, cssW, cssH);
+
+  // grid
+  ctx.strokeStyle = 'rgba(148,163,184,0.12)';
+  ctx.lineWidth = 1;
+  for (let g = 0; g < 5; g++) {
+    const y = pad.t + (H * g) / 4;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + W, y); ctx.stroke();
+  }
+
+  // split line between hist and forecast
+  const splitX = pad.l + hist.length * slot;
+  ctx.strokeStyle = 'rgba(139, 92, 246, 0.45)';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(splitX, pad.t); ctx.lineTo(splitX, pad.t + H); ctx.stroke();
+  ctx.setLineDash([]);
+
+  const bull = '#10b981';
+  const bear = '#f43f5e';
+  const fcBull = '#22d3ee';
+  const fcBear = '#a78bfa';
+
+  function drawCandle(c, i, isFc) {
+    const x = pad.l + i * slot + slot / 2;
+    const up = c.c >= c.o;
+    const col = isFc ? (up ? fcBull : fcBear) : (up ? bull : bear);
+    ctx.globalAlpha = isFc ? (0.45 + 0.45 * (c.conf || 0.5)) : 1;
+    ctx.strokeStyle = col;
+    ctx.fillStyle = col;
+    ctx.lineWidth = isFc ? 1.5 : 1.25;
+    // wick
+    ctx.beginPath();
+    ctx.moveTo(x, yScale(c.h));
+    ctx.lineTo(x, yScale(c.l));
+    ctx.stroke();
+    // body
+    const y1 = yScale(Math.max(c.o, c.c));
+    const y2 = yScale(Math.min(c.o, c.c));
+    const bh = Math.max(1.5, y2 - y1);
+    if (isFc) {
+      ctx.globalAlpha = 0.25 + 0.35 * (c.conf || 0.5);
+      ctx.fillRect(x - bodyW / 2, y1, bodyW, bh);
+      ctx.globalAlpha = 0.7;
+      ctx.strokeRect(x - bodyW / 2, y1, bodyW, bh);
+    } else {
+      ctx.fillRect(x - bodyW / 2, y1, bodyW, bh);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  hist.forEach((c, i) => drawCandle(c, i, false));
+  future.forEach((c, i) => drawCandle(c, hist.length + i, true));
+
+  // price labels
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-3').trim() || '#94a3b8';
+  ctx.font = '11px Vazirmatn, sans-serif';
+  ctx.textAlign = 'right';
+  for (let g = 0; g < 5; g++) {
+    const p = hi - ((hi - lo) * g) / 4;
+    const y = pad.t + (H * g) / 4;
+    ctx.fillText(p.toFixed(p > 100 ? 1 : 2), pad.l - 6, y + 4);
+  }
+
+  // target / stop lines
+  if (result?.target != null && Number.isFinite(result.target)) {
+    const y = yScale(result.target);
+    ctx.strokeStyle = 'rgba(16,185,129,0.55)';
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + W, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(16,185,129,0.85)';
+    ctx.textAlign = 'left';
+    ctx.fillText('هدف', pad.l + 4, y - 4);
+  }
+  if (result?.stop != null && Number.isFinite(result.stop)) {
+    const y = yScale(result.stop);
+    ctx.strokeStyle = 'rgba(244,63,94,0.5)';
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + W, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(244,63,94,0.85)';
+    ctx.textAlign = 'left';
+    ctx.fillText('حد ضرر', pad.l + 4, y - 4);
+  }
+
+  if (status) {
+    const sig = result?.signal || '—';
+    status.textContent = `${symbolId || ''} / ${tf} · ${hist.length} کندل واقعی · ${future.length} کندل پیش‌بینی (${sig}) · اطمینان ${result?.confidence != null ? Math.round(result.confidence * 100) + '٪' : '—'}`;
+  }
+
+  // soft glow animation on forecast zone
+  if (canvas._glowRaf) cancelAnimationFrame(canvas._glowRaf);
+  let t0 = performance.now();
+  const animate = (now) => {
+    const pulse = 0.15 + 0.12 * Math.sin((now - t0) / 500);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = `rgba(167, 139, 250, ${pulse})`;
+    ctx.fillRect(splitX, pad.t, W - (splitX - pad.l), H);
+    ctx.restore();
+    // redraw only forecast candles on top occasionally — skip full redraw to keep simple
+    if (now - t0 < 4000) canvas._glowRaf = requestAnimationFrame(animate);
+  };
+  canvas._glowRaf = requestAnimationFrame(animate);
+}
+
+// aliases for symbol change hooks
+async function refreshFundVarSelect() { return refreshFundEditableList(); }
+async function refreshFundStoredList() { return refreshFundSummaryOnly(); }

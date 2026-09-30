@@ -3393,3 +3393,137 @@ html[data-skin="zen-calm"] .asset-btn-wrap {
 html[data-skin="zen-calm"] .card.anim-in {
   animation: fadeSlideIn 0.4s ease both;
 }
+
+/* ── Fundamental editable list (v11.2) ── */
+.fund-editable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.fund-row {
+  border: 1px solid var(--line, var(--border));
+  border-radius: 14px;
+  padding: 0.75rem 0.9rem;
+  background: color-mix(in srgb, var(--card) 88%, var(--bg-elev, #1a1d24));
+  animation: fadeSlideIn 0.35s ease both;
+}
+.fund-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+.fund-row-name { font-weight: 700; font-size: 0.95rem; }
+.fund-row-meta { font-size: 0.75rem; color: var(--text-3); }
+.fund-row-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.fund-row-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.fund-row-fields .input { width: 100%; min-width: 0; }
+.fund-row-actions {
+  margin-top: 0.55rem;
+  display: flex;
+  justify-content: flex-end;
+}
+.fund-list-actions { margin-top: 0.75rem; }
+.fund-adv-card {
+  margin: 0.75rem 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface-2, var(--bg-elev));
+}
+.fund-adv-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: start;
+}
+.fund-adv-toggle:hover { background: color-mix(in srgb, var(--primary, #5b8def) 8%, transparent); }
+.fund-adv-panel { padding: 0 1rem 1rem; }
+.fund-adv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.85rem;
+}
+.fund-adv-val {
+  display: inline-block;
+  margin-inline-start: 0.35rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--primary, #5b8def);
+}
+.field-hint { font-size: 0.75rem; margin: 0.25rem 0 0; }
+.check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+@media (max-width: 720px) {
+  .fund-row-fields { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Forecast chart card ── */
+.chart-card { margin-top: 1rem; }
+.chart-wrap {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 70%, var(--card));
+}
+#forecastChart {
+  display: block;
+  width: 100%;
+  height: 360px;
+}
+.chart-legend {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.chart-leg {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+.chart-leg-hist {
+  color: #10b981;
+  border-color: color-mix(in srgb, #10b981 40%, transparent);
+  background: color-mix(in srgb, #10b981 12%, transparent);
+}
+.chart-leg-fc {
+  color: #a78bfa;
+  border-color: color-mix(in srgb, #a78bfa 45%, transparent);
+  background: color-mix(in srgb, #a78bfa 14%, transparent);
+  animation: softGlow 2.8s ease-in-out infinite;
+}
+html[data-skin="zen-calm"] .chart-wrap {
+  border-radius: 16px;
+  border-color: color-mix(in srgb, var(--primary-2, #5b8def) 25%, var(--line));
+}

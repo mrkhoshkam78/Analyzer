@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="تحلیل‌گر بازار آفلاین — Vector Soft Obsidian Editorial · Terminal Glass">
-  <title>تحلیل‌گر بازار · v11.1.1</title>
+  <title>تحلیل‌گر بازار · v11.2.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -99,7 +99,7 @@
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
           </button>
           <div class="brand-copy">
-            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v11.1.1</span></h1>
+            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge">v11.2.0</span></h1>
           </div>
         </div>
         <div class="header-center" id="headerAssetSlot">
@@ -317,6 +317,26 @@
         <p class="disclaimer">این خروجی یک مدل محلی است و توصیه سرمایه‌گذاری نیست.</p>
       </section>
 
+
+      <!-- نمودار کندل + پیش‌بینی -->
+      <section class="card chart-card anim-in" id="forecastChartCard" aria-labelledby="chart-title">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">نمای قیمت</p>
+            <h2 class="card-title" id="chart-title">نمودار کندلی و پیش‌بینی</h2>
+            <p class="card-desc">کندل‌های واقعی از دادهٔ پروژه · کندل‌های آینده از مدل (سیگنال، هدف، ATR)</p>
+          </div>
+          <div class="chart-legend">
+            <span class="chart-leg chart-leg-hist">تاریخی</span>
+            <span class="chart-leg chart-leg-fc">پیش‌بینی</span>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="forecastChart" width="900" height="360" role="img" aria-label="نمودار کندل تاریخی و پیش‌بینی"></canvas>
+        </div>
+        <p id="chartStatus" class="status-line muted">پس از انتخاب نماد و اجرای تحلیل، مسیر پیش‌بینی رسم می‌شود.</p>
+      </section>
+
       <!-- مغز الگوی بازار -->
       <section class="card view-panel anim-in" id="view-mpb" hidden aria-labelledby="mpb-title">
         <div class="card-head">
@@ -440,145 +460,51 @@
             </span>
           </label>
           <p id="fundPageStatus" class="status-line" role="status"></p>
-          <div id="fundPageBody" class="fund-page-body">
-            <p class="card-desc">وزن‌ها بر اساس نماد و رژیم بازار تنظیم می‌شوند. تاریخچه Surprise برای Z-Score ذخیره می‌شود.</p>
-            <div id="fundManualForm" class="fund-manual-form">
-              <div class="field">
-                <label for="fundVarSelect">متغیر</label>
-                <select id="fundVarSelect" class="input"></select>
-              </div>
-              <div class="fund-var-list-wrap">
-                <p class="fund-var-list-label">لیست متغیرهای این نماد</p>
-                <div id="fundVarList" class="fund-var-list" role="list"></div>
-              </div>
-              <div class="fund-manual-grid">
-                <div class="field"><label for="fundActual">واقعی (Actual)</label><input id="fundActual" class="input mono" type="number" step="any" placeholder="—"></div>
-                <div class="field"><label for="fundForecast">پیش‌بینی</label><input id="fundForecast" class="input mono" type="number" step="any" placeholder="—"></div>
-                <div class="field"><label for="fundPrevious">قبلی</label><input id="fundPrevious" class="input mono" type="number" step="any" placeholder="—"></div>
-                <div class="field"><label for="fundDate">تاریخ</label><input id="fundDate" class="input mono" type="date"></div>
-              </div>
-              <div class="fund-manual-actions">
-                <button type="button" class="btn btn-primary" id="fundSaveBtn">ذخیره متغیر</button>
-                <button type="button" class="btn btn-ghost" id="fundClearBtn">پاک کردن نماد</button>
-              </div>
-              <p id="fundFormMsg" class="status-line" role="status"></p>
-              <div id="fundStoredList" class="fund-stored-list"></div>
-              <div id="fundLiveSummary" class="fund-live-summary muted"></div>
-            </div>
-          </div>
-        </div>
-      </section>
+                    <div id="fundPageBody" class="fund-page-body">
+            <p class="card-desc">۸ محرک اصلی نماد را در همین لیست ویرایش و ذخیره کنید. وزن‌ها با رژیم بازار و تنظیمات پیشرفته ترکیب می‌شوند.</p>
 
-<section class="card view-panel anim-in" id="view-backtest" hidden aria-labelledby="bt-title">
-        <div class="card-head">
-          <div>
-            <p class="eyebrow">اعتبارسنجی تاریخی</p>
-            <h2 class="card-title" id="bt-title">بک‌تست</h2>
-            <p class="card-desc">آزمایش روی گذشته — بدون تقلب از آینده</p>
-          </div>
-        </div>
-        <div class="section-intro bt-intro-box">
-          <p class="section-intro-lead">بک‌تست یعنی: «اگر همان سیگنال‌ها را دیروز می‌گرفتی، چه می‌شد؟»</p>
-          <p class="muted section-intro-body">
-            مدل فقط با داده‌های قدیمی تصمیم می‌گیرد، بعد نتیجه را با قیمت واقعی همان زمان‌ها مقایسه می‌کنیم.
-            <span class="intro-chip">افق</span> یعنی چند کندل جلوتر را چک کنیم ·
-            <span class="intro-chip">فاصله نمونه‌ها</span> یعنی تست چقدر سریع/متراکم باشد.
-            داده از همان فایل‌ها و ورود دستی خودت خوانده می‌شود.
-          </p>
-        </div>
-        <div class="bt-controls form-grid">
-          <div class="field">
-            <label class="label" for="btHorizon">افق پیش‌بینی</label>
-            <select id="btHorizon" class="input">
-              <option value="3">کوتاه · ۳ کندل</option>
-              <option value="5" selected>متوسط · ۵ کندل</option>
-              <option value="10">بلند · ۱۰ کندل</option>
-              <option value="20">خیلی بلند · ۲۰ کندل</option>
-            </select>
-          </div>
-          <div class="field">
-            <label class="label" for="btMode">نوع مدل</label>
-            <select id="btMode" class="input">
-              <option value="ensemble" selected>Ensemble چنداستراتژی</option>
-              <option value="tech">فقط تکنیکال</option>
-              <option value="fund">فقط بنیادی</option>
-              <option value="combined">تکنیکال + بنیادی</option>
-            </select>
-          </div>
-          <div class="field">
-            <label class="label" for="btStep">فاصله نمونه‌ها</label>
-            <select id="btStep" class="input">
-              <option value="1">هر کندل</option>
-              <option value="5" selected>هر ۵ کندل</option>
-              <option value="10">هر ۱۰ کندل</option>
-            </select>
-          </div>
-          <div class="field field-action">
-            <button type="button" class="btn btn-primary" id="btRunBtn">اجرای بک‌تست</button>
-          </div>
-        </div>
-        <div id="btStatus" class="status-line"></div>
-        <div id="btMetrics" class="bt-metrics" hidden></div>
-        <div id="btSamples" class="bt-samples" hidden></div>
-      </section>
+            <div class="fund-adv-card" id="fundAdvCard">
+              <button type="button" class="fund-adv-toggle" id="fundAdvToggle" aria-expanded="false">
+                تنظیمات پیشرفته ترکیب بنیادی و تکنیکال
+                <span class="fund-adv-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div id="fundAdvPanel" class="fund-adv-panel" hidden>
+                <div class="fund-adv-grid">
+                  <div class="field">
+                    <label for="fundBlendPct">وزن بنیادی در ترکیب (٪)</label>
+                    <input id="fundBlendPct" class="input mono" type="range" min="0" max="70" step="5" value="30">
+                    <span class="fund-adv-val" id="fundBlendPctVal">۳۰٪</span>
+                    <p class="muted field-hint">باقی‌مانده به استراتژی‌های تکنیکال می‌رسد.</p>
+                  </div>
+                  <div class="field">
+                    <label for="fundSensPct">حساسیت Surprise / Z-Score (٪)</label>
+                    <input id="fundSensPct" class="input mono" type="range" min="50" max="150" step="10" value="100">
+                    <span class="fund-adv-val" id="fundSensPctVal">۱۰۰٪</span>
+                  </div>
+                  <div class="field">
+                    <label for="fundMinCoverage">حداقل پوشش داده برای اعمال (٪)</label>
+                    <input id="fundMinCoverage" class="input mono" type="range" min="10" max="80" step="5" value="25">
+                    <span class="fund-adv-val" id="fundMinCoverageVal">۲۵٪</span>
+                  </div>
+                  <div class="field fund-adv-check">
+                    <label class="check-label">
+                      <input type="checkbox" id="fundRequireActual" checked>
+                      فقط متغیرهایی با مقدار «واقعی» در امتیاز لحاظ شوند
+                    </label>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm" id="fundAdvReset">بازنشانی پیش‌فرض</button>
+              </div>
+            </div>
 
-      <!-- تنظیمات -->
-      <section class="card view-panel anim-in" id="view-settings" hidden aria-labelledby="settings-title">
-        <div class="card-head">
-          <div>
-            <p class="eyebrow">شخصی‌سازی</p>
-            <h2 class="card-title" id="settings-title">تنظیمات</h2>
-            <p class="card-desc">تم رنگ، زبان و پوستهٔ طراحی — جدا از یکدیگر</p>
-          </div>
-        </div>
-        <div class="settings-grid">
-          <div class="settings-card">
-            <h3 class="settings-h">تم رنگ</h3>
-            <p class="muted settings-desc">فقط پالت رنگ (روشن / تاریک). روی شکل دکمه‌ها و کادرها اثر ندارد.</p>
-            <div class="settings-row">
-              <label class="settings-option">
-                <input type="radio" name="setTheme" value="dark" id="setThemeDark">
-                <span>تاریک</span>
-              </label>
-              <label class="settings-option">
-                <input type="radio" name="setTheme" value="light" id="setThemeLight">
-                <span>روشن</span>
-              </label>
+            <div id="fundEditableList" class="fund-editable-list" role="list"></div>
+            <div class="fund-list-actions">
+              <button type="button" class="btn btn-ghost" id="fundClearAllBtn">پاک‌کردن همهٔ داده‌های نماد</button>
             </div>
+            <p id="fundFormMsg" class="status-line" role="status"></p>
+            <div id="fundLiveSummary" class="fund-live-summary muted"></div>
           </div>
-          <div class="settings-card">
-            <h3 class="settings-h">زبان رابط</h3>
-            <p class="muted settings-desc">جهت و برچسب‌های اصلی رابط کاربری.</p>
-            <div class="settings-row">
-              <label class="settings-option">
-                <input type="radio" name="setLang" value="fa" id="setLangFa" checked>
-                <span>فارسی (RTL)</span>
-              </label>
-              <label class="settings-option">
-                <input type="radio" name="setLang" value="en" id="setLangEn">
-                <span>English (LTR)</span>
-              </label>
-            </div>
-          </div>
-          <div class="settings-card">
-            <h3 class="settings-h">پوسته (Skin)</h3>
-            <p class="muted settings-desc">پوسته کل طراحی (شعاع گوشه‌ها، شیشه‌ای بودن، دکمه‌ها، کادرها) را تعریف می‌کند؛ جدا از تم رنگ است.</p>
-            <div class="settings-row">
-              <label class="settings-option">
-                <input type="radio" name="setSkin" value="zen-calm" id="setSkinZen">
-                <span>Zen Calm</span>
-              </label>
-              <label class="settings-option">
-                <input type="radio" name="setSkin" value="terminal-glass" id="setSkinTg">
-                <span>Terminal Glass</span>
-              </label>
-              <label class="settings-option">
-                <input type="radio" name="setSkin" value="vector-soft" id="setSkinVs">
-                <span>Vector Soft — Obsidian Editorial</span>
-              </label>
-            </div>
-            <p class="hint">پوستهٔ فعلی: <strong id="skinNameLabel">Terminal Glass</strong></p>
-          </div>
+
         </div>
       </section>
 
