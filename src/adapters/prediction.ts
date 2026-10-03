@@ -24,6 +24,8 @@ export function createPrediction(decision, meta = {}) {
     createdAt: now,
     priceAtPrediction: decision.data.price,
     horizonBars,
+    horizonDays: pred.horizonDays || CONFIG.forecastHorizonDays || 7,
+    dailyPath: pred.dailyPath || null,
     direction: pred.direction,
     signal: decision.signal,
     target: pred.target,

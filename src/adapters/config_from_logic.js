@@ -1,0 +1,97 @@
+/**
+ * تمام وزن‌ها و آستانه‌های موتور تصمیم — یک نقطه تنظیم
+ */
+export const CONFIG = Object.freeze({
+  minCandles: 30,
+  minCandlesADX: 40,
+  minCandlesStoch: 20,
+
+  // Technical periods
+  rsiPeriod: 14,
+  atrPeriod: 14,
+  smaFast: 20,
+  smaSlow: 50,
+  emaFast: 12,
+  emaSlow: 26,
+  emaSignal: 9,
+  momentumPeriod: 10,
+  rocPeriod: 12,
+  bbPeriod: 20,
+  bbStd: 2,
+  stochK: 14,
+  stochD: 3,
+  adxPeriod: 14,
+  lookbackSR: 20,
+  volumeAvgPeriod: 20,
+
+  // Decision thresholds (score 0–100)
+  // Calibrated from score distribution on sample_10k (mean≈52, p90≈59):
+  // previous 62/38 produced almost only HOLD → no testable directional signals.
+  buyThreshold: 57,
+  sellThreshold: 43,
+
+  // Technical component weights (sum ≈ 100 for normalization reference)
+  techWeights: Object.freeze({
+    trend: 22,
+    momentum: 18,
+    rsi: 14,
+    macd: 14,
+    volatility: 10,
+    structure: 12, // S/R + breakout
+    volume: 10
+  }),
+
+  // Combined engine weights
+  engineWeights: Object.freeze({
+    technical: 0.7,
+    fundamental: 0.3 // only applied when fundamental data exists
+  }),
+
+  // Risk
+  highVolPct: 7,
+  lowVolPct: 3,
+  highDrawdownPct: 25,
+
+  // Prediction
+  defaultHorizonBars: 7,
+  /** Primary user-facing forecast window in calendar/trading days */
+  forecastHorizonDays: 7,
+  /** Supported multi-horizon day windows for path projection */
+  forecastDayWindows: Object.freeze([1, 3, 5, 7]),
+  predictionAlgoVersion: 'v12.2.0-accuracy-enhancements',
+  minSamplesForLearning: 5,
+  confidenceClamp: Object.freeze({ min: 0.7, max: 1.15 }),
+
+  // Learning: how much past accuracy shifts confidence
+  learningStrength: 0.25,
+
+  // Entry Engine V10.0 gates (stricter EV, confluence-aware)
+  entryMinRR: 1.05,          // minimum raw R:R (Breakout may pass slightly lower via EV)
+  entryMinEV_R: -0.08,         // reject if expected value in R-units below this
+  minSamplesForKelly: 30,    // historical closed trades required to enable Kelly
+  defaultRiskPct: 0.01,      // 1% equity risk default for position sizing
+  entryConfluenceMin: 0.35,  // min structure+agreement+mtf confluence
+  entryEngineVersion: 'v10.0',
+  // Accuracy enhancements v12.2.0 (calibration + quality gates + dual metrics)
+  accuracyEnhancements: Object.freeze({
+    enableQualityGates: true,
+    calibrationMode: 'blend', // off | replace | blend
+    calibrationTemperature: 12,
+    minDirectionalProbability: 0.58,
+    minProbabilityMargin: 0.12,
+    minAdx: 18,
+    minRegimeConfidence: 0.45,
+    blockRegimes: Object.freeze(['Unclear']),
+    minMtfAgreement: 0.45,
+    blockMtfConflict: true,
+    minConfidence: 0.42,
+    minStrategyAgreement: 0.40,
+    maxEventRisk: 0.72,
+    minEvR: -0.05,
+    // layered forecast: tight path days 1-2, wider range days 5-7
+    layerTightDays: 2,
+    layerWideFromDay: 5,
+    rangeWidthAtrMultTight: 0.55,
+    rangeWidthAtrMultWide: 1.35
+  }),
+});

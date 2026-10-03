@@ -15,6 +15,7 @@ import {
   injectTestFaults, AUTO_DEBUGGER_VERSION, getDebugMemory, getRegressionMemory,
   emitRealtimeEvent, getCorrectionLog, getRealtimeState, onRealtimeEvent
 } from '../adapters/autoDebugger';
+import { buildForecastPath, horizonDaysToBars, barsToApproxDays } from '../adapters/forecastPath';
 
 const $ = (id) => document.getElementById(id);
 let activeTab = 'paste';
@@ -237,7 +238,7 @@ async function refreshAssetPanel(symbol) {
   loadManual(symbol, currentTf);
   // Load exact project CSVs for 1D / 4H / 1H (never mix TFs)
   try {
-    const { ensureAllProjectTimeframes, ensureProjectData } = await import('../adapters/datasets');
+    const { ensureAllProjectTimeframes, ensureProjectData } = await import('./logic/datasets');
     await ensureAllProjectTimeframes(symbol);
     await ensureProjectData(symbol, currentTf);
   } catch (_) {}
@@ -419,7 +420,7 @@ function collectImportText() {
 async function importHistoricalIfAny(sym, tf) {
   const text = collectImportText();
   if (!text || text.split(/\n/).filter(Boolean).length < 2) return { imported: 0 };
-  const { parseOHLCV } = await import('../adapters/analysis');
+  const { parseOHLCV } = await import('./logic/analysis');
   const { candles, error } = parseOHLCV(text);
   if (error || !candles.length) return { imported: 0, error };
   const withMeta = candles.map(c => ({
@@ -520,7 +521,7 @@ async function runAnalysis(silent = false) {
       setProcessing(true, 'بارگذاری فاندامنتال آفلاین…');
       setFundFetchStatus('خواندن داده دستی فاندامنتال…', 'is-loading');
       try {
-        const fmod = await import('../adapters/fundamental');
+        const fmod = await import('./logic/fundamental');
         const offline = fmod.buildSnapshotFromStore(sym);
         const hasOffline = offline && Object.keys(offline).length > 0;
         if (hasOffline) {
@@ -549,7 +550,7 @@ async function runAnalysis(silent = false) {
     // When analyzing 1D, also fetch 4H so MTF can use daily bias + 4H structure (no fabrication).
     const seriesMap = { [currentTf]: series.candles };
     try {
-      const { loadHistorical, TIMEFRAMES, ensureAllProjectTimeframes, ensureProjectData } = await import('../adapters/datasets');
+      const { loadHistorical, TIMEFRAMES, ensureAllProjectTimeframes, ensureProjectData } = await import('./logic/datasets');
       // Always bind each TF to its own CSV (1D↔1d, 4H↔4h, 1H↔1h)
       try { await ensureAllProjectTimeframes(sym); } catch (_) { /* optional */ }
       try { await ensureProjectData(sym, currentTf); } catch (_) {}
@@ -563,7 +564,7 @@ async function runAnalysis(silent = false) {
       }
     } catch (_) { /* offline / missing */ }
 
-    const { analyze } = await import('../adapters/analysis');
+    const { analyze } = await import('./logic/analysis');
     const fset = getFundAdvancedSettings();
     const result = analyze(series.candles, {
       currentPrice, symbol: sym, timeframe: currentTf, recordPrediction: true,
@@ -1037,7 +1038,7 @@ function switchView(view) {
       (async () => {
         try {
           if (currentSymbol) {
-            const { ensureProjectData } = await import('../adapters/datasets');
+            const { ensureProjectData } = await import('./logic/datasets');
             await ensureProjectData(currentSymbol, currentTf || '1D');
             if ((currentTf || '1D') === '1D') {
               try { await ensureProjectData(currentSymbol, '4H'); } catch (_) {}
@@ -1135,7 +1136,7 @@ async function runBacktestUI() {
 
   try {
     try {
-      const { ensureProjectData } = await import('../adapters/datasets');
+      const { ensureProjectData } = await import('./logic/datasets');
       const proj = await ensureProjectData(currentSymbol, currentTf);
       if (proj?.ok && proj.source && proj.source !== 'store') {
         if (status) status.textContent = `داده پروژه بارگذاری شد (${proj.count} کندل از ${proj.source}) — در حال بک‌تست…`;
@@ -1148,7 +1149,7 @@ async function runBacktestUI() {
       toast(msg, 'err');
       return;
     }
-    const { runBacktest } = await import('../adapters/backtest');
+    const { runBacktest } = await import('./logic/backtest');
     const horizon = Number($('btHorizon')?.value || 5);
     const step = Number($('btStep')?.value || 5);
     const mode = $('btMode')?.value || 'combined';
@@ -1245,7 +1246,7 @@ async function downloadMergedCsv() {
   const sym = currentSymbol || $('symbol')?.value;
   if (!sym) { toast('ابتدا نماد را انتخاب کنید', 'err'); return; }
   try {
-    const { exportMergedCSV, promoteManualIntoHistorical } = await import('../adapters/datasets');
+    const { exportMergedCSV, promoteManualIntoHistorical } = await import('./logic/datasets');
     // Persist manual into historical so next upload/session keeps them
     promoteManualIntoHistorical(sym, currentTf || '1D', false);
     const out = exportMergedCSV(sym, currentTf || '1D');
@@ -1260,7 +1261,7 @@ async function downloadMergedCsv() {
 
 async function downloadPatternLibrary() {
   try {
-    const { exportPatternsJSON } = await import('../adapters/mpb/memory');
+    const { exportPatternsJSON } = await import('./logic/mpb/memory');
     const json = exportPatternsJSON();
     const name = `mpb_patterns_${new Date().toISOString().slice(0, 10)}.json`;
     downloadTextFile(name, json, 'application/json');
@@ -1274,7 +1275,7 @@ async function importPatternLibraryFile(file) {
   if (!file) return;
   try {
     const text = await file.text();
-    const { importPatternsJSON } = await import('../adapters/mpb/memory');
+    const { importPatternsJSON } = await import('./logic/mpb/memory');
     const res = importPatternsJSON(text);
     if (!res.ok) { toast(res.error || 'بارگذاری ناموفق', 'err'); return; }
     toast(`${res.added} الگو اضافه شد · مجموع ${res.total}`, 'ok');
@@ -1288,7 +1289,7 @@ async function refreshMPBLibrary() {
   const box = $('mpbLibraryList');
   const statsEl = $('mpbMemoryStats');
   try {
-    const { listPatterns, patternMemoryStats, deletePattern } = await import('../adapters/mpb/memory');
+    const { listPatterns, patternMemoryStats, deletePattern } = await import('./logic/mpb/memory');
     const items = listPatterns();
     const stats = patternMemoryStats();
     if (statsEl) statsEl.textContent = `ذخیره‌شده: ${stats.total} الگو`;
@@ -1309,7 +1310,7 @@ async function refreshMPBLibrary() {
     `).join('');
     box.querySelectorAll('.mpb-del').forEach(btn => {
       btn.onclick = async () => {
-        const { deletePattern } = await import('../adapters/mpb/memory');
+        const { deletePattern } = await import('./logic/mpb/memory');
         deletePattern(btn.dataset.id);
         refreshMPBLibrary();
         toast('الگو حذف شد', 'ok');
@@ -1824,7 +1825,7 @@ function init() {
     updateSmartDateTimeUI();
     if (currentSymbol) {
       try {
-        const { ensureProjectData } = await import('../adapters/datasets');
+        const { ensureProjectData } = await import('./logic/datasets');
         await ensureProjectData(currentSymbol, currentTf);
       } catch (_) {}
       refreshAssetPanel(currentSymbol);
@@ -1893,7 +1894,7 @@ function init() {
     }
     // also try project path cache refresh
     try {
-      const { ensureProjectData } = await import('../adapters/datasets');
+      const { ensureProjectData } = await import('./logic/datasets');
       await ensureProjectData(sym, currentTf);
     } catch (_) {}
     refreshAssetPanel(sym);
@@ -2160,7 +2161,7 @@ function saveFundAdvancedSettings(partial) {
 async function ensureFundModule() {
   if (window.__fundMod) return window.__fundMod;
   try {
-    const mod = await import('../adapters/fundamental');
+    const mod = await import('./logic/fundamental');
     window.__fundMod = mod;
     return mod;
   } catch (e) {
@@ -2695,6 +2696,40 @@ function drawForecastChartFrame(state, pulse = 0) {
   state.plotH = H;
 }
 
+
+function renderSevenDayPanel(result) {
+  const host = document.getElementById('forecast7dPanel');
+  if (!host) return;
+  const days = result?.forecast7d?.days || result?.prediction?.dailyPath;
+  if (!days || !days.length) {
+    host.hidden = true;
+    host.innerHTML = '';
+    return;
+  }
+  host.hidden = false;
+  const sig = result?.signal || result?.forecast7d?.direction || 'HOLD';
+  const hd = result?.forecast7d?.horizonDays || days.length || 7;
+  const hq = result?.analysis?.highQuality || result?.prediction?.highQuality;
+  const cal = result?.analysis?.calibration || result?.prediction?.calibration;
+  const gate = result?.analysis?.qualityGate || result?.prediction?.qualityGate;
+  const gateNote = gate && !gate.pass ? (gate.reasons || []).slice(0, 2).join(' · ') : '';
+  host.innerHTML = `<div class="f7-head"><strong>پیش‌بینی ${hd}روزه</strong>
+    ${hq ? '<span class="f7-badge hq">کیفیت بالا</span>' : '<span class="f7-badge nq">فیلتر شده / عادی</span>'}
+    ${cal ? `<span class="muted mono">P↑ ${cal.pUp} · P↓ ${cal.pDown}</span>` : ''}
+
+    <span class="muted mono">افق ${hd} روز · ${sig}</span></div>
+    <div class="f7-grid">` + days.map(d => `
+      <div class="f7-day">
+        <div class="f7-d">روز ${d.day}</div>
+        <div class="f7-c mono">${Number(d.close).toFixed(2)}</div>
+        ${d.low != null && d.high != null ? `<div class="f7-range muted mono">${Number(d.low).toFixed(1)}–${Number(d.high).toFixed(1)}</div>` : ''}
+        ${d.layer ? `<div class="f7-layer muted">${d.layer === 'tight' ? 'دقیق' : d.layer === 'wide' ? 'بازه' : 'میانی'}</div>` : ''}
+        <div class="f7-ch ${Number(d.changePct) >= 0 ? 'up' : 'dn'}">${Number(d.changePct) >= 0 ? '+' : ''}${d.changePct}%</div>
+        <div class="f7-conf muted">اعتماد ${(Number(d.confidence) * 100).toFixed(0)}٪</div>
+      </div>`).join('') + `</div>
+    <p class="f7-note muted">${gateNote ? 'دروازه کیفیت: ' + gateNote + ' · ' : ''}${result?.forecast7d?.disclaimer || 'مسیر چندروزه برون‌یابی ساختاری است، نه تضمین قیمت.'}</p>`;
+}
+
 function renderForecastChart(symbolId, result) {
   const canvas = $('forecastChart');
   const status = $('chartStatus');
@@ -2716,15 +2751,24 @@ function renderForecastChart(symbolId, result) {
   }
 
   const conf = Number.isFinite(result?.confidence) ? result.confidence : 0.5;
-  // Always show forecast path after analysis (min 3 bars when signal exists)
-  let nFuture = 0;
-  if (result && result.ok !== false) {
-    if (result.signal === 'HOLD' && conf < 0.35) nFuture = 2;
-    else if (conf >= 0.65) nFuture = 4;
-    else nFuture = 3;
+  // 7-day (or CONFIG) forecast path — user-facing horizon
+  const horizonDays = Number(result?.forecast7d?.horizonDays
+    || result?.prediction?.horizonDays
+    || 7);
+  let nFuture = horizonDaysToBars(tf, horizonDays);
+  // Prefer precomputed path from analysis when available and matching length
+  let future = [];
+  if (result?.forecast7d?.future?.length) {
+    future = result.forecast7d.future;
+    nFuture = future.length;
+  } else if (result && result.ok !== false) {
+    const built = buildForecastPath(hist, result, { days: horizonDays, timeframe: tf });
+    future = built.future || [];
+    nFuture = future.length || nFuture;
+  } else {
+    const built = buildForecastCandles(hist, result, Math.min(7, nFuture || 7));
+    future = built.future || [];
   }
-  const built = buildForecastCandles(hist, result, nFuture);
-  const future = built.future || [];
   const all = hist.concat(future);
 
   const showDates = $('chartShowDates')?.checked !== false;

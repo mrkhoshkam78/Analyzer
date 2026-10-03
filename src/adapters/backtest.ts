@@ -13,6 +13,7 @@ import { loadJSON, saveJSON } from './storage';
 import { runDecision } from './decision';
 import { runAllStrategies, computeTargetStop } from './strategies';
 import { detectRegime } from './regime';
+import { aggregateAccuracyReport, evaluateForecastMetrics } from './accuracyEnhancements';
 
 const BT_STORE = 'backtest_results';
 
@@ -246,6 +247,7 @@ export function runBacktest(candles, opts = {}) {
     let strategySignals = null;
 
     if (mode === 'ensemble' || mode === 'combined') {
+      let highQuality = false;
       const decision = runDecision(hist, {
         symbol,
         currentPrice: entryPrice,
@@ -256,6 +258,7 @@ export function runBacktest(candles, opts = {}) {
       });
       if (!decision.ok) continue;
       signal = decision.signal;
+      highQuality = !!(decision.analysis?.highQuality || decision.prediction?.highQuality);
       direction = decision.prediction?.direction || (signal === 'BUY' ? 'up' : signal === 'SELL' ? 'down' : 'neutral');
       target = decision.target;
       stop = decision.stop;
@@ -266,6 +269,7 @@ export function runBacktest(candles, opts = {}) {
       fundApplied = decision.fundamentalApplied;
       regime = decision.regime;
       strategySignals = decision.strategies;
+      highQuality = !!(decision.analysis?.highQuality || decision.prediction?.highQuality || decision.highQuality);
     } else if (strategyId || ['trendFollowing', 'meanReversion', 'momentum', 'breakout', 'fibStructure', 'fundamental'].includes(mode)) {
       const sid = strategyId || mode;
       const stratResult = runAllStrategies(hist, {
@@ -398,6 +402,8 @@ export function runBacktest(candles, opts = {}) {
       entryPrice,
       predictedDirection: direction,
       signal,
+      highQuality: typeof highQuality !== 'undefined' ? !!highQuality : false,
+      directionCorrect: result === 'correct',
       predictedTarget: target,
       predictedStop: stop,
       confidence: Math.round(confidence * 1000) / 1000,
@@ -484,6 +490,29 @@ export function runBacktest(candles, opts = {}) {
     predictions,
     samples: pickSamples(predictions, 8)
   };
+
+  // Dual accuracy report: all vs high-quality filtered
+  try {
+    const evalRows = predictions.map(p => {
+      const predDir = p.signal === 'BUY' ? 'up' : p.signal === 'SELL' ? 'down' : 'neutral';
+      const actualDir = p.actualDirection || (p.actualRet > 0.002 ? 'up' : p.actualRet < -0.002 ? 'down' : 'neutral');
+      return {
+        ok: true,
+        predDir,
+        actualDir,
+        directionCorrect: p.directionCorrect != null ? p.directionCorrect : (predDir !== 'neutral' && predDir === actualDir),
+        actualRetPct: p.actualReturnPct != null ? p.actualReturnPct : (p.actualRetPct != null ? p.actualRetPct : null),
+        rangeCoverage: p.rangeCoverage ?? null,
+        maeDay1: p.maeDay1 ?? null,
+        maeDayLast: p.maeDayLast ?? null,
+        highQuality: !!p.highQuality
+      };
+    });
+    summary.accuracySplit = aggregateAccuracyReport(evalRows);
+    summary.highQualityCount = evalRows.filter(r => r.highQuality).length;
+  } catch (_) {
+    summary.accuracySplit = null;
+  }
 
   // Persist
   const history = loadBacktestResults();

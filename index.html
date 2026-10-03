@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="تحلیل‌گر بازار آفلاین — Vector Soft Obsidian Editorial · Terminal Glass">
-  <title>تحلیل‌گر بازار · v12.0.2</title>
+  <title>تحلیل‌گر بازار · v12.2.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/styles.css">
   <script>
     (function () {
       try {
@@ -99,7 +99,7 @@
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
           </button>
           <div class="brand-copy">
-            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge anim-shimmer">v12.0.2</span></h1>
+            <h1 class="site-name">تحلیل‌گر بازار <span class="ver-badge anim-shimmer">v12.2.0</span></h1>
           </div>
         </div>
         <div class="header-center" id="headerAssetSlot">
@@ -342,7 +342,8 @@
             <div id="chartTooltip" class="chart-tooltip" hidden></div>
           </div>
         </div>
-        <p id="chartStatus" class="status-line muted">پس از انتخاب نماد و اجرای تحلیل، مسیر پیش‌بینی رسم می‌شود.</p>
+        <div id="forecast7dPanel" class="forecast7d-panel" hidden></div>
+        <p id="chartStatus" class="status-line muted">پس از تحلیل، مسیر پیش‌بینی ۷روزه روی نمودار و جدول روزانه نمایش داده می‌شود.</p>
       </section>
 
       <!-- مغز الگوی بازار -->
@@ -541,7 +542,8 @@
             <label class="label" for="btHorizon">افق پیش‌بینی</label>
             <select id="btHorizon" class="input">
               <option value="3">کوتاه · ۳ کندل</option>
-              <option value="5" selected>متوسط · ۵ کندل</option>
+              <option value="5">متوسط · ۵ کندل</option>
+              <option value="7" selected>هفت‌روزه · ۷ کندل</option>
               <option value="10">بلند · ۱۰ کندل</option>
               <option value="20">خیلی بلند · ۲۰ کندل</option>
             </select>
@@ -677,7 +679,7 @@
     </main>
 
     <footer class="site-footer">
-      <span>نسخه v12.0.2 · آفلاین</span>
+      <span>نسخه v12.2.0 · آفلاین</span>
       <span class="muted" id="footerSkinLabel">پوسته Terminal Glass · داده محلی</span>
     </footer>
   </div>
@@ -712,6 +714,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="/src/app/main.ts"></script>
 </body>
 </html>

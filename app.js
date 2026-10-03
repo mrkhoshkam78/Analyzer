@@ -15,6 +15,7 @@ import {
   injectTestFaults, AUTO_DEBUGGER_VERSION, getDebugMemory, getRegressionMemory,
   emitRealtimeEvent, getCorrectionLog, getRealtimeState, onRealtimeEvent
 } from './logic/autoDebugger.js';
+import { buildForecastPath, horizonDaysToBars, barsToApproxDays } from './logic/forecastPath.js';
 
 const $ = (id) => document.getElementById(id);
 let activeTab = 'paste';
@@ -2695,6 +2696,40 @@ function drawForecastChartFrame(state, pulse = 0) {
   state.plotH = H;
 }
 
+
+function renderSevenDayPanel(result) {
+  const host = document.getElementById('forecast7dPanel');
+  if (!host) return;
+  const days = result?.forecast7d?.days || result?.prediction?.dailyPath;
+  if (!days || !days.length) {
+    host.hidden = true;
+    host.innerHTML = '';
+    return;
+  }
+  host.hidden = false;
+  const sig = result?.signal || result?.forecast7d?.direction || 'HOLD';
+  const hd = result?.forecast7d?.horizonDays || days.length || 7;
+  const hq = result?.analysis?.highQuality || result?.prediction?.highQuality;
+  const cal = result?.analysis?.calibration || result?.prediction?.calibration;
+  const gate = result?.analysis?.qualityGate || result?.prediction?.qualityGate;
+  const gateNote = gate && !gate.pass ? (gate.reasons || []).slice(0, 2).join(' · ') : '';
+  host.innerHTML = `<div class="f7-head"><strong>پیش‌بینی ${hd}روزه</strong>
+    ${hq ? '<span class="f7-badge hq">کیفیت بالا</span>' : '<span class="f7-badge nq">فیلتر شده / عادی</span>'}
+    ${cal ? `<span class="muted mono">P↑ ${cal.pUp} · P↓ ${cal.pDown}</span>` : ''}
+
+    <span class="muted mono">افق ${hd} روز · ${sig}</span></div>
+    <div class="f7-grid">` + days.map(d => `
+      <div class="f7-day">
+        <div class="f7-d">روز ${d.day}</div>
+        <div class="f7-c mono">${Number(d.close).toFixed(2)}</div>
+        ${d.low != null && d.high != null ? `<div class="f7-range muted mono">${Number(d.low).toFixed(1)}–${Number(d.high).toFixed(1)}</div>` : ''}
+        ${d.layer ? `<div class="f7-layer muted">${d.layer === 'tight' ? 'دقیق' : d.layer === 'wide' ? 'بازه' : 'میانی'}</div>` : ''}
+        <div class="f7-ch ${Number(d.changePct) >= 0 ? 'up' : 'dn'}">${Number(d.changePct) >= 0 ? '+' : ''}${d.changePct}%</div>
+        <div class="f7-conf muted">اعتماد ${(Number(d.confidence) * 100).toFixed(0)}٪</div>
+      </div>`).join('') + `</div>
+    <p class="f7-note muted">${gateNote ? 'دروازه کیفیت: ' + gateNote + ' · ' : ''}${result?.forecast7d?.disclaimer || 'مسیر چندروزه برون‌یابی ساختاری است، نه تضمین قیمت.'}</p>`;
+}
+
 function renderForecastChart(symbolId, result) {
   const canvas = $('forecastChart');
   const status = $('chartStatus');
@@ -2716,15 +2751,24 @@ function renderForecastChart(symbolId, result) {
   }
 
   const conf = Number.isFinite(result?.confidence) ? result.confidence : 0.5;
-  // Always show forecast path after analysis (min 3 bars when signal exists)
-  let nFuture = 0;
-  if (result && result.ok !== false) {
-    if (result.signal === 'HOLD' && conf < 0.35) nFuture = 2;
-    else if (conf >= 0.65) nFuture = 4;
-    else nFuture = 3;
+  // 7-day (or CONFIG) forecast path — user-facing horizon
+  const horizonDays = Number(result?.forecast7d?.horizonDays
+    || result?.prediction?.horizonDays
+    || 7);
+  let nFuture = horizonDaysToBars(tf, horizonDays);
+  // Prefer precomputed path from analysis when available and matching length
+  let future = [];
+  if (result?.forecast7d?.future?.length) {
+    future = result.forecast7d.future;
+    nFuture = future.length;
+  } else if (result && result.ok !== false) {
+    const built = buildForecastPath(hist, result, { days: horizonDays, timeframe: tf });
+    future = built.future || [];
+    nFuture = future.length || nFuture;
+  } else {
+    const built = buildForecastCandles(hist, result, Math.min(7, nFuture || 7));
+    future = built.future || [];
   }
-  const built = buildForecastCandles(hist, result, nFuture);
-  const future = built.future || [];
   const all = hist.concat(future);
 
   const showDates = $('chartShowDates')?.checked !== false;

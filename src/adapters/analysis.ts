@@ -6,7 +6,8 @@
 import { runDecision } from './decision';
 import { createPrediction } from './prediction';
 import { isNum } from './indicators';
-import { runMPB } from './mpb/index';
+import { runMPB } from './mpb/index'
+import { attachForecastToResult } from './forecastPath';
 
 function detectDelim(line) {
   if (line.includes('\t')) return '\t';

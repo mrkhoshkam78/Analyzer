@@ -85,6 +85,8 @@ export interface AppConfig {
   lowVolPct: number;
   highDrawdownPct: number;
   defaultHorizonBars: number;
+  forecastHorizonDays: number;
+  forecastDayWindows: readonly number[];
   predictionAlgoVersion: string;
   minSamplesForLearning: number;
   confidenceClamp: { min: number; max: number };

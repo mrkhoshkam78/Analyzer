@@ -12,6 +12,7 @@ import { buildMarketContext } from './context';
 import { getCalendarAsOf } from './calendar';
 import { runMultiTimeframe } from './mtf';
 import { computeEntry } from './entry';
+import { enhanceEnsembleDecision } from './accuracyEnhancements';
 
 function buildSuggestion(signal, riskLevel, tech, confidence, regime, entry, fund) {
   const highRisk = riskLevel === 'High' || riskLevel === 'high';
@@ -336,7 +337,34 @@ export function runDecision(candles, options = {}) {
       stratForEns = strategies.map(s => s.id === 'fundamental' ? { ...s, active: false } : s);
     }
   }
-  const ens = ensembleStrategies(stratForEns, regimeInfo, riskScore, learning.multiplier, context, mtf, fundOpts);
+  let ens = ensembleStrategies(stratForEns, regimeInfo, riskScore, learning.multiplier, context, mtf, fundOpts);
+
+  // v12.2.0 accuracy layer: calibration + quality gates (may force HOLD)
+  const adxVal = ind?.adx?.adx != null ? ind.adx.adx : (ind?.adx != null && typeof ind.adx === 'number' ? ind.adx : null);
+  const enhanced = enhanceEnsembleDecision(ens, {
+    adx: adxVal,
+    regime: regimeInfo.regime,
+    regimeConfidence: regimeInfo.confidence,
+    mtfOk: !!(mtf && mtf.ok),
+    mtfAgreement: mtf?.agreement,
+    mtfConflict: mtf?.htfLtfConflict === true,
+    eventRisk: context?.event?.eventRisk,
+    agreement: ens.agreement,
+    confidence: ens.confidence,
+    signal: ens.signal,
+    evR: null
+  });
+  ens = {
+    ...ens,
+    signal: enhanced.signal,
+    confidence: enhanced.confidence,
+    rawSignal: enhanced.rawSignal,
+    calibration: enhanced.calibration,
+    qualityGate: enhanced.qualityGate,
+    highQuality: enhanced.highQuality,
+    enhancementVersion: enhanced.enhancementVersion
+  };
+
 
   const price = ind.price;
   const support = ind.support;
@@ -373,7 +401,26 @@ export function runDecision(candles, options = {}) {
     candleCount: candles.length
   });
 
-  // Target/Stop: prefer entry engine levels when valid, else structure+ATR
+  // EV quality re-gate: if entry EV weak, force HOLD for non-HQ path
+  if (ens.signal !== 'HOLD' && entry && entry.evR != null && Number.isFinite(entry.evR)) {
+    const minEv = (CONFIG.accuracyEnhancements && CONFIG.accuracyEnhancements.minEvR != null)
+      ? CONFIG.accuracyEnhancements.minEvR : -0.05;
+    if (entry.evR < minEv) {
+      ens = {
+        ...ens,
+        signal: 'HOLD',
+        highQuality: false,
+        qualityGate: {
+          ...(ens.qualityGate || {}),
+          pass: false,
+          forcedHold: true,
+          reasons: [...((ens.qualityGate && ens.qualityGate.reasons) || []), `EV ضعیف (${entry.evR}R)`]
+        }
+      };
+    }
+  }
+
+    // Target/Stop: prefer entry engine levels when valid, else structure+ATR
   let target = entry.target1;
   let stop = entry.stop;
   let rr = entry.rr;
@@ -398,7 +445,8 @@ export function runDecision(candles, options = {}) {
     }
   }
 
-  const horizonBars = options.horizonBars || CONFIG.defaultHorizonBars;
+  const horizonDays = options.horizonDays || CONFIG.forecastHorizonDays || 7;
+  const horizonBars = options.horizonBars || CONFIG.defaultHorizonBars || horizonDays;
   const direction = ens.signal === 'BUY' ? 'up' : ens.signal === 'SELL' ? 'down' : 'neutral';
   const fundamentalApplied = strategies.some(s => s.id === 'fundamental' && s.active);
   const activeStrategies = strategies.filter(s => s.active).map(s => s.name);
@@ -469,6 +517,10 @@ export function runDecision(candles, options = {}) {
       supportingFactors: ens.supporting,
       conflictingFactors: ens.conflicting,
       dataQuality,
+      highQuality: !!ens.highQuality,
+      calibration: ens.calibration || null,
+      qualityGate: ens.qualityGate || null,
+      rawSignal: ens.rawSignal || ens.signal,
       historicalReliability: histAcc.ready
         ? { rate: histAcc.rate, samples: histAcc.samples }
         : { rate: null, samples: histAcc.samples || 0 }
@@ -482,6 +534,7 @@ export function runDecision(candles, options = {}) {
       resistance,
       confidence: ens.confidence,
       horizonBars,
+      horizonDays,
       rr: entry.netRR != null ? entry.netRR : rr,
       target2: entry.target2,
       algoVersion: 'v11.0.1-fund-entry-v10',
@@ -496,7 +549,14 @@ export function runDecision(candles, options = {}) {
       evR: entry.evR,
       modelConfidence: entry.modelConfidence,
       selectedScenario: entry.selectedScenario,
-      disclaimer: 'پیش‌بینی قطعی نیست. Entry V10.0 بر اساس سناریوهای ساختاری، EV محافظه‌کارانه و Ensemble محلی است — نه تضمین سود.'
+      highQuality: !!ens.highQuality,
+      calibration: ens.calibration || null,
+      qualityGate: ens.qualityGate || null,
+      rawSignal: ens.rawSignal || ens.signal,
+      pUp: ens.calibration?.pUp ?? null,
+      pDown: ens.calibration?.pDown ?? null,
+      algoVersion: (typeof CONFIG !== 'undefined' && CONFIG.predictionAlgoVersion) || 'v12.2.0-accuracy-enhancements',
+      disclaimer: 'پیش‌بینی قطعی نیست. لایه دقت v12.2: calibration احتمالی + دروازه کیفیت (ADX/MTF/regime/confidence/EV). Entry V10.0 — نه تضمین سود.'
     },
     suggestion,
     signal: ens.signal,

@@ -49,8 +49,10 @@ export const CONFIG: Readonly<AppConfig> = Object.freeze({
   lowVolPct: 3,
   highDrawdownPct: 25,
 
-  defaultHorizonBars: 5,
-  predictionAlgoVersion: 'v8.0.1-mpb-memory',
+  defaultHorizonBars: 7,
+  forecastHorizonDays: 7,
+  forecastDayWindows: Object.freeze([1, 3, 5, 7]) as readonly number[],
+  predictionAlgoVersion: 'v12.2.0-accuracy-enhancements',
   minSamplesForLearning: 5,
   confidenceClamp: Object.freeze({ min: 0.7, max: 1.15 }),
 
@@ -62,7 +64,27 @@ export const CONFIG: Readonly<AppConfig> = Object.freeze({
   defaultRiskPct: 0.01,
   entryConfluenceMin: 0.35,
   entryEngineVersion: 'v10.0',
+  accuracyEnhancements: Object.freeze({
+    enableQualityGates: true,
+    calibrationMode: 'blend',
+    calibrationTemperature: 12,
+    minDirectionalProbability: 0.58,
+    minProbabilityMargin: 0.12,
+    minAdx: 18,
+    minRegimeConfidence: 0.45,
+    blockRegimes: Object.freeze(['Unclear']),
+    minMtfAgreement: 0.45,
+    blockMtfConflict: true,
+    minConfidence: 0.42,
+    minStrategyAgreement: 0.40,
+    maxEventRisk: 0.72,
+    minEvR: -0.05,
+    layerTightDays: 2,
+    layerWideFromDay: 5,
+    rangeWidthAtrMultTight: 0.55,
+    rangeWidthAtrMultWide: 1.35,
+  }),
 });
 
-export const APP_VERSION = '12.0.1';
+export const APP_VERSION = '12.2.0';
 export const MIGRATION_BASELINE_VERSION = '11.6.0';
