@@ -1,0 +1,29 @@
+{
+  "name": "offline-market-analyzer",
+  "version": "12.0.1",
+  "description": "OMA — Offline Market Analyzer (TypeScript + Rust/WASM)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:regression": "vitest run tests/regression",
+    "typecheck": "tsc --noEmit",
+    "rust:build": "cd rust-core && cargo build --release",
+    "rust:test": "cd rust-core && cargo test",
+    "rust:wasm": "cd rust-core && cargo build --release --target wasm32-unknown-unknown && wasm-bindgen --target web --out-dir ../src/bridge/pkg ./target/wasm32-unknown-unknown/release/oma_core.wasm",
+    "server": "node server/index.js",
+    "server:dev": "node --watch server/index.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4",
+    "@types/node": "^22.7.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
