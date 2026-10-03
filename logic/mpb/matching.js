@@ -17,7 +17,7 @@ const DEFAULT_WEIGHTS = Object.freeze({
 });
 
 /* Multi-horizon outcomes: short → swing (more realistic coverage) */
-const HORIZONS = [3, 5, 10, 15, 20];
+const HORIZONS = [3, 5, 7, 10, 15, 20];
 
 function pearson(a, b) {
   const n = Math.min(a.length, b.length);
@@ -290,6 +290,25 @@ function aggregateOutcomes(matches) {
     };
   }
   return byH;
+}
+
+
+/** Blend default weights with optional learned weights (walk-forward safe). */
+export function resolveMatchWeights(learned = null, strength = 0.35) {
+  const base = { ...DEFAULT_WEIGHTS };
+  if (!learned || typeof learned !== 'object') return base;
+  const out = { ...base };
+  let sum = 0;
+  for (const k of Object.keys(base)) {
+    if (learned[k] != null && Number.isFinite(Number(learned[k]))) {
+      out[k] = (1 - strength) * base[k] + strength * Number(learned[k]);
+    }
+    sum += out[k];
+  }
+  if (sum > 0) {
+    for (const k of Object.keys(out)) out[k] = out[k] / sum;
+  }
+  return out;
 }
 
 export { HORIZONS, DEFAULT_WEIGHTS };

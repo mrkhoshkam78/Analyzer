@@ -53,8 +53,12 @@ export const CONFIG = Object.freeze({
   highDrawdownPct: 25,
 
   // Prediction
-  defaultHorizonBars: 5,
-  predictionAlgoVersion: 'v8.0.1-mpb-memory',
+  defaultHorizonBars: 7,
+  /** Primary user-facing forecast window in calendar/trading days */
+  forecastHorizonDays: 7,
+  /** Supported multi-horizon day windows for path projection */
+  forecastDayWindows: Object.freeze([1, 3, 5, 7]),
+  predictionAlgoVersion: 'v12.2.0-accuracy-enhancements',
   minSamplesForLearning: 5,
   confidenceClamp: Object.freeze({ min: 0.7, max: 1.15 }),
 
@@ -67,5 +71,27 @@ export const CONFIG = Object.freeze({
   minSamplesForKelly: 30,    // historical closed trades required to enable Kelly
   defaultRiskPct: 0.01,      // 1% equity risk default for position sizing
   entryConfluenceMin: 0.35,  // min structure+agreement+mtf confluence
-  entryEngineVersion: 'v10.0'
+  entryEngineVersion: 'v10.0',
+  // Accuracy enhancements v12.2.0 (calibration + quality gates + dual metrics)
+  accuracyEnhancements: Object.freeze({
+    enableQualityGates: true,
+    calibrationMode: 'blend', // off | replace | blend
+    calibrationTemperature: 12,
+    minDirectionalProbability: 0.58,
+    minProbabilityMargin: 0.12,
+    minAdx: 18,
+    minRegimeConfidence: 0.45,
+    blockRegimes: Object.freeze(['Unclear']),
+    minMtfAgreement: 0.45,
+    blockMtfConflict: true,
+    minConfidence: 0.42,
+    minStrategyAgreement: 0.40,
+    maxEventRisk: 0.72,
+    minEvR: -0.05,
+    // layered forecast: tight path days 1-2, wider range days 5-7
+    layerTightDays: 2,
+    layerWideFromDay: 5,
+    rangeWidthAtrMultTight: 0.55,
+    rangeWidthAtrMultWide: 1.35
+  }),
 });

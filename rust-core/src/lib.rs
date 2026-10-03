@@ -8,7 +8,7 @@ pub mod indicators;
 pub mod technical;
 pub mod types;
 
-pub mod prediction {}
+pub mod prediction;
 pub mod strategies {}
 pub mod regime {}
 pub mod mtf {}

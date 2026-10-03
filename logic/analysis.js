@@ -7,6 +7,7 @@ import { runDecision } from './decision.js';
 import { createPrediction } from './prediction.js';
 import { isNum } from './indicators.js';
 import { runMPB } from './mpb/index.js';
+import { attachForecastToResult, horizonDaysToBars } from './forecastPath.js';
 
 function detectDelim(line) {
   if (line.includes('\t')) return '\t';
@@ -205,6 +206,16 @@ export function analyze(candles, options = {}) {
       result.predictionId = null;
     }
   }
+
+
+  // Multi-day forecast path (default 7 days) — non-destructive
+  try {
+    const days = options.horizonDays ?? options.days;
+    attachForecastToResult(result, clean, {
+      timeframe: options.timeframe || '1D',
+      days: days
+    });
+  } catch (_) { /* non-fatal */ }
 
   // MPB v2.0 — Adaptive Market Pattern Brain (non-destructive attachment)
   try {
