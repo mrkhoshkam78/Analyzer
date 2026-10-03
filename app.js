@@ -1108,18 +1108,35 @@ function applyLang(lang) {
 }
 
 function applySkin(skin) {
+  const names = {
+    'terminal-glass': 'Terminal Glass',
+    'vector-soft': 'Vector Soft — Obsidian Editorial',
+    'zen-calm': 'Zen Calm',
+    'dribbble-dashboard': 'Dribbble Dashboard'
+  };
+  // Full alternate template page (standalone HTML) — open without altering its markup
+  if (skin === 'dribbble-dashboard') {
+    try { localStorage.setItem('oma_skin', 'dribbble-dashboard'); } catch (_) {}
+    if ($('skinNameLabel')) $('skinNameLabel').textContent = names['dribbble-dashboard'];
+    if ($('footerSkinLabel')) $('footerSkinLabel').textContent = 'پوسته Dribbble Dashboard · داده محلی';
+    // Only navigate when user actively selects it (not on every init reload loop)
+    if (applySkin._allowNavigate) {
+      applySkin._allowNavigate = false;
+      window.location.href = 'oma-dashboard-dribbble-style.html';
+      return;
+    }
+    return;
+  }
   const s = (skin === 'vector-soft' || skin === 'zen-calm') ? skin : 'terminal-glass';
   document.documentElement.setAttribute('data-skin', s);
-  // ensure theme+skin combo attributes stay in sync for CSS selectors
   const theme = document.documentElement.getAttribute('data-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', theme);
   try { localStorage.setItem('oma_skin', s); } catch (_) {}
-  const names = { 'terminal-glass': 'Terminal Glass', 'vector-soft': 'Vector Soft — Obsidian Editorial', 'zen-calm': 'Zen Calm' };
   if ($('skinNameLabel')) $('skinNameLabel').textContent = names[s] || s;
   if ($('footerSkinLabel')) $('footerSkinLabel').textContent = `پوسته ${names[s] || s} · داده محلی`;
-  // force repaint so CSS variables apply immediately
   document.body && void document.body.offsetHeight;
 }
+applySkin._allowNavigate = false;
 
 
 async function runBacktestUI() {
@@ -2084,13 +2101,23 @@ function init() {
     r.addEventListener('change', () => { if (r.checked) applyLang(r.value); });
   });
   document.querySelectorAll('input[name="setSkin"]').forEach(r => {
-    r.addEventListener('change', () => { if (r.checked) applySkin(r.value); });
+    r.addEventListener('change', () => {
+      if (!r.checked) return;
+      applySkin._allowNavigate = (r.value === 'dribbble-dashboard');
+      applySkin(r.value);
+    });
   });
   try {
     const sk = localStorage.getItem('oma_skin') || 'terminal-glass';
     const radio = document.querySelector(`input[name="setSkin"][value="${sk}"]`);
     if (radio) radio.checked = true;
-    applySkin(sk);
+    // Never auto-navigate on boot; user must select Dribbble in Settings
+    applySkin._allowNavigate = false;
+    if (sk === 'dribbble-dashboard') {
+      if ($('skinNameLabel')) $('skinNameLabel').textContent = 'Dribbble Dashboard';
+    } else {
+      applySkin(sk);
+    }
   } catch (_) { applySkin('terminal-glass'); }
 
   window.__OMA_V5__ = { getCachedSymbols, buildAnalysisSeries, loadManual, loadHistorical, getDataDayIndex };
