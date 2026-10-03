@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMA - Offline Market Analyzer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #F8F9FA;
+            --card: #FFFFFF;
+            --sidebar: #1A1D1F;
+            --sidebar-hover: #272B30;
+            --text-primary: #1A1D1F;
+            --text-secondary: #6F767E;
+            --text-light: #9A9FA5;
+            --border: #EFEFEF;
+            --green: #83BF6E;
+            --red: #FF6A55;
+            --blue: #2A85FF;
+            --purple: #8E66FF;
+            --yellow: #FFD88D;
+            --radius: 16px;
+            --shadow: 0px 4px 16px rgba(17, 17, 26, 0.05), 0px 8px 32px rgba(17, 17, 26, 0.02);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .app {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar);
+            color: white;
+            padding: 32px 24px;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            z-index: 100;
+            transition: transform 0.3s ease;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 48px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--blue), var(--purple));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-text {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .nav {
+            flex: 1;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-light);
+        }
+
+        .nav-item:hover {
+            background: var(--sidebar-hover);
+            color: white;
+        }
+
+        .nav-item.active {
+            background: var(--sidebar-hover);
+            color: white;
+        }
+
+        .nav-item svg {
+            width: 22px;
+            height: 22px;
+            flex-shrink: 0;
+        }
+
+        .nav-text {
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .premium-card {
+            background: linear-gradient(135deg, #2A2F33 0%, #1F2326 100%);
+            border-radius: var(--radius);
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #2A2F33;
+        }
+
+        .premium-card::before {
+            content: '';
+            position: absolute;
+            top: -50px;
+            right: -50px;
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, rgba(42, 133, 255, 0.2) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .premium-icon {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 16px;
+        }
+
+        .premium-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .premium-desc {
+            font-size: 13px;
+            color: var(--text-light);
+            text-align: center;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .premium-btn {
+            width: 100%;
+            padding: 10px;
+            background: var(--blue);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .premium-btn:hover {
+            background: #1f6fe0;
+            transform: translateY(-1px);
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            margin-left: 280px;
+            padding: 32px;
+            max-width: calc(100vw - 280px);
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            gap: 24px;
+        }
+
+        .header-left {
+            flex: 1;
+        }
+
+        .greeting {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -1px;
+            margin-bottom: 4px;
+        }
+
+        .greeting-sub {
+            color: var(--text-secondary);
+            font-size: 15px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .search-box {
+            position: relative;
+            width: 320px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 16px 12px 44px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            font-size: 15px;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--blue);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            color: var(--text-light);
+        }
+
+        .icon-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .icon-btn:hover {
+            border-color: var(--blue);
+        }
+
+        .icon-btn svg {
+            width: 20px;
+            height: 20px;
+            color: var(--text-secondary);
+        }
+
+        .notification-dot {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 8px;
+            height: 8px;
+            background: var(--red);
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+
+        .profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 6px 12px 6px 6px;
+            background: white;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .profile:hover {
+            border-color: var(--blue);
+        }
+
+        .profile img {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: linear-gradient(135deg, var(--purple), var(--blue));
+        }
+
+        .profile-name {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .mobile-menu {
+            display: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+            background: white;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        /* Grid Layout */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0px 8px 24px rgba(17, 17, 26, 0.08);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+
+        .card-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .card-action {
+            color: var(--blue);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        /* Market Cards */
+        .market-card {
+            grid-column: span 6;
+        }
+
+        .market-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .market-symbol {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .market-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .market-icon.gold {
+            background: linear-gradient(135deg, #FFD88D, #FFB800);
+            color: #7A5200;
+        }
+
+        .market-icon.oil {
+            background: linear-gradient(135deg, #2A2F33, #1A1D1F);
+            color: white;
+        }
+
+        .market-name {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .market-type {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .market-price {
+            text-align: right;
+        }
+
+        .price-value {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .price-change {
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            justify-content: flex-end;
+            margin-top: 4px;
+        }
+
+        .price-change.up {
+            color: var(--green);
+        }
+
+        .price-change.down {
+            color: var(--red);
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 180px;
+            position: relative;
+        }
+
+        .chart-container canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Transfer Card */
+        .transfer-card {
+            grid-column: span 4;
+            background: linear-gradient(135deg, #8E66FF 0%, #2A85FF 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .transfer-card::before {
+            content: '';
+            position: absolute;
+            bottom: -40px;
+            right: -40px;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .transfer-illustration {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 120px;
+            height: 120px;
+            opacity: 0.9;
+        }
+
+        .transfer-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .transfer-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .transfer-desc {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .transfer-btn {
+            background: white;
+            color: var(--blue);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .transfer-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        /* Reports Card */
+        .reports-card {
+            grid-column: span 8;
+        }
+
+        .report-stats {
+            display: flex;
+            gap: 32px;
+            margin-bottom: 24px;
+        }
+
+        .stat-item {
+            flex: 1;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .stat-change {
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        /* Activities Card */
+        .activities-card {
+            grid-column: span 4;
+        }
+
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .activity-icon.blue {
+            background: rgba(42, 133, 255, 0.1);
+            color: var(--blue);
+        }
+
+        .activity-icon.green {
+            background: rgba(131, 191, 110, 0.1);
+            color: var(--green);
+        }
+
+        .activity-icon.purple {
+            background: rgba(142, 102, 255, 0.1);
+            color: var(--purple);
+        }
+
+        .activity-info {
+            flex: 1;
+        }
+
+        .activity-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .activity-time {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        /* Forecast Section */
+        .forecast-section {
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .forecast-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+
+        .forecast-title {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .forecast-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 16px;
+        }
+
+        .forecast-day {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .forecast-day:hover {
+            background: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transform: translateY(-2px);
+        }
+
+        .forecast-day.current {
+            background: linear-gradient(135deg, var(--blue), var(--purple));
+            color: white;
+        }
+
+        .day-name {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            opacity: 0.7;
+            margin-bottom: 12px;
+        }
+
+        .forecast-day.current .day-name {
+            opacity: 1;
+        }
+
+        .day-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 12px;
+        }
+
+        .day-temp {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .day-change {
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .forecast-day .day-change.up {
+            color: var(--green);
+        }
+
+        .forecast-day .day-change.down {
+            color: var(--red);
+        }
+
+        .forecast-day.current .day-change {
+            color: white;
+        }
+
+        /* Overlay */
+        .overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 99;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .market-card {
+                grid-column: span 12;
+            }
+            .transfer-card {
+                grid-column: span 6;
+            }
+            .reports-card {
+                grid-column: span 12;
+            }
+            .activities-card {
+                grid-column: span 6;
+            }
+            .forecast-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            .main {
+                margin-left: 0;
+                max-width: 100vw;
+                padding: 20px;
+            }
+            .mobile-menu {
+                display: flex;
+            }
+            .search-box {
+                display: none;
+            }
+            .greeting {
+                font-size: 24px;
+            }
+            .grid {
+                gap: 16px;
+            }
+            .market-card,
+            .transfer-card,
+            .reports-card,
+            .activities-card {
+                grid-column: span 12;
+            }
+            .forecast-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .report-stats {
+                flex-direction: column;
+                gap: 16px;
+            }
+            .header-right {
+                gap: 12px;
+            }
+            .profile-name {
+                display: none;
+            }
+        }
+
+        @media (max-width: 390px) {
+            .main {
+                padding: 16px;
+            }
+            .card {
+                padding: 16px;
+            }
+            .greeting {
+                font-size: 20px;
+            }
+            .forecast-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="overlay" id="overlay"></div>
+        
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M3 13L12 4L21 13L12 22L3 13Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M12 4V22" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="logo-text">OMA</div>
+            </div>
+
+            <nav class="nav">
+                <div class="nav-item active">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7" rx="1"/>
+                        <rect x="14" y="3" width="7" height="7" rx="1"/>
+                        <rect x="3" y="14" width="7" height="7" rx="1"/>
+                        <rect x="14" y="14" width="7" height="7" rx="1"/>
+                    </svg>
+                    <span class="nav-text">Dashboard</span>
+                </div>
+                <div class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z"/>
+                        <path d="M2 17L12 22L22 17"/>
+                        <path d="M2 12L12 17L22 12"/>
+                    </svg>
+                    <span class="nav-text">Markets</span>
+                </div>
+                <div class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 3V21H21"/>
+                        <path d="M7 14L12 9L16 13L21 8"/>
+                    </svg>
+                    <span class="nav-text">Analytics</span>
+                </div>
+                <div class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8C21 5.79086 19.2091 4 17 4H7C4.79086 4 3 5.79086 3 8V16C3 18.2091 4.79086 20 7 20H17C19.2091 20 21 18.2091 21 16Z"/>
+                        <path d="M3 10H21"/>
+                    </svg>
+                    <span class="nav-text">Forecasts</span>
+                </div>
+                <div class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 1V3M12 21V23M4.22 4.22L5.64 5.64M18.36 18.36L19.78 19.78M1 12H3M21 12H23M4.22 19.78L5.64 18.36M18.36 5.64L19.78 4.22"/>
+                    </svg>
+                    <span class="nav-text">Settings</span>
+                </div>
+            </nav>
+
+            <div class="premium-card">
+                <svg class="premium-icon" viewBox="0 0 100 100" fill="none">
+                    <circle cx="50" cy="50" r="40" fill="url(#robotGrad)"/>
+                    <rect x="38" y="35" width="24" height="20" rx="4" fill="#1A1D1F"/>
+                    <circle cx="44" cy="42" r="3" fill="#2A85FF"/>
+                    <circle cx="56" cy="42" r="3" fill="#2A85FF"/>
+                    <rect x="35" y="55" width="30" height="15" rx="3" fill="#1A1D1F"/>
+                    <path d="M45 62H55" stroke="#2A85FF" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="robotGrad" x1="0" y1="0" x2="100" y2="100">
+                            <stop stop-color="#8E66FF"/>
+                            <stop offset="1" stop-color="#2A85FF"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <div class="premium-title">Go to Premium</div>
+                <div class="premium-desc">Unlock AI-powered predictions and unlimited market data</div>
+                <button class="premium-btn">Upgrade Now</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <div class="mobile-menu" id="mobileMenu">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12H21M3 6H21M3 18H21"/>
+                        </svg>
+                    </div>
+                    <h1 class="greeting">Hello, Trader 👋</h1>
+                    <p class="greeting-sub">Let's check your markets today</p>
+                </div>
+                <div class="header-right">
+                    <div class="search-box">
+                        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21L16.65 16.65"/>
+                        </svg>
+                        <input type="text" placeholder="Search markets...">
+                    </div>
+                    <div class="icon-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 8C18 6.4087 17.3679 4.88258 16.2426 3.75736C15.1174 2.63214 13.5913 2 12 2C10.4087 2 8.88258 2.63214 7.75736 3.75736C6.63214 4.88258 6 6.4087 6 8C6 15 3 17 3 17H21C21 17 18 15 18 8Z"/>
+                            <path d="M13.73 21C13.5542 21.3031 13.3019 21.5547 12.9982 21.7295C12.6946 21.9044 12.3504 21.9965 12 21.9965C11.6496 21.9965 11.3054 21.9044 11.0018 21.7295C10.6982 21.5547 10.4458 21.3031 10.27 21"/>
+                        </svg>
+                        <span class="notification-dot"></span>
+                    </div>
+                    <div class="profile">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%238E66FF'/%3E%3Cpath d='M50 50C58.2843 50 65 43.2843 65 35C65 26.7157 58.2843 20 50 20C41.7157 20 35 26.7157 35 35C35 43.2843 41.7157 50 50 50ZM50 55C38.9543 55 30 63.9543 30 75V80H70V75C70 63.9543 61.0457 55 50 55Z' fill='white'/%3E%3C/svg%3E" alt="Profile">
+                        <span class="profile-name">John Doe</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Grid -->
+            <div class="grid">
+                <!-- XAUUSD Card -->
+                <div class="card market-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Market Snapshot</div>
+                            <div class="card-subtitle">Real-time price tracking</div>
+                        </div>
+                        <a href="#" class="card-action">View All</a>
+                    </div>
+                    <div class="market-info">
+                        <div class="market-symbol">
+                            <div class="market-icon gold">XAU</div>
+                            <div>
+                                <div class="market-name">XAUUSD</div>
+                                <div class="market-type">Gold / USD</div>
+                            </div>
+                        </div>
+                        <div class="market-price">
+                            <div class="price-value" id="xau-price">2,672.45</div>
+                            <div class="price-change up" id="xau-change">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M8 3L3 8H6V13H10V8H13L8 3Z"/>
+                                </svg>
+                                <span>+1.24%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="xau-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- BRENT Card -->
+                <div class="card market-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Market Snapshot</div>
+                            <div class="card-subtitle">Real-time price tracking</div>
+                        </div>
+                        <a href="#" class="card-action">View All</a>
+                    </div>
+                    <div class="market-info">
+                        <div class="market-symbol">
+                            <div class="market-icon oil">BRN</div>
+                            <div>
+                                <div class="market-name">BRENT</div>
+                                <div class="market-type">Crude Oil</div>
+                            </div>
+                        </div>
+                        <div class="market-price">
+                            <div class="price-value" id="brent-price">73.82</div>
+                            <div class="price-change down" id="brent-change">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M8 13L13 8H10V3H6V8H3L8 13Z"/>
+                                </svg>
+                                <span>-0.86%</span>
+                            </div>
+                        </div>
+                    <div class="chart-container">
+                        <canvas id="brent-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Transfer Card -->
+                <div class="card transfer-card">
+                    <div class="transfer-content">
+                        <div class="transfer-title">Transfer & Exchange</div>
+                        <div class="transfer-desc">Convert your assets instantly with zero fees and best market rates</div>
+                        <button class="transfer-btn">Start Transfer</button>
+                    </div>
+                    <svg class="transfer-illustration" viewBox="0 0 120 120" fill="none">
+                        <circle cx="60" cy="60" r="50" fill="rgba(255,255,255,0.1)"/>
+                        <path d="M45 60H75M60 45V75" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                        <circle cx="45" cy="45" r="8" fill="white"/>
+                        <circle cx="75" cy="75" r="8" fill="white"/>
+                        <path d="M53 40L65 52M55 80L67 68" stroke="white" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                </div>
+
+                <!-- Reports Card -->
+                <div class="card reports-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Monthly Reports</div>
+                            <div class="card-subtitle">Performance overview</div>
+                        </div>
+                        <a href="#" class="card-action">Download</a>
+                    </div>
+                    <div class="report-stats">
+                        <div class="stat-item">
+                            <div class="stat-label">Total Volume</div>
+                            <div class="stat-value">$284.5K</div>
+                            <div class="stat-change up style="color: var(--green)">+12.4% vs last month</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Profit</div>
+                            <div class="stat-value">$42.8K</div>
+                            <div class="stat-change up" style="color: var(--green)">+8.2% vs last month</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Win Rate</div>
+                            <div class="stat-value">68.5%</div>
+                            <div class="stat-change up" style="color: var(--green)">+3.1% vs last month</div>
+                        </div>
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="report-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Activities Card -->
+                <div class="card activities-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Top Activities</div>
+                            <div class="card-subtitle">Recent transactions</div>
+                        </div>
+                    <div class="activity-item">
+                        <div class="activity-icon blue">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M7 17L17 7M17 7H7M17 7V17"/>
+                            </svg>
+                        </div>
+                        <div class="activity-info">
+                            <div class="activity-title">XAUUSD Buy</div>
+                            <div class="activity-time">+$2,450 · 2h ago</div>
+                        </div>
+                    </div>
+                    <div class="activity-item">
+                        <div class="activity-icon green">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2L2 7L12 12L22 7L12 2Z"/>
+                            </svg>
+                        </div>
+                        <div class="activity-info">
+                            <div class="activity-title">BRENT Sell</div>
+                            <div class="activity-time">+$1,280 · 5h ago</div>
+                        </div>
+                    </div>
+                    <div class="activity-item">
+                        <div class="activity-icon purple">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 3V21H21M7 14L12 9L16 13L21 8"/>
+                            </svg>
+                        </div>
+                        <div class="activity-info">
+                            <div class="activity-title">EURUSD Trade</div>
+                            <div class="activity-time">+$890 · 1d ago</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Forecast Section -->
+            <div class="forecast-section">
+                <div class="forecast-header">
+                    <h2 class="forecast-title">7-Day Forecast</h2>
+                    <a href="#" class="card-action">View Details</a>
+                </div>
+                <div class="forecast-grid" id="forecast-grid"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Mobile Menu Toggle
+        const mobileMenu = document.getElementById('mobileMenu');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+
+        mobileMenu.addEventListener('click', () => {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        });
+
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('active');
+            overlay.classList.remove('active');
+        });
+
+        // Generate Fake Candle Data
+        function generateCandleData(count, basePrice, volatility) {
+            const data = [];
+            let currentPrice = basePrice;
+            
+            for (let i = 0; i < count; i++) {
+                const change = (Math.random() - 0.5) * volatility;
+                const open = currentPrice;
+                const close = currentPrice + change;
+                const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+                const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+                
+                data.push({ open, high, low, close });
+                currentPrice = close;
+            }
+            
+            return data;
+        }
+
+        // Draw Candlestick Chart
+        function drawCandlestickChart(canvasId, data, color) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width * 2;
+            canvas.height = rect.height * 2;
+            ctx.scale(2, 2);
+            
+            const width = rect.width;
+            const height = rect.height;
+            const padding = 10;
+            const candleWidth = (width - padding * 2) / data.length * 0.7;
+            const candleGap = (width - padding * 2) / data.length * 0.3;
+            
+            // Find min and max
+            let minPrice = Math.min(...data.map(d => d.low));
+            let maxPrice = Math.max(...data.map(d => d.high));
+            const priceRange = maxPrice - minPrice;
+            minPrice -= priceRange * 0.1;
+            maxPrice += priceRange * 0.1;
+            const range = maxPrice - minPrice;
+            
+            // Draw grid lines
+            ctx.strokeStyle = '#EFEFEF';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = padding + (height - padding * 2) * (i / 4);
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(width - padding, y);
+                ctx.stroke();
+            }
+            
+            // Draw candles
+            data.forEach((candle, i) => {
+                const x = padding + i * (candleWidth + candleGap) + candleGap / 2;
+                const openY = padding + (height - padding * 2) * (1 - (candle.open - minPrice) / range);
+                const closeY = padding + (height - padding * 2) * (1 - (candle.close - minPrice) / range);
+                const highY = padding + (height - padding * 2) * (1 - (candle.high - minPrice) / range);
+                const lowY = padding + (height - padding * 2) * (1 - (candle.low - minPrice) / range);
+                
+                const isGreen = candle.close >= candle.open;
+                ctx.strokeStyle = isGreen ? '#83BF6E' : '#FF6A55';
+                ctx.fillStyle = isGreen ? '#83BF6E' : '#FF6A55';
+                
+                // Draw wick
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x + candleWidth / 2, highY);
+                ctx.lineTo(x + candleWidth / 2, lowY);
+                ctx.stroke();
+                
+                // Draw body
+                const bodyTop = Math.min(openY, closeY);
+                const bodyHeight = Math.abs(closeY - openY) || 1;
+                ctx.fillRect(x, bodyTop, candleWidth, bodyHeight);
+            });
+        }
+
+        // Draw Line Chart
+        function drawLineChart() {
+            const canvas = document.getElementById('report-chart');
+            const ctx = canvas.getContext('2d');
+            
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width * 2;
+            canvas.height = rect.height * 2;
+            ctx.scale(2, 2);
+            
+            const width = rect.width;
+            const height = rect.height;
+            const padding = 20;
+            
+            const data = [30, 45, 38, 55, 62, 48, 65, 70, 68, 75, 82, 78];
+            const maxVal = Math.max(...data);
+            const minVal = Math.min(...data);
+            const range = maxVal - minVal;
+            
+            // Draw gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, height);
+            gradient.addColorStop(0, 'rgba(42, 133, 255, 0.2)');
+            gradient.addColorStop(1, 'rgba(42, 133, 255, 0.0)');
+            
+            // Draw area
+            ctx.beginPath();
+            data.forEach((val, i) => {
+                const x = padding + (width - padding * 2) * (i / (data.length - 1));
+                const y = padding + (height - padding * 2) * (1 - (val - minVal) / range);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.lineTo(width - padding, height - padding);
+            ctx.lineTo(padding, height - padding);
+            ctx.closePath();
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // Draw line
+            ctx.beginPath();
+            data.forEach((val, i) => {
+                const x = padding + (width - padding * 2) * (i / (data.length - 1));
+                const y = padding + (height - padding * 2) * (1 - (val - minVal) / range);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.strokeStyle = '#2A85FF';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+            
+            // Draw points
+            ctx.fillStyle = '#2A85FF';
+            data.forEach((val, i) => {
+                const x = padding + (width - padding * 2) * (i / (data.length - 1));
+                const y = padding + (height - padding * 2) * (1 - (val - minVal) / range);
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+        }
+
+        // Generate 7-Day Forecast
+        function generateForecast() {
+            const forecastGrid = document.getElementById('forecast-grid');
+            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const basePrice = 2672;
+            
+            for (let i = 0; i < 7; i++) {
+                const change = (Math.random() - 0.45) * 3;
+                const price = basePrice + change * 10;
+                const isUp = change >= 0;
+                const isCurrent = i === 3;
+                
+                const dayCard = document.createElement('div');
+                dayCard.className = 'forecast-day' + (isCurrent ? ' current' : '');
+                dayCard.innerHTML = `
+                    <div class="day-name">${days[i]}</div>
+                    <svg class="day-icon" viewBox="0 0 48 48" fill="none">
+                        <circle cx="24" cy="24" r="20" fill="url(#grad${i})" opacity="0.2"/>
+                        <path d="M24 14V24L30 30" stroke="${isUp ? '#83BF6E' : '#FF6A55'}" stroke-width="3" stroke-linecap="round"/>
+                        <defs>
+                            <linearGradient id="grad${i}" x1="0" y1="0" x2="48" y2="48">
+                                <stop stop-color="${isUp ? '#83BF6E' : '#FF6A55'}"/>
+                                <stop offset="1" stop-color="${isUp ? '#83BF6E' : '#FF6A55'}" stop-opacity="0.5"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div class="day-temp">$${price.toFixed(0)}</div>
+                    <div class="day-change ${isUp ? 'up' : 'down'}">
+                        ${isUp ? '+' : ''}${change.toFixed(2)}%
+                    </div>
+                `;
+                forecastGrid.appendChild(dayCard);
+            }
+        }
+
+        // Initialize Charts
+        const xauData = generateCandleData(24, 2672, 8);
+        const brentData = generateCandleData(24, 73.8, 1.2);
+        
+        drawCandlestickChart('xau-chart', xauData, 'gold');
+        drawCandlestickChart('brent-chart', brentData, 'oil');
+        drawLineChart();
+        generateForecast();
+
+        // Redraw on resize
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                drawCandlestickChart('xau-chart', xauData, 'gold');
+                drawCandlestickChart('brent-chart', brentData, 'oil');
+                drawLineChart();
+            }, 250);
+        });
+
+        // Simulate live price updates
+        setInterval(() => {
+            const xauPrice = document.getElementById('xau-price');
+            const currentPrice = parseFloat(xauPrice.textContent.replace(',', ''));
+            const newPrice = currentPrice + (Math.random() - 0.5) * 0.5;
+            xauPrice.textContent = newPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }, 3000);
+    </script>
+<script>(function(){document.addEventListener("click",function(e){var a=e.target.closest("[data-product-id]");if(!a)return;e.preventDefault();var pid=a.getAttribute("data-product-id");if(pid)parent.postMessage({type:"ecto-artifact-link-click",productId:pid},"*")})})();</script>
+</body>
+</html>
