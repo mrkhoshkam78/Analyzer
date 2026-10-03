@@ -1,7 +1,7 @@
 {
   "name": "offline-market-analyzer",
-  "version": "12.2.0",
-  "description": "OMA — Offline Market Analyzer (TypeScript + Rust/WASM)",
+  "version": "12.2.1",
+  "description": "OMA \u2014 Offline Market Analyzer (TypeScript + Rust/WASM)",
   "type": "module",
   "scripts": {
     "dev": "vite",
