@@ -237,7 +237,7 @@ async function refreshAssetPanel(symbol) {
   loadManual(symbol, currentTf);
   // Load exact project CSVs for 1D / 4H / 1H (never mix TFs)
   try {
-    const { ensureAllProjectTimeframes, ensureProjectData } = await import('./logic/datasets');
+    const { ensureAllProjectTimeframes, ensureProjectData } = await import('../adapters/datasets');
     await ensureAllProjectTimeframes(symbol);
     await ensureProjectData(symbol, currentTf);
   } catch (_) {}
@@ -419,7 +419,7 @@ function collectImportText() {
 async function importHistoricalIfAny(sym, tf) {
   const text = collectImportText();
   if (!text || text.split(/\n/).filter(Boolean).length < 2) return { imported: 0 };
-  const { parseOHLCV } = await import('./logic/analysis');
+  const { parseOHLCV } = await import('../adapters/analysis');
   const { candles, error } = parseOHLCV(text);
   if (error || !candles.length) return { imported: 0, error };
   const withMeta = candles.map(c => ({
@@ -520,7 +520,7 @@ async function runAnalysis(silent = false) {
       setProcessing(true, 'بارگذاری فاندامنتال آفلاین…');
       setFundFetchStatus('خواندن داده دستی فاندامنتال…', 'is-loading');
       try {
-        const fmod = await import('./logic/fundamental');
+        const fmod = await import('../adapters/fundamental');
         const offline = fmod.buildSnapshotFromStore(sym);
         const hasOffline = offline && Object.keys(offline).length > 0;
         if (hasOffline) {
@@ -549,7 +549,7 @@ async function runAnalysis(silent = false) {
     // When analyzing 1D, also fetch 4H so MTF can use daily bias + 4H structure (no fabrication).
     const seriesMap = { [currentTf]: series.candles };
     try {
-      const { loadHistorical, TIMEFRAMES, ensureAllProjectTimeframes, ensureProjectData } = await import('./logic/datasets');
+      const { loadHistorical, TIMEFRAMES, ensureAllProjectTimeframes, ensureProjectData } = await import('../adapters/datasets');
       // Always bind each TF to its own CSV (1D↔1d, 4H↔4h, 1H↔1h)
       try { await ensureAllProjectTimeframes(sym); } catch (_) { /* optional */ }
       try { await ensureProjectData(sym, currentTf); } catch (_) {}
@@ -563,7 +563,7 @@ async function runAnalysis(silent = false) {
       }
     } catch (_) { /* offline / missing */ }
 
-    const { analyze } = await import('./logic/analysis');
+    const { analyze } = await import('../adapters/analysis');
     const fset = getFundAdvancedSettings();
     const result = analyze(series.candles, {
       currentPrice, symbol: sym, timeframe: currentTf, recordPrediction: true,
@@ -1037,7 +1037,7 @@ function switchView(view) {
       (async () => {
         try {
           if (currentSymbol) {
-            const { ensureProjectData } = await import('./logic/datasets');
+            const { ensureProjectData } = await import('../adapters/datasets');
             await ensureProjectData(currentSymbol, currentTf || '1D');
             if ((currentTf || '1D') === '1D') {
               try { await ensureProjectData(currentSymbol, '4H'); } catch (_) {}
@@ -1135,7 +1135,7 @@ async function runBacktestUI() {
 
   try {
     try {
-      const { ensureProjectData } = await import('./logic/datasets');
+      const { ensureProjectData } = await import('../adapters/datasets');
       const proj = await ensureProjectData(currentSymbol, currentTf);
       if (proj?.ok && proj.source && proj.source !== 'store') {
         if (status) status.textContent = `داده پروژه بارگذاری شد (${proj.count} کندل از ${proj.source}) — در حال بک‌تست…`;
@@ -1148,7 +1148,7 @@ async function runBacktestUI() {
       toast(msg, 'err');
       return;
     }
-    const { runBacktest } = await import('./logic/backtest');
+    const { runBacktest } = await import('../adapters/backtest');
     const horizon = Number($('btHorizon')?.value || 5);
     const step = Number($('btStep')?.value || 5);
     const mode = $('btMode')?.value || 'combined';
@@ -1245,7 +1245,7 @@ async function downloadMergedCsv() {
   const sym = currentSymbol || $('symbol')?.value;
   if (!sym) { toast('ابتدا نماد را انتخاب کنید', 'err'); return; }
   try {
-    const { exportMergedCSV, promoteManualIntoHistorical } = await import('./logic/datasets');
+    const { exportMergedCSV, promoteManualIntoHistorical } = await import('../adapters/datasets');
     // Persist manual into historical so next upload/session keeps them
     promoteManualIntoHistorical(sym, currentTf || '1D', false);
     const out = exportMergedCSV(sym, currentTf || '1D');
@@ -1260,7 +1260,7 @@ async function downloadMergedCsv() {
 
 async function downloadPatternLibrary() {
   try {
-    const { exportPatternsJSON } = await import('./logic/mpb/memory');
+    const { exportPatternsJSON } = await import('../adapters/mpb/memory');
     const json = exportPatternsJSON();
     const name = `mpb_patterns_${new Date().toISOString().slice(0, 10)}.json`;
     downloadTextFile(name, json, 'application/json');
@@ -1274,7 +1274,7 @@ async function importPatternLibraryFile(file) {
   if (!file) return;
   try {
     const text = await file.text();
-    const { importPatternsJSON } = await import('./logic/mpb/memory');
+    const { importPatternsJSON } = await import('../adapters/mpb/memory');
     const res = importPatternsJSON(text);
     if (!res.ok) { toast(res.error || 'بارگذاری ناموفق', 'err'); return; }
     toast(`${res.added} الگو اضافه شد · مجموع ${res.total}`, 'ok');
@@ -1288,7 +1288,7 @@ async function refreshMPBLibrary() {
   const box = $('mpbLibraryList');
   const statsEl = $('mpbMemoryStats');
   try {
-    const { listPatterns, patternMemoryStats, deletePattern } = await import('./logic/mpb/memory');
+    const { listPatterns, patternMemoryStats, deletePattern } = await import('../adapters/mpb/memory');
     const items = listPatterns();
     const stats = patternMemoryStats();
     if (statsEl) statsEl.textContent = `ذخیره‌شده: ${stats.total} الگو`;
@@ -1309,7 +1309,7 @@ async function refreshMPBLibrary() {
     `).join('');
     box.querySelectorAll('.mpb-del').forEach(btn => {
       btn.onclick = async () => {
-        const { deletePattern } = await import('./logic/mpb/memory');
+        const { deletePattern } = await import('../adapters/mpb/memory');
         deletePattern(btn.dataset.id);
         refreshMPBLibrary();
         toast('الگو حذف شد', 'ok');
@@ -1824,7 +1824,7 @@ function init() {
     updateSmartDateTimeUI();
     if (currentSymbol) {
       try {
-        const { ensureProjectData } = await import('./logic/datasets');
+        const { ensureProjectData } = await import('../adapters/datasets');
         await ensureProjectData(currentSymbol, currentTf);
       } catch (_) {}
       refreshAssetPanel(currentSymbol);
@@ -1893,7 +1893,7 @@ function init() {
     }
     // also try project path cache refresh
     try {
-      const { ensureProjectData } = await import('./logic/datasets');
+      const { ensureProjectData } = await import('../adapters/datasets');
       await ensureProjectData(sym, currentTf);
     } catch (_) {}
     refreshAssetPanel(sym);
@@ -2160,7 +2160,7 @@ function saveFundAdvancedSettings(partial) {
 async function ensureFundModule() {
   if (window.__fundMod) return window.__fundMod;
   try {
-    const mod = await import('./logic/fundamental');
+    const mod = await import('../adapters/fundamental');
     window.__fundMod = mod;
     return mod;
   } catch (e) {
