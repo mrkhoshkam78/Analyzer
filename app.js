@@ -264,6 +264,7 @@ async function refreshAssetPanel(symbol) {
     else
       renderForecastChart(symbol, null);
   } catch (_) {}
+  try { refreshDribbbleMarketCards(); } catch (_) {}
 }
 
 function fillPriceFormFromRecord(rec) {
@@ -851,6 +852,10 @@ function showResult(r, symbolId) {
   $('result').hidden = false;
   if ($('scoreLayers')) $('scoreLayers').hidden = false;
   try { renderForecastChart(symbolId, r); } catch (e) { console.warn('chart', e); }
+  try {
+    window.__lastAnalysisResult = r;
+    refreshDribbbleMarketCards();
+  } catch (_) {}
 }
 
 function clearAll() {
@@ -1107,6 +1112,116 @@ function applyLang(lang) {
   document.body.classList.toggle('is-rtl', l !== 'en');
 }
 
+
+/** Dribbble skin: market snapshot cards from real project CSV/store data */
+async function refreshDribbbleMarketCards() {
+  const strip = $('dribbbleMarketStrip');
+  if (!strip || document.documentElement.getAttribute('data-skin') !== 'dribbble-dashboard') return;
+  const tf = currentTf || '1D';
+  const symbols = ['XAUUSD', 'BRENT'];
+  for (const sym of symbols) {
+    try {
+      const { ensureProjectData, buildAnalysisSeries } = await import('./logic/datasets.js');
+      await ensureProjectData(sym, tf);
+      const series = buildAnalysisSeries(sym, tf);
+      const candles = (series?.candles || []).filter(c =>
+        [c.o, c.h, c.l, c.c].every(x => Number.isFinite(Number(x))));
+      const last = candles[candles.length - 1];
+      const prev = candles[candles.length - 2];
+      const priceEl = $(`drib-price-${sym}`);
+      const chgEl = $(`drib-chg-${sym}`);
+      const canvas = $(`drib-chart-${sym}`);
+      if (last && priceEl) {
+        const px = Number(last.c);
+        priceEl.textContent = px > 100 ? px.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : px.toFixed(2);
+        if (prev && chgEl) {
+          const pct = ((Number(last.c) - Number(prev.c)) / Number(prev.c)) * 100;
+          const up = pct >= 0;
+          chgEl.className = 'drib-price-change ' + (up ? 'up' : 'down');
+          chgEl.innerHTML = (up ? '▲ ' : '▼ ') + (up ? '+' : '') + pct.toFixed(2) + '%';
+        }
+      }
+      if (canvas && candles.length) {
+        drawDribbbleMiniChart(canvas, candles.slice(-30));
+      }
+    } catch (e) {
+      console.warn('dribbble card', sym, e);
+    }
+  }
+  // Forecast strip from last analysis if any
+  const grid = $('dribForecastGrid');
+  if (grid && window.__lastAnalysisResult) {
+    fillDribbbleForecast(grid, window.__lastAnalysisResult);
+  }
+}
+
+function drawDribbbleMiniChart(canvas, candles) {
+  if (!canvas || !candles.length) return;
+  const parent = canvas.parentElement;
+  const w = Math.max(280, parent?.clientWidth || 320);
+  const h = 160;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  let lo = Math.min(...candles.map(c => Number(c.l)));
+  let hi = Math.max(...candles.map(c => Number(c.h)));
+  if (!(hi > lo)) { hi = lo + 1; }
+  const pad = 8;
+  const slot = (w - pad * 2) / candles.length;
+  const bw = Math.max(2, slot * 0.65);
+  const yScale = (p) => pad + (h - pad * 2) * (1 - (p - lo) / (hi - lo));
+  candles.forEach((c, i) => {
+    const o = Number(c.o), cl = Number(c.c), hiC = Number(c.h), loC = Number(c.l);
+    const x = pad + i * slot + slot / 2;
+    const up = cl >= o;
+    ctx.strokeStyle = up ? '#83BF6E' : '#FF6A55';
+    ctx.fillStyle = up ? '#83BF6E' : '#FF6A55';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, yScale(hiC));
+    ctx.lineTo(x, yScale(loC));
+    ctx.stroke();
+    const y1 = yScale(Math.max(o, cl));
+    const y2 = yScale(Math.min(o, cl));
+    ctx.fillRect(x - bw / 2, y1, bw, Math.max(1, y2 - y1));
+  });
+}
+
+function fillDribbbleForecast(grid, result) {
+  if (!grid || !result) return;
+  const signal = result.signal || 'HOLD';
+  const conf = Number.isFinite(result.confidence) ? result.confidence : 0.5;
+  const target = Number(result.target);
+  const price = Number(result.price);
+  grid.innerHTML = '';
+  const days = ['امروز', '۲', '۳', '۴', '۵', '۶', '۷'];
+  const dir = signal === 'BUY' ? 1 : signal === 'SELL' ? -1 : 0;
+  for (let i = 0; i < 7; i++) {
+    const progress = (i + 1) / 7;
+    let px = price;
+    if (Number.isFinite(target) && Number.isFinite(price)) {
+      px = price + (target - price) * progress * (0.4 + 0.4 * conf);
+    } else if (dir && Number.isFinite(price)) {
+      px = price * (1 + dir * 0.002 * progress * conf);
+    }
+    const pct = Number.isFinite(price) && price ? ((px - price) / price) * 100 : 0;
+    const up = pct >= 0;
+    const el = document.createElement('div');
+    el.className = 'drib-forecast-day' + (i === 0 ? ' current' : '');
+    el.innerHTML = `<div class="day-name">${days[i]}</div>
+      <div class="day-temp">${Number.isFinite(px) ? (px > 100 ? px.toFixed(0) : px.toFixed(2)) : '—'}</div>
+      <div class="day-change ${up ? 'up' : 'down'}">${up ? '+' : ''}${pct.toFixed(2)}٪</div>
+      <div class="day-sig muted">${i === 0 ? signal : ''}</div>`;
+    grid.appendChild(el);
+  }
+}
+
 function applySkin(skin) {
   const names = {
     'terminal-glass': 'Terminal Glass',
@@ -1114,29 +1229,22 @@ function applySkin(skin) {
     'zen-calm': 'Zen Calm',
     'dribbble-dashboard': 'Dribbble Dashboard'
   };
-  // Full alternate template page (standalone HTML) — open without altering its markup
-  if (skin === 'dribbble-dashboard') {
-    try { localStorage.setItem('oma_skin', 'dribbble-dashboard'); } catch (_) {}
-    if ($('skinNameLabel')) $('skinNameLabel').textContent = names['dribbble-dashboard'];
-    if ($('footerSkinLabel')) $('footerSkinLabel').textContent = 'پوسته Dribbble Dashboard · داده محلی';
-    // Only navigate when user actively selects it (not on every init reload loop)
-    if (applySkin._allowNavigate) {
-      applySkin._allowNavigate = false;
-      window.location.href = 'oma-dashboard-dribbble-style.html';
-      return;
-    }
-    return;
-  }
-  const s = (skin === 'vector-soft' || skin === 'zen-calm') ? skin : 'terminal-glass';
+  const allowed = ['vector-soft', 'zen-calm', 'dribbble-dashboard', 'terminal-glass'];
+  const s = allowed.includes(skin) ? skin : 'terminal-glass';
   document.documentElement.setAttribute('data-skin', s);
   const theme = document.documentElement.getAttribute('data-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', theme);
   try { localStorage.setItem('oma_skin', s); } catch (_) {}
   if ($('skinNameLabel')) $('skinNameLabel').textContent = names[s] || s;
   if ($('footerSkinLabel')) $('footerSkinLabel').textContent = `پوسته ${names[s] || s} · داده محلی`;
+  // Show/hide dribbble market strip
+  const strip = $('dribbbleMarketStrip');
+  if (strip) strip.hidden = (s !== 'dribbble-dashboard');
   document.body && void document.body.offsetHeight;
+  if (s === 'dribbble-dashboard') {
+    try { refreshDribbbleMarketCards(); } catch (_) {}
+  }
 }
-applySkin._allowNavigate = false;
 
 
 async function runBacktestUI() {
@@ -2101,23 +2209,13 @@ function init() {
     r.addEventListener('change', () => { if (r.checked) applyLang(r.value); });
   });
   document.querySelectorAll('input[name="setSkin"]').forEach(r => {
-    r.addEventListener('change', () => {
-      if (!r.checked) return;
-      applySkin._allowNavigate = (r.value === 'dribbble-dashboard');
-      applySkin(r.value);
-    });
+    r.addEventListener('change', () => { if (r.checked) applySkin(r.value); });
   });
   try {
     const sk = localStorage.getItem('oma_skin') || 'terminal-glass';
     const radio = document.querySelector(`input[name="setSkin"][value="${sk}"]`);
     if (radio) radio.checked = true;
-    // Never auto-navigate on boot; user must select Dribbble in Settings
-    applySkin._allowNavigate = false;
-    if (sk === 'dribbble-dashboard') {
-      if ($('skinNameLabel')) $('skinNameLabel').textContent = 'Dribbble Dashboard';
-    } else {
-      applySkin(sk);
-    }
+    applySkin(sk);
   } catch (_) { applySkin('terminal-glass'); }
 
   window.__OMA_V5__ = { getCachedSymbols, buildAnalysisSeries, loadManual, loadHistorical, getDataDayIndex };
